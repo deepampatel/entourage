@@ -435,6 +435,44 @@
   flex-shrink: 0;
 }
 
+/* ─── Parallel Execution Indicators ───────────────────── */
+
+.running-indicator {
+  color: #3b82f6;
+}
+
+.running-indicator.parallel {
+  color: #8b5cf6;
+  font-weight: 600;
+}
+
+.parallel-badge {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #c084fc;
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.pipeline-task-row.parallel-running {
+  border-left: 2px solid #8b5cf6;
+  padding-left: 0.5rem;
+  background: rgba(139, 92, 246, 0.04);
+}
+
+.pipeline-task-agent {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+  padding: 0.1rem 0.35rem;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 3px;
+}
+
 /* ─── Empty State ──────────────────────────────────────── */
 
 .empty-state {

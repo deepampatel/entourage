@@ -55,11 +55,20 @@ function TaskProgress({ tasks }: { tasks: PipelineTask[] }) {
   const done = tasks.filter((t) => t.status === "done").length;
   const failed = tasks.filter((t) => t.status === "failed").length;
   const inProgress = tasks.filter((t) => t.status === "in_progress").length;
+  const isParallel = inProgress > 1;
   return (
     <div className="task-progress">
       <span className="task-progress-text">
         {done}/{tasks.length} tasks done
-        {inProgress > 0 && `, ${inProgress} running`}
+        {inProgress > 0 && (
+          <>
+            {", "}
+            <span className={`running-indicator${isParallel ? " parallel" : ""}`}>
+              {inProgress} {isParallel ? "running in parallel" : "running"}
+              {isParallel && " ⚡"}
+            </span>
+          </>
+        )}
         {failed > 0 && `, ${failed} failed`}
       </span>
       <div className="task-progress-bar">
@@ -155,39 +164,66 @@ function PipelineCard({
       {/* Expanded: show task graph + contracts */}
       {expanded && tasks && (
         <div className="pipeline-tasks-list">
-          <h4>Task Graph ({tasks.length} tasks)</h4>
-          {tasks.map((task, i) => (
-            <div key={task.id} className="pipeline-task-row">
-              <span className="pipeline-task-idx">{i}</span>
-              <span
-                className="pipeline-task-complexity"
-                data-complexity={task.complexity}
+          {(() => {
+            const runningTasks = tasks.filter((t) => t.status === "in_progress");
+            const isParallel = runningTasks.length > 1;
+            return (
+              <h4>
+                Task Graph ({tasks.length} tasks)
+                {isParallel && (
+                  <span className="parallel-badge">
+                    ⚡ {runningTasks.length} parallel
+                  </span>
+                )}
+              </h4>
+            );
+          })()}
+          {tasks.map((task, i) => {
+            const isRunning = task.status === "in_progress";
+            const runningTasks = tasks.filter((t) => t.status === "in_progress");
+            const isParallel = isRunning && runningTasks.length > 1;
+            return (
+              <div
+                key={task.id}
+                className={`pipeline-task-row${isParallel ? " parallel-running" : ""}`}
               >
-                {task.complexity}
-              </span>
-              <span className="pipeline-task-title">{task.title}</span>
-              <span
-                className="pipeline-task-status"
-                style={{
-                  color:
-                    task.status === "done"
-                      ? "#10b981"
-                      : task.status === "failed"
-                        ? "#ef4444"
-                        : task.status === "in_progress"
-                          ? "#3b82f6"
-                          : "#6b7280",
-                }}
-              >
-                {task.status}
-              </span>
-              {task.dependencies.length > 0 && (
-                <span className="pipeline-task-deps">
-                  deps: [{task.dependencies.join(", ")}]
+                <span className="pipeline-task-idx">{i}</span>
+                <span
+                  className="pipeline-task-complexity"
+                  data-complexity={task.complexity}
+                >
+                  {task.complexity}
                 </span>
-              )}
-            </div>
-          ))}
+                <span className="pipeline-task-title">{task.title}</span>
+                {isRunning && task.agent_id && (
+                  <span className="pipeline-task-agent" title={task.agent_id}>
+                    🤖 {task.agent_id.slice(0, 8)}
+                  </span>
+                )}
+                <span
+                  className="pipeline-task-status"
+                  style={{
+                    color:
+                      task.status === "done"
+                        ? "#10b981"
+                        : task.status === "failed"
+                          ? "#ef4444"
+                          : task.status === "in_progress"
+                            ? "#3b82f6"
+                            : "#6b7280",
+                  }}
+                >
+                  {task.status}
+                  {isParallel && " ⚡"}
+                </span>
+                {task.dependencies.length > 0 && (
+                  <span className="pipeline-task-deps">
+                    deps: [{task.dependencies.join(", ")}]
+                  </span>
+                )}
+              </div>
+            );
+          })}
 
           {/* Contracts section */}
           {contracts && contracts.length > 0 && (
