@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     mcp_server_path: str = ""  # auto-detected if empty
     agent_timeout_seconds: int = 1800  # 30 min default
 
+    # Pipeline execution
+    max_concurrent_pipeline_tasks: int = 4
+    task_polling_interval_seconds: float = 10.0
+    max_task_retries: int = 2
+
     model_config = {"env_prefix": "OPENCLAW_"}
 
     @model_validator(mode="after")

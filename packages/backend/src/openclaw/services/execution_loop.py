@@ -1,10 +1,12 @@
-"""Execution loop — dispatches PipelineTasks serially, respecting dependencies.
+"""Execution loop — dispatches PipelineTasks in parallel, respecting dependencies.
 
-Phase 1: Serial execution (one task at a time). Parallel dispatch is Phase 2.
+Phase 2: Parallel execution with resource monitoring. Tasks whose dependencies
+are satisfied are dispatched concurrently, up to max_concurrent_pipeline_tasks.
 
-Learn: The loop runs as an asyncio.create_task from the API layer (same pattern
-as agent_runs.py). It creates its own DB sessions via async_session_factory
-since it runs outside a FastAPI request context.
+Learn: The loop tracks running tasks as asyncio.Task futures in a dict. Each
+iteration collects completed futures, dispatches new ready tasks, and sleeps.
+When max_concurrent_pipeline_tasks=1, serial behavior is preserved (backward
+compatible with Phase 1).
 """
 
 import asyncio
@@ -37,23 +39,36 @@ from openclaw.services.pipeline_budget_service import (
     PipelineBudgetService,
 )
 from openclaw.services.pipeline_service import PipelineService
+from openclaw.services.resource_monitor import ResourceMonitor
 
 logger = logging.getLogger("openclaw.services.execution_loop")
 
 
 class ExecutionLoop:
-    """Dispatches PipelineTasks serially, respecting dependencies.
+    """Dispatches PipelineTasks in parallel, respecting dependencies.
 
     Learn: The loop is stateless — each call to run() creates fresh DB
     sessions. This makes it safe to launch via asyncio.create_task().
+
+    Key upgrade from Phase 1:
+    - _find_ready_tasks() returns ALL ready tasks (not just one)
+    - _find_idle_agents() returns multiple agents
+    - Running tasks tracked as asyncio.Task futures
+    - ResourceMonitor gates dispatch on CPU/memory/disk
     """
 
+    def __init__(self) -> None:
+        self._resource_monitor = ResourceMonitor()
+
     async def run(self, pipeline_id: uuid.UUID) -> dict:
-        """Main loop: dispatch ready tasks one at a time until done or failure.
+        """Main loop: dispatch ready tasks in parallel until done or failure.
 
         Returns dict with final status and summary.
         """
         logger.info("Starting execution loop for pipeline %s", pipeline_id)
+
+        # Track running tasks: pipeline_task_id → asyncio.Task
+        running: dict[int, asyncio.Task] = {}
 
         try:
             while True:
@@ -70,6 +85,8 @@ class ExecutionLoop:
                             pipeline_id,
                             pipeline.status,
                         )
+                        # Cancel any running futures
+                        await self._cancel_running(running)
                         return {
                             "pipeline_id": str(pipeline_id),
                             "status": pipeline.status,
@@ -94,6 +111,34 @@ class ExecutionLoop:
                             "reason": "No tasks in pipeline",
                         }
 
+                    team_id = pipeline.team_id
+
+                # ── Collect completed futures ──────────────────────────
+                for tid in list(running.keys()):
+                    fut = running[tid]
+                    if fut.done():
+                        try:
+                            success = fut.result()
+                        except Exception as e:
+                            logger.exception(
+                                "Pipeline task %d raised exception", tid
+                            )
+                            success = False
+
+                        await self._handle_task_completion(
+                            pipeline_id, tid, success, team_id
+                        )
+                        del running[tid]
+
+                # ── Re-read task state after completions ───────────────
+                async with async_session_factory() as db:
+                    result = await db.execute(
+                        select(PipelineTask)
+                        .where(PipelineTask.pipeline_id == pipeline_id)
+                        .order_by(PipelineTask.id)
+                    )
+                    tasks = list(result.scalars().all())
+
                     # Check if all tasks are done
                     all_done = all(t.status == "done" for t in tasks)
                     if all_done:
@@ -104,7 +149,7 @@ class ExecutionLoop:
                         svc = PipelineService(db)
                         await svc.change_status(pipeline_id, "reviewing")
                         await self._publish_event(
-                            pipeline.team_id,
+                            team_id,
                             PIPELINE_COMPLETED,
                             {
                                 "pipeline_id": str(pipeline_id),
@@ -125,10 +170,13 @@ class ExecutionLoop:
                             pipeline_id,
                             len(failed_tasks),
                         )
+                        # Cancel remaining running tasks
+                        await self._cancel_running(running)
+
                         svc = PipelineService(db)
                         await svc.change_status(pipeline_id, "failed")
                         await self._publish_event(
-                            pipeline.team_id,
+                            team_id,
                             PIPELINE_FAILED,
                             {
                                 "pipeline_id": str(pipeline_id),
@@ -144,131 +192,95 @@ class ExecutionLoop:
                             "reason": f"Task(s) failed: {[t.title for t in failed_tasks]}",
                         }
 
-                    # Find next ready task (deps satisfied, status=todo)
-                    ready_task = self._find_ready_task(tasks)
-                    if not ready_task:
-                        # No ready tasks but not all done — blocked
-                        logger.warning(
-                            "Pipeline %s: no ready tasks but not all done (deadlock?)",
-                            pipeline_id,
+                    # ── Resource gate ──────────────────────────────────
+                    can_dispatch, reason = self._resource_monitor.can_dispatch()
+                    if not can_dispatch:
+                        logger.info(
+                            "Resource gate closed: %s. Waiting %ds",
+                            reason,
+                            settings.task_polling_interval_seconds,
                         )
-                        svc = PipelineService(db)
-                        await svc.change_status(pipeline_id, "failed")
-                        return {
-                            "pipeline_id": str(pipeline_id),
-                            "status": "failed",
-                            "reason": "Deadlock: no ready tasks available",
-                        }
-
-                    # Find an idle agent
-                    agent = await self._find_idle_agent(
-                        db, pipeline.team_id, ready_task.assigned_role
-                    )
-                    if not agent:
-                        logger.warning(
-                            "No idle %s agent for pipeline %s, waiting 30s",
-                            ready_task.assigned_role,
-                            pipeline_id,
-                        )
-                        await asyncio.sleep(30)
+                        await asyncio.sleep(settings.task_polling_interval_seconds)
                         continue
 
-                    # Mark task in progress
-                    ready_task.status = "in_progress"
-                    ready_task.agent_id = agent.id
-                    ready_task.started_at = datetime.now(timezone.utc)
-                    await db.commit()
+                    # ── Find ready tasks + idle agents ─────────────────
+                    slots = settings.max_concurrent_pipeline_tasks - len(running)
+                    if slots <= 0:
+                        # Max concurrency reached, wait for completions
+                        await asyncio.sleep(settings.task_polling_interval_seconds)
+                        continue
 
-                    task_id_to_run = ready_task.id
-                    task_title = ready_task.title
-                    task_desc = ready_task.description
-                    agent_id_str = str(agent.id)
-                    team_id = pipeline.team_id
+                    ready = self._find_ready_tasks(tasks, slots)
 
-                # Record task started event
-                async with async_session_factory() as db:
-                    events = EventStore(db)
-                    await events.append(
-                        stream_id=f"pipeline:{pipeline_id}",
-                        event_type=PIPELINE_TASK_STARTED,
-                        data={
-                            "pipeline_id": str(pipeline_id),
-                            "pipeline_task_id": task_id_to_run,
-                            "title": task_title,
-                            "agent_id": agent_id_str,
-                        },
+                    if not ready and not running:
+                        # No ready tasks and nothing running — deadlock
+                        in_progress = [t for t in tasks if t.status == "in_progress"]
+                        if not in_progress:
+                            logger.warning(
+                                "Pipeline %s: no ready tasks and nothing running (deadlock?)",
+                                pipeline_id,
+                            )
+                            svc = PipelineService(db)
+                            await svc.change_status(pipeline_id, "failed")
+                            return {
+                                "pipeline_id": str(pipeline_id),
+                                "status": "failed",
+                                "reason": "Deadlock: no ready tasks available",
+                            }
+
+                    if not ready:
+                        # Tasks running but none ready yet — wait for completions
+                        await asyncio.sleep(settings.task_polling_interval_seconds)
+                        continue
+
+                    agents = await self._find_idle_agents(
+                        db, team_id, len(ready)
                     )
-                    await db.commit()
 
-                await self._publish_event(
-                    team_id,
-                    PIPELINE_TASK_STARTED,
-                    {
-                        "pipeline_id": str(pipeline_id),
-                        "pipeline_task_id": task_id_to_run,
-                        "title": task_title,
-                    },
-                )
-
-                # Run the task via AgentRunner
-                logger.info(
-                    "Running pipeline task %d (%s) via agent %s",
-                    task_id_to_run,
-                    task_title,
-                    agent_id_str,
-                )
-
-                success = await self._run_task(
-                    pipeline_id=pipeline_id,
-                    pipeline_task_id=task_id_to_run,
-                    agent_id=agent_id_str,
-                    team_id=str(team_id),
-                    task_title=task_title,
-                    task_description=task_desc,
-                )
-
-                # Update task status based on result
-                async with async_session_factory() as db:
-                    ptask = await db.get(PipelineTask, task_id_to_run)
-                    events = EventStore(db)
-
-                    if success:
-                        ptask.status = "done"
-                        ptask.completed_at = datetime.now(timezone.utc)
-                        event_type = PIPELINE_TASK_COMPLETED
+                    if not agents:
                         logger.info(
-                            "Pipeline task %d completed successfully",
-                            task_id_to_run,
+                            "No idle agents for pipeline %s, waiting %ds",
+                            pipeline_id,
+                            settings.task_polling_interval_seconds,
                         )
-                    else:
-                        ptask.status = "failed"
-                        ptask.completed_at = datetime.now(timezone.utc)
-                        event_type = PIPELINE_TASK_FAILED
-                        logger.error(
-                            "Pipeline task %d failed", task_id_to_run
-                        )
+                        await asyncio.sleep(settings.task_polling_interval_seconds)
+                        continue
 
-                    await events.append(
-                        stream_id=f"pipeline:{pipeline_id}",
-                        event_type=event_type,
-                        data={
-                            "pipeline_id": str(pipeline_id),
-                            "pipeline_task_id": task_id_to_run,
-                            "title": task_title,
-                        },
-                    )
+                    # ── Dispatch ready tasks in parallel ───────────────
+                    for task, agent in zip(ready, agents):
+                        task.status = "in_progress"
+                        task.agent_id = agent.id
+                        task.started_at = datetime.now(timezone.utc)
                     await db.commit()
 
-                await self._publish_event(
-                    team_id,
-                    event_type,
-                    {
-                        "pipeline_id": str(pipeline_id),
-                        "pipeline_task_id": task_id_to_run,
-                    },
-                )
+                    # Create asyncio tasks outside the DB session
+                    for task, agent in zip(ready, agents):
+                        agent_id_str = str(agent.id)
+                        logger.info(
+                            "Dispatching pipeline task %d (%s) to agent %s",
+                            task.id,
+                            task.title,
+                            agent_id_str,
+                        )
 
-                # Check budget
+                        # Fire task started event
+                        await self._record_task_started(
+                            pipeline_id, task.id, task.title, agent_id_str, team_id
+                        )
+
+                        # Launch async task
+                        running[task.id] = asyncio.create_task(
+                            self._run_task(
+                                pipeline_id=pipeline_id,
+                                pipeline_task_id=task.id,
+                                agent_id=agent_id_str,
+                                team_id=str(team_id),
+                                task_title=task.title,
+                                task_description=task.description,
+                            )
+                        )
+
+                # ── Check budget ────────────────────────────────────────
                 try:
                     async with async_session_factory() as db:
                         budget_svc = PipelineBudgetService(db)
@@ -278,6 +290,7 @@ class ExecutionLoop:
                                 "Pipeline %s exceeded budget, pausing",
                                 pipeline_id,
                             )
+                            await self._cancel_running(running)
                             svc = PipelineService(db)
                             await svc.change_status(pipeline_id, "paused")
                             return {
@@ -286,6 +299,7 @@ class ExecutionLoop:
                                 "reason": "Budget exceeded",
                             }
                 except PipelineBudgetExceededError:
+                    await self._cancel_running(running)
                     async with async_session_factory() as db:
                         svc = PipelineService(db)
                         await svc.change_status(pipeline_id, "paused")
@@ -295,10 +309,13 @@ class ExecutionLoop:
                         "reason": "Budget exceeded",
                     }
 
+                await asyncio.sleep(settings.task_polling_interval_seconds)
+
         except Exception as e:
             logger.exception(
                 "Execution loop for pipeline %s failed unexpectedly", pipeline_id
             )
+            await self._cancel_running(running)
             try:
                 async with async_session_factory() as db:
                     svc = PipelineService(db)
@@ -312,31 +329,34 @@ class ExecutionLoop:
                 "reason": str(e),
             }
 
-    def _find_ready_task(self, tasks: list[PipelineTask]) -> Optional[PipelineTask]:
-        """Find the next task with all dependencies satisfied.
+    # ─── Task discovery ────────────────────────────────────────────
+
+    def _find_ready_tasks(
+        self, tasks: list[PipelineTask], max_count: int = 1
+    ) -> list[PipelineTask]:
+        """Find up to max_count tasks with all dependencies satisfied.
 
         A task is ready when:
         - Its status is "todo"
         - All tasks in its dependencies list have status "done"
-        """
-        # Build a map of task index → status (tasks are 0-indexed by position)
-        done_ids = {t.id for t in tasks if t.status == "done"}
 
-        for task in tasks:
+        When max_count=1, this is equivalent to the Phase 1 serial behavior.
+        """
+        done_indices = set()
+        for i, t in enumerate(tasks):
+            if t.status == "done":
+                done_indices.add(i)
+
+        ready: list[PipelineTask] = []
+        for i, task in enumerate(tasks):
             if task.status != "todo":
                 continue
 
             deps = task.dependencies or []
-            # Dependencies reference task indices (0-based), which map to task IDs
-            # since tasks are ordered by ID and were created sequentially.
-            # But we need to be careful — deps reference the position in the
-            # original task_graph, not the PipelineTask.id. The PipelineTask
-            # rows were created in order, so we can map by index.
             all_deps_done = True
             for dep_idx in deps:
                 if dep_idx < len(tasks):
-                    dep_task = tasks[dep_idx]
-                    if dep_task.status != "done":
+                    if dep_idx not in done_indices:
                         all_deps_done = False
                         break
                 else:
@@ -345,9 +365,37 @@ class ExecutionLoop:
                     break
 
             if all_deps_done:
-                return task
+                ready.append(task)
+                if len(ready) >= max_count:
+                    break
 
-        return None
+        return ready
+
+    def _find_ready_task(
+        self, tasks: list[PipelineTask]
+    ) -> Optional[PipelineTask]:
+        """Find a single ready task (backward compat alias for Phase 1)."""
+        ready = self._find_ready_tasks(tasks, max_count=1)
+        return ready[0] if ready else None
+
+    async def _find_idle_agents(
+        self,
+        db: AsyncSession,
+        team_id: uuid.UUID,
+        max_count: int = 1,
+        role: str = "engineer",
+    ) -> list[Agent]:
+        """Find up to max_count idle agents with the matching role."""
+        result = await db.execute(
+            select(Agent)
+            .where(
+                Agent.team_id == team_id,
+                Agent.role == role,
+                Agent.status == "idle",
+            )
+            .limit(max_count)
+        )
+        return list(result.scalars().all())
 
     async def _find_idle_agent(
         self,
@@ -355,15 +403,11 @@ class ExecutionLoop:
         team_id: uuid.UUID,
         role: str = "engineer",
     ) -> Optional[Agent]:
-        """Find an idle agent with the matching role from the team."""
-        result = await db.execute(
-            select(Agent).where(
-                Agent.team_id == team_id,
-                Agent.role == role,
-                Agent.status == "idle",
-            )
-        )
-        return result.scalars().first()
+        """Find a single idle agent (backward compat alias)."""
+        agents = await self._find_idle_agents(db, team_id, max_count=1, role=role)
+        return agents[0] if agents else None
+
+    # ─── Task execution ────────────────────────────────────────────
 
     async def _run_task(
         self,
@@ -416,6 +460,108 @@ class ExecutionLoop:
                     ptask.error = str(e)
                     await db.commit()
             return False
+
+    # ─── Task lifecycle helpers ────────────────────────────────────
+
+    async def _record_task_started(
+        self,
+        pipeline_id: uuid.UUID,
+        task_id: int,
+        task_title: str,
+        agent_id: str,
+        team_id: uuid.UUID,
+    ) -> None:
+        """Record task started event in EventStore and publish via Redis."""
+        async with async_session_factory() as db:
+            events = EventStore(db)
+            await events.append(
+                stream_id=f"pipeline:{pipeline_id}",
+                event_type=PIPELINE_TASK_STARTED,
+                data={
+                    "pipeline_id": str(pipeline_id),
+                    "pipeline_task_id": task_id,
+                    "title": task_title,
+                    "agent_id": agent_id,
+                },
+            )
+            await db.commit()
+
+        await self._publish_event(
+            team_id,
+            PIPELINE_TASK_STARTED,
+            {
+                "pipeline_id": str(pipeline_id),
+                "pipeline_task_id": task_id,
+                "title": task_title,
+            },
+        )
+
+    async def _handle_task_completion(
+        self,
+        pipeline_id: uuid.UUID,
+        task_id: int,
+        success: bool,
+        team_id: uuid.UUID,
+    ) -> None:
+        """Update task status and emit events after task completion."""
+        async with async_session_factory() as db:
+            ptask = await db.get(PipelineTask, task_id)
+            if not ptask:
+                logger.error("Pipeline task %d not found for completion", task_id)
+                return
+
+            events = EventStore(db)
+
+            if success:
+                ptask.status = "done"
+                ptask.completed_at = datetime.now(timezone.utc)
+                event_type = PIPELINE_TASK_COMPLETED
+                logger.info(
+                    "Pipeline task %d completed successfully", task_id
+                )
+            else:
+                ptask.status = "failed"
+                ptask.completed_at = datetime.now(timezone.utc)
+                event_type = PIPELINE_TASK_FAILED
+                logger.error("Pipeline task %d failed", task_id)
+
+            await events.append(
+                stream_id=f"pipeline:{pipeline_id}",
+                event_type=event_type,
+                data={
+                    "pipeline_id": str(pipeline_id),
+                    "pipeline_task_id": task_id,
+                    "title": ptask.title,
+                },
+            )
+            await db.commit()
+
+        await self._publish_event(
+            team_id,
+            event_type,
+            {
+                "pipeline_id": str(pipeline_id),
+                "pipeline_task_id": task_id,
+            },
+        )
+
+    # ─── Cleanup ───────────────────────────────────────────────────
+
+    async def _cancel_running(self, running: dict[int, asyncio.Task]) -> None:
+        """Cancel all running asyncio tasks and wait for cleanup."""
+        for tid, fut in running.items():
+            if not fut.done():
+                logger.info("Cancelling running pipeline task %d", tid)
+                fut.cancel()
+
+        # Wait for cancellations to propagate
+        if running:
+            await asyncio.gather(
+                *running.values(), return_exceptions=True
+            )
+            running.clear()
+
+    # ─── Event publishing ──────────────────────────────────────────
 
     async def _publish_event(
         self,
