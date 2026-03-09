@@ -32,7 +32,8 @@ from openclaw.events.types import (
 
 VALID_PIPELINE_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"planning", "cancelled"},
-    "planning": {"awaiting_plan_approval", "failed", "cancelled"},
+    "planning": {"contracting", "awaiting_plan_approval", "failed", "cancelled"},
+    "contracting": {"awaiting_plan_approval", "failed", "cancelled"},
     "awaiting_plan_approval": {"executing", "planning", "cancelled"},
     "executing": {"reviewing", "paused", "failed", "cancelled"},
     "reviewing": {"merging", "executing", "failed", "cancelled"},

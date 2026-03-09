@@ -34,6 +34,13 @@ class PlanRejection(BaseModel):
 # ─── Response schemas ─────────────────────────────────────
 
 
+class ContractLock(BaseModel):
+    agent_id: uuid.UUID
+
+
+# ─── Response schemas ─────────────────────────────────────
+
+
 class PipelineRead(BaseModel):
     id: uuid.UUID
     org_id: uuid.UUID
@@ -44,6 +51,7 @@ class PipelineRead(BaseModel):
     intent: str
     status: str
     task_graph: Optional[dict] = None
+    contract_set: Optional[dict] = None
     estimated_cost_usd: float
     actual_cost_usd: float
     budget_limit_usd: float
@@ -100,5 +108,21 @@ class BudgetEntryRead(BaseModel):
     output_tokens: int
     cost_usd: float
     recorded_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ContractRead(BaseModel):
+    id: int
+    pipeline_id: uuid.UUID
+    pipeline_task_id: Optional[int] = None
+    contract_type: str
+    name: str
+    specification: dict
+    locked: bool
+    locked_by: Optional[uuid.UUID] = None
+    locked_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}

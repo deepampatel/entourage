@@ -817,6 +817,9 @@ class Pipeline(Base):
     pipeline_metadata: Mapped[dict] = mapped_column(
         "metadata", JSONB, nullable=False, server_default="{}"
     )
+    contract_set: Mapped[Optional[dict]] = mapped_column(
+        "contracts", JSONB, nullable=True
+    )  # Phase 2: Raw ContractSet from ContractBuilder
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -830,6 +833,9 @@ class Pipeline(Base):
     # Relationships
     team: Mapped["Team"] = relationship()
     pipeline_tasks: Mapped[list["PipelineTask"]] = relationship(
+        back_populates="pipeline", cascade="all, delete-orphan"
+    )
+    contracts: Mapped[list["Contract"]] = relationship(
         back_populates="pipeline", cascade="all, delete-orphan"
     )
     budget_ledger: Mapped[Optional["BudgetLedger"]] = relationship(
@@ -898,6 +904,57 @@ class PipelineTask(Base):
 
     # Relationships
     pipeline: Mapped["Pipeline"] = relationship(back_populates="pipeline_tasks")
+
+
+class Contract(Base):
+    """A typed interface contract between pipeline tasks.
+
+    Phase 2: When tasks run in parallel, contracts prevent interface
+    collisions. The ContractBuilder LLM generates these from the TaskGraph,
+    and agents must acknowledge (lock) contracts before starting work.
+
+    Contract types:
+      - api: Function/endpoint signatures
+      - type: Shared data type definitions
+      - event: Async event schemas
+      - database: Shared table/column definitions
+    """
+
+    __tablename__ = "contracts"
+    __table_args__ = (
+        Index("idx_contracts_pipeline", "pipeline_id"),
+        Index("idx_contracts_type", "contract_type"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pipeline_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("pipelines.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    pipeline_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("pipeline_tasks.id"), nullable=True
+    )
+    contract_type: Mapped[str] = mapped_column(
+        String(30), nullable=False
+    )  # api, type, event, database
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    specification: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    locked_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True
+    )
+    locked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=utcnow
+    )
+
+    # Relationships
+    pipeline: Mapped["Pipeline"] = relationship(back_populates="contracts")
 
 
 class BudgetLedger(Base):

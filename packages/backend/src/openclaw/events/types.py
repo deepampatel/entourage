@@ -82,3 +82,13 @@ PIPELINE_BUDGET_WARNING = "pipeline.budget_warning"
 PIPELINE_BUDGET_EXCEEDED = "pipeline.budget_exceeded"
 PIPELINE_COMPLETED = "pipeline.completed"
 PIPELINE_FAILED = "pipeline.failed"
+
+# ─── Phase 2A: Contract lifecycle ──────────────────────────
+
+PIPELINE_CONTRACTS_GENERATED = "pipeline.contracts_generated"
+PIPELINE_CONTRACT_LOCKED = "pipeline.contract_locked"
+
+# ─── Phase 2D: Resume / Retry ─────────────────────────────
+
+PIPELINE_TASK_RETRIED = "pipeline.task_retried"
+PIPELINE_RESUMED = "pipeline.resumed"
