@@ -92,3 +92,11 @@ PIPELINE_CONTRACT_LOCKED = "pipeline.contract_locked"
 
 PIPELINE_TASK_RETRIED = "pipeline.task_retried"
 PIPELINE_RESUMED = "pipeline.resumed"
+
+# ─── Phase 3B: Sandbox ───────────────────────────────────
+
+SANDBOX_STARTED = "sandbox.started"
+SANDBOX_PASSED = "sandbox.passed"
+SANDBOX_FAILED = "sandbox.failed"
+SANDBOX_TIMEOUT = "sandbox.timeout"
+SANDBOX_ERROR = "sandbox.error"

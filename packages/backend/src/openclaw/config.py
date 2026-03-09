@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     enable_convention_discovery: bool = True
     enable_agent_memory: bool = True
 
+    # Sandbox (Docker-based test execution)
+    sandbox_enabled: bool = True
+    sandbox_default_image: str = "python:3.12-slim"
+    sandbox_timeout_seconds: int = 300
+    sandbox_memory_limit: str = "512m"
+    sandbox_cpus: float = 1.0
+
     model_config = {"env_prefix": "OPENCLAW_"}
 
     @model_validator(mode="after")

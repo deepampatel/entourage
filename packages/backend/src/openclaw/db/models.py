@@ -1043,3 +1043,53 @@ class BudgetEntry(Base):
 
     # Relationships
     ledger: Mapped["BudgetLedger"] = relationship(back_populates="entries")
+
+
+# ══════════════════════════════════════════════════════════════
+# Phase 3B: Sandbox test runs
+# ══════════════════════════════════════════════════════════════
+
+
+class SandboxRun(Base):
+    """A sandboxed test execution for a pipeline task.
+
+    Learn: After a pipeline task completes, the SandboxManager can run
+    tests in a Docker container. The result (pass/fail, stdout/stderr)
+    is stored here for auditability. If tests fail, the task may be
+    retried automatically.
+    """
+
+    __tablename__ = "sandbox_runs"
+    __table_args__ = (
+        Index("idx_sandbox_runs_pipeline_task", "pipeline_task_id"),
+        Index("idx_sandbox_runs_team", "team_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sandbox_id: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False
+    )
+    pipeline_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("pipelines.id"), nullable=True
+    )
+    pipeline_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("pipeline_tasks.id"), nullable=True
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("teams.id"), nullable=False
+    )
+    test_cmd: Mapped[str] = mapped_column(Text, nullable=False)
+    exit_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    stdout: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    stderr: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    passed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    duration_seconds: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0)
+    image: Mapped[str] = mapped_column(
+        String(200), nullable=False, default="python:3.12-slim"
+    )
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    ended_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
