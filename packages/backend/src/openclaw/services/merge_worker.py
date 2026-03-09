@@ -24,7 +24,11 @@ from openclaw.db.engine import async_session_factory
 from openclaw.db.models import MergeJob, Repository, Task
 from openclaw.events.store import EventStore
 from openclaw.events.types import MERGE_COMPLETED, MERGE_FAILED, MERGE_STARTED
+from openclaw.observability.tracing import log_structured, new_span, new_trace
 
+import logging as _logging
+
+_trace_logger = _logging.getLogger("openclaw.services.merge_worker")
 logger = structlog.get_logger()
 
 
@@ -151,6 +155,14 @@ async def _execute_merge_job(db: AsyncSession, job: MergeJob) -> None:
     """
     events = EventStore(db)
     log = logger.bind(merge_job_id=job.id, task_id=job.task_id)
+
+    # Trace merge operation
+    new_trace()
+    new_span("merge.execute")
+    log_structured(
+        _trace_logger, _logging.INFO, "merge.job.started",
+        merge_job_id=job.id, task_id=job.task_id, strategy=job.strategy,
+    )
 
     # Mark as running
     job.status = "running"

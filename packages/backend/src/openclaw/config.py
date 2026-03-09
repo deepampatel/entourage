@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     sandbox_memory_limit: str = "512m"
     sandbox_cpus: float = 1.0
 
+    # Observability
+    structured_logging: bool = True
+    log_file_json: str = "openclaw.jsonl"
+
     model_config = {"env_prefix": "OPENCLAW_"}
 
     @model_validator(mode="after")

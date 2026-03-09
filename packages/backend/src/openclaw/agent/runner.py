@@ -33,6 +33,7 @@ from openclaw.events.types import (
     AGENT_RUN_STARTED,
     AGENT_RUN_TIMEOUT,
 )
+from openclaw.observability.tracing import log_structured, new_span
 from openclaw.services.session_service import SessionService
 
 logger = logging.getLogger("openclaw.agent.runner")
@@ -184,12 +185,11 @@ class AgentRunner:
 
         # ── Run the adapter ───────────────────────────────────
         try:
-            logger.info(
-                "Running agent %s via %s (task=%s, timeout=%ds)",
-                agent_id,
-                adapter_name,
-                task_id,
-                adapter_config.timeout_seconds,
+            new_span("agent.run")
+            log_structured(
+                logger, logging.INFO, "agent.run.started",
+                agent_id=agent_id, adapter=adapter_name,
+                task_id=task_id, timeout=adapter_config.timeout_seconds,
             )
 
             result = await adapter.run(prompt, adapter_config)
@@ -245,12 +245,12 @@ class AgentRunner:
             except Exception:
                 logger.debug("Failed to publish to Redis", exc_info=True)
 
-            logger.info(
-                "Agent %s %s (%.1fs, exit=%d)",
-                agent_id,
-                "completed" if result.ok else "failed",
-                result.duration_seconds,
-                result.exit_code,
+            log_structured(
+                logger, logging.INFO, "agent.run.completed",
+                agent_id=agent_id, adapter=adapter_name,
+                duration_seconds=round(result.duration_seconds, 1),
+                exit_code=result.exit_code,
+                success=result.ok,
             )
 
             return {

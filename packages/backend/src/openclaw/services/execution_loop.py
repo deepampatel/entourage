@@ -38,6 +38,7 @@ from openclaw.events.types import (
     SANDBOX_PASSED,
     SANDBOX_FAILED,
 )
+from openclaw.observability.tracing import log_structured, new_span, new_trace
 from openclaw.services.sandbox_manager import SandboxManager
 from openclaw.services.pipeline_budget_service import (
     PipelineBudgetExceededError,
@@ -71,7 +72,13 @@ class ExecutionLoop:
 
         Returns dict with final status and summary.
         """
-        logger.info("Starting execution loop for pipeline %s", pipeline_id)
+        # Start a new trace for this pipeline execution
+        trace = new_trace()
+        new_span("pipeline.execute")
+        log_structured(
+            logger, logging.INFO, "pipeline.execution.started",
+            pipeline_id=str(pipeline_id), trace_id=trace,
+        )
 
         # Track running tasks: pipeline_task_id → asyncio.Task
         running: dict[int, asyncio.Task] = {}
@@ -497,6 +504,12 @@ class ExecutionLoop:
 
         Returns True on success, False on failure.
         """
+        new_span("task.dispatch")
+        log_structured(
+            logger, logging.INFO, "task.dispatched",
+            task_id=pipeline_task_id, agent_id=agent_id,
+            pipeline_id=str(pipeline_id), title=task_title,
+        )
         runner = AgentRunner()
 
         # Build prompt for the agent

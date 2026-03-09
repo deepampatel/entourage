@@ -9,6 +9,7 @@ each concern lives in its own module.
 """
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 import structlog
@@ -18,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from openclaw import __version__
 from openclaw.api import api_router
 from openclaw.config import settings
+from openclaw.observability.tracing import StructuredJsonFormatter
 
 logger = structlog.get_logger()
 
@@ -29,6 +31,14 @@ async def lifespan(app: FastAPI):
     Learn: FastAPI lifespan replaces on_event("startup") / on_event("shutdown").
     Anything before `yield` runs at startup, after `yield` runs at shutdown.
     """
+    # ── Set up structured JSON logging ───────────────────────
+    if settings.structured_logging:
+        json_handler = logging.FileHandler(settings.log_file_json)
+        json_handler.setFormatter(StructuredJsonFormatter())
+        root_logger = logging.getLogger("openclaw")
+        root_logger.addHandler(json_handler)
+        root_logger.setLevel(logging.INFO)
+
     logger.info(
         "openclaw.starting",
         version=__version__,
@@ -83,13 +93,15 @@ def create_app() -> FastAPI:
 
     # ── Middleware stack ──────────────────────────────────────
     # Note: Starlette middleware executes in reverse order of registration.
-    # Request flow: RequestId → Security → RateLimit → CORS → handler
+    # Request flow: RequestId → Tracing → Security → RateLimit → CORS → handler
 
     from openclaw.middleware.rate_limit import RateLimitMiddleware
     from openclaw.middleware.request_id import RequestIdMiddleware
     from openclaw.middleware.security import SecurityHeadersMiddleware
+    from openclaw.middleware.tracing import TracingMiddleware
 
     app.add_middleware(RequestIdMiddleware)
+    app.add_middleware(TracingMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         RateLimitMiddleware,
