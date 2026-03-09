@@ -67,3 +67,18 @@ AGENT_RUN_STARTED = "agent.run_started"
 AGENT_RUN_COMPLETED = "agent.run_completed"
 AGENT_RUN_FAILED = "agent.run_failed"
 AGENT_RUN_TIMEOUT = "agent.run_timeout"
+
+# ─── Phase 12: Pipeline lifecycle ─────────────────────────
+
+PIPELINE_CREATED = "pipeline.created"
+PIPELINE_STATUS_CHANGED = "pipeline.status_changed"
+PIPELINE_PLAN_GENERATED = "pipeline.plan_generated"
+PIPELINE_PLAN_APPROVED = "pipeline.plan_approved"
+PIPELINE_PLAN_REJECTED = "pipeline.plan_rejected"
+PIPELINE_TASK_STARTED = "pipeline.task_started"
+PIPELINE_TASK_COMPLETED = "pipeline.task_completed"
+PIPELINE_TASK_FAILED = "pipeline.task_failed"
+PIPELINE_BUDGET_WARNING = "pipeline.budget_warning"
+PIPELINE_BUDGET_EXCEEDED = "pipeline.budget_exceeded"
+PIPELINE_COMPLETED = "pipeline.completed"
+PIPELINE_FAILED = "pipeline.failed"

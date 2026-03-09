@@ -753,3 +753,235 @@ class WebhookDelivery(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+# ══════════════════════════════════════════════════════════════
+# Phase 12: Pipelines
+# ══════════════════════════════════════════════════════════════
+
+
+class Pipeline(Base):
+    """A pipeline — the top-level orchestration unit.
+
+    A pipeline takes a human intent ("Add OAuth2 login"), uses an LLM
+    planner to decompose it into a TaskGraph, gets human approval, then
+    executes tasks serially (or in parallel in future phases).
+
+    State machine:
+      draft → planning → awaiting_plan_approval → executing →
+      reviewing → merging → done
+    With: paused, failed, cancelled as escape states.
+    """
+
+    __tablename__ = "pipelines"
+    __table_args__ = (
+        Index("idx_pipelines_team_status", "team_id", "status"),
+        Index("idx_pipelines_created_at", "created_at"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=new_uuid
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("teams.id"), nullable=False
+    )
+    repository_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("repositories.id"), nullable=True
+    )
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    intent: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(30), nullable=False, default="draft"
+    )  # draft, planning, awaiting_plan_approval, executing,
+    #    reviewing, merging, done, paused, failed, cancelled
+    task_graph: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    estimated_cost_usd: Mapped[float] = mapped_column(
+        Numeric(12, 6), default=0
+    )
+    actual_cost_usd: Mapped[float] = mapped_column(
+        Numeric(12, 6), default=0
+    )
+    budget_limit_usd: Mapped[float] = mapped_column(
+        Numeric(12, 6), nullable=False, default=10.0
+    )
+    branch_name: Mapped[str] = mapped_column(
+        String(200), nullable=False, default=""
+    )
+    pr_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    pipeline_metadata: Mapped[dict] = mapped_column(
+        "metadata", JSONB, nullable=False, server_default="{}"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=utcnow
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Relationships
+    team: Mapped["Team"] = relationship()
+    pipeline_tasks: Mapped[list["PipelineTask"]] = relationship(
+        back_populates="pipeline", cascade="all, delete-orphan"
+    )
+    budget_ledger: Mapped[Optional["BudgetLedger"]] = relationship(
+        back_populates="pipeline", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class PipelineTask(Base):
+    """A task within a pipeline's TaskGraph.
+
+    Separate from the standalone Task model — PipelineTasks are
+    scoped to a pipeline and managed by the ExecutionLoop.
+    """
+
+    __tablename__ = "pipeline_tasks"
+    __table_args__ = (
+        Index("idx_ptasks_pipeline", "pipeline_id"),
+        Index("idx_ptasks_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pipeline_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("pipelines.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True
+    )
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    complexity: Mapped[str] = mapped_column(
+        String(5), nullable=False, default="M"
+    )  # S, M, L, XL
+    assigned_role: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="engineer"
+    )  # engineer, reviewer
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="todo"
+    )  # todo, blocked, in_progress, awaiting_review, done, failed
+    dependencies: Mapped[Optional[list[int]]] = mapped_column(
+        ARRAY(Integer), nullable=False, server_default="{}"
+    )
+    integration_hints: Mapped[Optional[list[str]]] = mapped_column(
+        ARRAY(Text), nullable=False, server_default="{}"
+    )
+    estimated_tokens: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    branch_name: Mapped[str] = mapped_column(
+        String(200), nullable=False, default=""
+    )
+    result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=utcnow
+    )
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    # Relationships
+    pipeline: Mapped["Pipeline"] = relationship(back_populates="pipeline_tasks")
+
+
+class BudgetLedger(Base):
+    """Per-pipeline budget tracking.
+
+    Each pipeline gets one ledger. As agents work, cost entries are
+    recorded and the running total is updated. Warnings at 80%,
+    hard stop at 100%.
+    """
+
+    __tablename__ = "budget_ledgers"
+    __table_args__ = (
+        Index("idx_budget_ledgers_org", "org_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), primary_key=True, default=new_uuid
+    )
+    pipeline_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("pipelines.id", ondelete="CASCADE"),
+        unique=True, nullable=False,
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("teams.id"), nullable=False
+    )
+    budget_limit_usd: Mapped[float] = mapped_column(
+        Numeric(12, 6), nullable=False
+    )
+    estimated_cost_usd: Mapped[float] = mapped_column(
+        Numeric(12, 6), default=0
+    )
+    actual_cost_usd: Mapped[float] = mapped_column(
+        Numeric(12, 6), default=0
+    )
+    status: Mapped[str] = mapped_column(
+        String(10), nullable=False, default="ok"
+    )  # ok, warn, exceeded
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=utcnow
+    )
+
+    # Relationships
+    pipeline: Mapped["Pipeline"] = relationship(back_populates="budget_ledger")
+    entries: Mapped[list["BudgetEntry"]] = relationship(
+        back_populates="ledger", cascade="all, delete-orphan"
+    )
+
+
+class BudgetEntry(Base):
+    """Individual cost entry within a pipeline's budget ledger."""
+
+    __tablename__ = "budget_entries"
+    __table_args__ = (
+        Index("idx_budget_entries_pipeline", "pipeline_id"),
+        Index("idx_budget_entries_recorded", "recorded_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ledger_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("budget_ledgers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    pipeline_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("pipelines.id"), nullable=False
+    )
+    pipeline_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("pipeline_tasks.id"), nullable=True
+    )
+    agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True
+    )
+    model: Mapped[str] = mapped_column(String(100), nullable=False)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd: Mapped[float] = mapped_column(Numeric(12, 6), nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    # Relationships
+    ledger: Mapped["BudgetLedger"] = relationship(back_populates="entries")
