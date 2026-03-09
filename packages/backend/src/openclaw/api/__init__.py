@@ -11,6 +11,7 @@ open (no auth required).
 from fastapi import APIRouter, Depends
 
 from openclaw.api.agent_runs import router as agent_runs_router
+from openclaw.api.alerts import router as alerts_router
 from openclaw.api.auth import router as auth_router
 from openclaw.api.dispatch import router as dispatch_router
 from openclaw.api.git import router as git_router
@@ -49,4 +50,5 @@ api_router.include_router(webhooks_router, tags=["webhooks"], dependencies=_auth
 api_router.include_router(pipelines_router, tags=["pipelines"], dependencies=_auth)
 api_router.include_router(sandbox_router, tags=["sandbox"], dependencies=_auth)
 api_router.include_router(analytics_router, tags=["analytics"], dependencies=_auth)
+api_router.include_router(alerts_router, tags=["alerts"], dependencies=_auth)
 api_router.include_router(settings_router, tags=["settings"], dependencies=_auth)

@@ -11,6 +11,7 @@ import { apiClient } from "../api/client";
 import type {
   Agent,
   AgentPerformance,
+  Alert,
   Contract,
   CostSummary,
   CostTimeseriesPoint,
@@ -528,6 +529,37 @@ export function useTriggerSandboxRun(_teamId: string) {
       queryClient.invalidateQueries({
         queryKey: ["sandbox-runs", vars.pipelineId, vars.taskId],
       });
+    },
+  });
+}
+
+// ─── Alerts ─────────────────────────────────────────────
+
+export function useAlerts(teamId: string | undefined, acknowledged?: boolean) {
+  const params = new URLSearchParams();
+  if (acknowledged !== undefined) params.set("acknowledged", String(acknowledged));
+  const qs = params.toString();
+  return useQuery({
+    queryKey: ["alerts", teamId, acknowledged],
+    queryFn: () =>
+      apiClient.get<Alert[]>(
+        `/api/v1/teams/${teamId}/alerts${qs ? `?${qs}` : ""}`
+      ),
+    enabled: !!teamId,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useAcknowledgeAlert(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (alertId: number) =>
+      apiClient.post<Alert>(
+        `/api/v1/teams/${teamId}/alerts/${alertId}/acknowledge`,
+        {}
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts", teamId] });
     },
   });
 }

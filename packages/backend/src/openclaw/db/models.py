@@ -1046,6 +1046,48 @@ class BudgetEntry(Base):
 
 
 # ══════════════════════════════════════════════════════════════
+# Phase 3C: Alerts
+# ══════════════════════════════════════════════════════════════
+
+
+class Alert(Base):
+    """Persistent alert record for budget, failure, and performance events.
+
+    Learn: Alerts are created by AlertService.evaluate_all() and deduplicated
+    within a 1-hour window. Users can acknowledge alerts to dismiss them
+    from the dashboard without deleting the record.
+    """
+
+    __tablename__ = "alerts"
+    __table_args__ = (
+        Index("idx_alerts_team_acknowledged", "team_id", "acknowledged"),
+        Index("idx_alerts_kind_created", "kind", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(50), nullable=False)
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("teams.id"), nullable=False
+    )
+    org_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False
+    )
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    alert_data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    acknowledged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    acknowledged_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=True
+    )
+    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+# ══════════════════════════════════════════════════════════════
 # Phase 3B: Sandbox test runs
 # ══════════════════════════════════════════════════════════════
 

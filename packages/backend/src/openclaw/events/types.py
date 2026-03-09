@@ -100,3 +100,11 @@ SANDBOX_PASSED = "sandbox.passed"
 SANDBOX_FAILED = "sandbox.failed"
 SANDBOX_TIMEOUT = "sandbox.timeout"
 SANDBOX_ERROR = "sandbox.error"
+
+# ─── Phase 3C: Alerts ──────────────────────────────────
+
+ALERT_BUDGET_WARNING = "alert.budget_warning"
+ALERT_BUDGET_EXCEEDED = "alert.budget_exceeded"
+ALERT_FAILURE_SPIKE = "alert.failure_spike"
+ALERT_PERFORMANCE = "alert.performance_degradation"
+ALERT_ACKNOWLEDGED = "alert.acknowledged"

@@ -345,3 +345,17 @@ export interface SandboxRun {
   started_at: string;
   ended_at: string | null;
 }
+
+// ─── Alerts ─────────────────────────────────────────────
+
+export interface Alert {
+  id: number;
+  kind: string;
+  severity: string;
+  message: string;
+  alert_data: Record<string, unknown>;
+  acknowledged: boolean;
+  acknowledged_by: string | null;
+  acknowledged_at: string | null;
+  created_at: string;
+}

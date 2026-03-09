@@ -13,7 +13,9 @@ import { SkeletonGrid, SkeletonList } from "../components/Skeleton";
 import { StatCard } from "../components/StatCard";
 import { TaskCard } from "../components/TaskCard";
 import {
+  useAcknowledgeAlert,
   useAgents,
+  useAlerts,
   useCosts,
   useHumanRequests,
   useRespondToRequest,
@@ -34,8 +36,10 @@ export function Dashboard({ teamId }: DashboardProps) {
   const { data: agents, isLoading: agentsLoading } = useAgents(teamId);
   const { data: costs } = useCosts(teamId);
   const { data: pendingRequests } = useHumanRequests(teamId, "pending");
+  const { data: alerts } = useAlerts(teamId, false);
   const respondMutation = useRespondToRequest(teamId);
   const runAgentMutation = useRunAgent(teamId);
+  const acknowledgeMutation = useAcknowledgeAlert(teamId);
 
   const activeTasks = tasks?.filter(
     (t) => !["done", "cancelled"].includes(t.status)
@@ -53,6 +57,30 @@ export function Dashboard({ teamId }: DashboardProps) {
   return (
     <div className="dashboard">
       <h1>Dashboard</h1>
+
+      {/* Active Alerts Banner */}
+      {alerts && alerts.length > 0 && (
+        <div className="alerts-banner">
+          {alerts.map((alert) => (
+            <div
+              key={alert.id}
+              className={`alert-item alert-${alert.severity}`}
+            >
+              <span className="alert-severity">
+                {alert.severity === "critical" ? "!!!" : "!"}
+              </span>
+              <span className="alert-message">{alert.message}</span>
+              <button
+                className="alert-dismiss"
+                onClick={() => acknowledgeMutation.mutate(alert.id)}
+                disabled={acknowledgeMutation.isPending}
+              >
+                Dismiss
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Stats Row */}
       <div className="stats-row">
