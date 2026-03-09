@@ -94,6 +94,19 @@ class ClaudeCodeAdapter(AgentAdapter):
             lines.append(f"- {k}: {v}")
         return "\n".join(lines) + "\n\n"
 
+    def _build_security_section(self, config: "AdapterConfig | None" = None) -> str:
+        """Build write-path restrictions section for security enforcement."""
+        if not config or not config.write_path_allowlist:
+            return ""
+        paths = ", ".join(config.write_path_allowlist)
+        return f"""SECURITY — WRITE PATH RESTRICTIONS:
+You may ONLY write to files within your assigned directories: {paths}
+Do NOT write to paths outside these directories.
+Do NOT use parent directory traversal (../) to escape your workspace.
+Violations will be blocked and logged.
+
+"""
+
     def _build_engineer_prompt(
         self,
         task_title: str,

@@ -3,10 +3,12 @@
  *
  * Learn: Displays and edits team settings via GET/PATCH /settings/teams/{id}.
  * Uses controlled form inputs with local state, submitted via mutation.
+ * Phase 3D adds a Security section for network allowlist and security mode.
  */
 
 import { useState, useEffect } from "react";
 import { useTeamSettings, useUpdateTeamSettings } from "../hooks/useApi";
+import "../styles/settings.css";
 
 interface SettingsProps {
   teamId: string;
@@ -18,6 +20,7 @@ export function Settings({ teamId }: SettingsProps) {
 
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [saved, setSaved] = useState(false);
+  const [newDomain, setNewDomain] = useState("");
 
   useEffect(() => {
     if (teamSettings?.settings) {
@@ -35,6 +38,23 @@ export function Settings({ teamId }: SettingsProps) {
     updateMut.mutate(form, {
       onSuccess: () => setSaved(true),
     });
+  };
+
+  const networkAllowlist = (form.network_allowlist as string[]) ?? [];
+
+  const handleAddDomain = () => {
+    const domain = newDomain.trim();
+    if (domain && !networkAllowlist.includes(domain)) {
+      handleChange("network_allowlist", [...networkAllowlist, domain]);
+      setNewDomain("");
+    }
+  };
+
+  const handleRemoveDomain = (domain: string) => {
+    handleChange(
+      "network_allowlist",
+      networkAllowlist.filter((d) => d !== domain)
+    );
   };
 
   if (isLoading) {
@@ -137,6 +157,64 @@ export function Settings({ teamId }: SettingsProps) {
               />
               Auto-merge after approval
             </label>
+          </div>
+        </div>
+
+        {/* Security */}
+        <div className="settings-section">
+          <h2>Security</h2>
+          <div className="settings-field">
+            <label>Security Mode</label>
+            <select
+              value={(form.security_mode as string) ?? "strict"}
+              onChange={(e) => handleChange("security_mode", e.target.value)}
+            >
+              <option value="strict">Strict (block violations)</option>
+              <option value="permissive">Permissive (log only)</option>
+            </select>
+          </div>
+
+          <div className="settings-field">
+            <label>Network Allowlist</label>
+            <p className="settings-hint">
+              Domains agents are allowed to access. Supports wildcards
+              (*.github.com).
+            </p>
+            <div className="allowlist-editor">
+              {networkAllowlist.map((domain) => (
+                <div key={domain} className="allowlist-item">
+                  <span className="allowlist-domain">{domain}</span>
+                  <button
+                    type="button"
+                    className="allowlist-remove"
+                    onClick={() => handleRemoveDomain(domain)}
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+              <div className="allowlist-add">
+                <input
+                  type="text"
+                  value={newDomain}
+                  onChange={(e) => setNewDomain(e.target.value)}
+                  placeholder="e.g. *.github.com"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddDomain();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="allowlist-add-btn"
+                  onClick={handleAddDomain}
+                >
+                  Add
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

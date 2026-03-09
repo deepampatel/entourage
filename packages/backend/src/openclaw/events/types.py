@@ -108,3 +108,8 @@ ALERT_BUDGET_EXCEEDED = "alert.budget_exceeded"
 ALERT_FAILURE_SPIKE = "alert.failure_spike"
 ALERT_PERFORMANCE = "alert.performance_degradation"
 ALERT_ACKNOWLEDGED = "alert.acknowledged"
+
+# ─── Phase 3D: Security ─────────────────────────────────
+
+SECURITY_VIOLATION_BLOCKED = "security.violation.blocked"
+SECURITY_VIOLATION_LOGGED = "security.violation.logged"

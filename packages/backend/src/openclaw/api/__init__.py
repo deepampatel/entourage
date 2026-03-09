@@ -25,6 +25,7 @@ from openclaw.api.teams import router as teams_router
 from openclaw.api.analytics import router as analytics_router
 from openclaw.api.pipelines import router as pipelines_router
 from openclaw.api.sandbox import router as sandbox_router
+from openclaw.api.security import router as security_router
 from openclaw.api.webhooks import router as webhooks_router
 from openclaw.auth.dependencies import get_current_user
 
@@ -52,3 +53,4 @@ api_router.include_router(sandbox_router, tags=["sandbox"], dependencies=_auth)
 api_router.include_router(analytics_router, tags=["analytics"], dependencies=_auth)
 api_router.include_router(alerts_router, tags=["alerts"], dependencies=_auth)
 api_router.include_router(settings_router, tags=["settings"], dependencies=_auth)
+api_router.include_router(security_router, tags=["security"], dependencies=_auth)

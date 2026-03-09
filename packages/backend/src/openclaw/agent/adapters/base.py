@@ -45,6 +45,10 @@ class AdapterConfig:
     # Limits
     timeout_seconds: float = 1800.0  # 30 min default
 
+    # Security restrictions
+    write_path_allowlist: list[str] = field(default_factory=list)
+    network_allowlist: list[str] = field(default_factory=list)
+
     # Extra env vars for the subprocess
     env_overrides: dict[str, str] = field(default_factory=dict)
 

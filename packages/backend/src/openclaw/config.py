@@ -77,6 +77,15 @@ class Settings(BaseSettings):
     structured_logging: bool = True
     log_file_json: str = "openclaw.jsonl"
 
+    # Security
+    security_mode: str = "strict"  # strict|permissive
+    default_network_allowlist: list[str] = [
+        "*.github.com",
+        "*.anthropic.com",
+        "pypi.org",
+        "registry.npmjs.org",
+    ]
+
     model_config = {"env_prefix": "OPENCLAW_"}
 
     @model_validator(mode="after")

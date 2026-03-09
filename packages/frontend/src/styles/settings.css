@@ -107,3 +107,101 @@
   color: #f87171;
   font-size: 0.85rem;
 }
+
+/* ─── Security section ──────────────────────────────────── */
+
+.settings-field select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #333;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.settings-field select:focus {
+  outline: none;
+  border-color: #555;
+}
+
+.settings-hint {
+  font-size: 0.8rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.allowlist-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.allowlist-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+}
+
+.allowlist-domain {
+  flex: 1;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 0.8rem;
+  color: #e0e0e0;
+}
+
+.allowlist-remove {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.allowlist-remove:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.allowlist-add {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.allowlist-add input {
+  flex: 1;
+  padding: 0.35rem 0.75rem;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #333;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+.allowlist-add input:focus {
+  outline: none;
+  border-color: #555;
+}
+
+.allowlist-add-btn {
+  padding: 0.35rem 0.75rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.allowlist-add-btn:hover {
+  background: #2563eb;
+}

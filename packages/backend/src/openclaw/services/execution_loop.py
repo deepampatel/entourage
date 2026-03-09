@@ -40,6 +40,7 @@ from openclaw.events.types import (
 )
 from openclaw.observability.tracing import log_structured, new_span, new_trace
 from openclaw.services.sandbox_manager import SandboxManager
+from openclaw.services.security_enforcer import SecurityEnforcer
 from openclaw.services.pipeline_budget_service import (
     PipelineBudgetExceededError,
     PipelineBudgetService,

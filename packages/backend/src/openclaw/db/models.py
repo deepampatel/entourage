@@ -1135,3 +1135,43 @@ class SandboxRun(Base):
     ended_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+# ══════════════════════════════════════════════════════════════
+# Phase 3D: Security audit log
+# ══════════════════════════════════════════════════════════════
+
+
+class SecurityAudit(Base):
+    """Audit log entry for security-relevant agent actions.
+
+    Learn: The SecurityEnforcer records every violation (blocked or
+    logged) here. This provides a tamper-evident trail for security
+    reviews and compliance — who tried what, when, and what rule
+    matched.
+    """
+
+    __tablename__ = "security_audit"
+    __table_args__ = (
+        Index("idx_security_audit_team_created", "team_id", "created_at"),
+        Index("idx_security_audit_agent_created", "agent_id", "created_at"),
+        Index("idx_security_audit_kind", "kind"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    agent_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False
+    )
+    team_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("teams.id"), nullable=False
+    )
+    pipeline_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("pipeline_tasks.id"), nullable=True
+    )
+    detail: Mapped[str] = mapped_column(Text, nullable=False)
+    rule: Mapped[str] = mapped_column(String(200), nullable=False)
+    action: Mapped[str] = mapped_column(String(20), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
