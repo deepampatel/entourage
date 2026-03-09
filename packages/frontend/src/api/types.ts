@@ -217,6 +217,7 @@ export interface PipelineTask {
   dependencies: number[];
   integration_hints: string[];
   estimated_tokens: number;
+  retry_count: number;
   branch_name: string;
   error: string | null;
   created_at: string;

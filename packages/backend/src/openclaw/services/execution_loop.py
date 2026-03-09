@@ -29,9 +29,11 @@ from openclaw.events.store import EventStore
 from openclaw.events.types import (
     PIPELINE_COMPLETED,
     PIPELINE_FAILED,
+    PIPELINE_RESUMED,
     PIPELINE_STATUS_CHANGED,
     PIPELINE_TASK_COMPLETED,
     PIPELINE_TASK_FAILED,
+    PIPELINE_TASK_RETRIED,
     PIPELINE_TASK_STARTED,
 )
 from openclaw.services.pipeline_budget_service import (
@@ -329,6 +331,75 @@ class ExecutionLoop:
                 "reason": str(e),
             }
 
+    # ─── Resume ────────────────────────────────────────────────────
+
+    async def resume(self, pipeline_id: uuid.UUID) -> dict:
+        """Resume a paused or crashed pipeline from its last checkpoint.
+
+        1. Read pipeline and tasks from DB
+        2. Reset any in_progress tasks → todo (they were interrupted)
+        3. Transition pipeline → executing
+        4. Start the normal execution loop
+
+        Returns the result of the resumed execution.
+        """
+        logger.info("Resuming pipeline %s", pipeline_id)
+
+        async with async_session_factory() as db:
+            pipeline = await db.get(Pipeline, pipeline_id)
+            if not pipeline:
+                raise ValueError(f"Pipeline {pipeline_id} not found")
+
+            if pipeline.status not in ("paused", "failed", "executing"):
+                raise ValueError(
+                    f"Cannot resume pipeline in '{pipeline.status}' status. "
+                    f"Expected 'paused', 'failed', or 'executing'."
+                )
+
+            # Reset in_progress tasks to todo (they were interrupted)
+            result = await db.execute(
+                select(PipelineTask)
+                .where(PipelineTask.pipeline_id == pipeline_id)
+                .order_by(PipelineTask.id)
+            )
+            tasks = list(result.scalars().all())
+            reset_count = 0
+
+            for task in tasks:
+                if task.status == "in_progress":
+                    task.status = "todo"
+                    task.agent_id = None
+                    task.started_at = None
+                    reset_count += 1
+
+            # Transition to executing
+            svc = PipelineService(db)
+            if pipeline.status != "executing":
+                await svc.change_status(pipeline_id, "executing")
+
+            # Record resume event
+            events = EventStore(db)
+            await events.append(
+                stream_id=f"pipeline:{pipeline_id}",
+                event_type=PIPELINE_RESUMED,
+                data={
+                    "pipeline_id": str(pipeline_id),
+                    "reset_tasks": reset_count,
+                    "total_tasks": len(tasks),
+                    "done_tasks": len([t for t in tasks if t.status == "done"]),
+                },
+            )
+            await db.commit()
+
+            logger.info(
+                "Pipeline %s resumed: reset %d in_progress tasks to todo",
+                pipeline_id,
+                reset_count,
+            )
+
+        # Run the normal execution loop
+        return await self.run(pipeline_id)
+
     # ─── Task discovery ────────────────────────────────────────────
 
     def _find_ready_tasks(
@@ -503,7 +574,10 @@ class ExecutionLoop:
         success: bool,
         team_id: uuid.UUID,
     ) -> None:
-        """Update task status and emit events after task completion."""
+        """Update task status and emit events after task completion.
+
+        On failure, retries up to max_task_retries before marking as failed.
+        """
         async with async_session_factory() as db:
             ptask = await db.get(PipelineTask, task_id)
             if not ptask:
@@ -519,11 +593,29 @@ class ExecutionLoop:
                 logger.info(
                     "Pipeline task %d completed successfully", task_id
                 )
+            elif ptask.retry_count < settings.max_task_retries:
+                # Retry: reset to todo with incremented retry count
+                ptask.retry_count += 1
+                ptask.status = "todo"
+                ptask.agent_id = None  # Re-assign on next dispatch
+                ptask.started_at = None
+                ptask.error = None
+                event_type = PIPELINE_TASK_RETRIED
+                logger.warning(
+                    "Pipeline task %d failed, retrying (attempt %d/%d)",
+                    task_id,
+                    ptask.retry_count,
+                    settings.max_task_retries,
+                )
             else:
                 ptask.status = "failed"
                 ptask.completed_at = datetime.now(timezone.utc)
                 event_type = PIPELINE_TASK_FAILED
-                logger.error("Pipeline task %d failed", task_id)
+                logger.error(
+                    "Pipeline task %d failed after %d retries",
+                    task_id,
+                    ptask.retry_count,
+                )
 
             await events.append(
                 stream_id=f"pipeline:{pipeline_id}",
@@ -532,6 +624,7 @@ class ExecutionLoop:
                     "pipeline_id": str(pipeline_id),
                     "pipeline_task_id": task_id,
                     "title": ptask.title,
+                    "retry_count": ptask.retry_count,
                 },
             )
             await db.commit()

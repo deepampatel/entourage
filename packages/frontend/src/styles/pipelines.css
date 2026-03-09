@@ -469,6 +469,16 @@
   background: rgba(139, 92, 246, 0.04);
 }
 
+.pipeline-task-retry {
+  font-size: 0.7rem;
+  color: #f59e0b;
+  font-weight: 600;
+  flex-shrink: 0;
+  padding: 0.1rem 0.35rem;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 3px;
+}
+
 .pipeline-task-agent {
   font-size: 0.7rem;
   color: var(--text-secondary);

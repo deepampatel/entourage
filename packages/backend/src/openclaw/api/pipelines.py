@@ -266,11 +266,26 @@ async def pause_pipeline(
 )
 async def resume_pipeline(
     pipeline_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
     svc: PipelineService = Depends(_svc),
 ):
-    """Resume a paused pipeline."""
+    """Resume a paused/failed pipeline via ExecutionLoop.resume().
+
+    Resets interrupted tasks and continues execution in background.
+    """
     try:
-        return await svc.change_status(pipeline_id, "executing")
+        loop = ExecutionLoop()
+
+        # Validate pipeline exists before background dispatch
+        pipeline = await svc.db.get(Pipeline, pipeline_id)
+        if not pipeline:
+            raise HTTPException(status_code=404, detail="Pipeline not found")
+
+        background_tasks.add_task(loop.resume, pipeline_id)
+
+        # Re-read after potential status change
+        await svc.db.refresh(pipeline)
+        return pipeline
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except InvalidPipelineTransitionError as e:

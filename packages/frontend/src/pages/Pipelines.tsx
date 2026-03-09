@@ -216,6 +216,11 @@ function PipelineCard({
                   {task.status}
                   {isParallel && " ⚡"}
                 </span>
+                {task.retry_count > 0 && (
+                  <span className="pipeline-task-retry" title={`Retried ${task.retry_count} time(s)`}>
+                    🔄 {task.retry_count}
+                  </span>
+                )}
                 {task.dependencies.length > 0 && (
                   <span className="pipeline-task-deps">
                     deps: [{task.dependencies.join(", ")}]

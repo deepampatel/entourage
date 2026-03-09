@@ -887,6 +887,7 @@ class PipelineTask(Base):
     branch_name: Mapped[str] = mapped_column(
         String(200), nullable=False, default=""
     )
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(

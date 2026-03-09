@@ -77,6 +77,7 @@ class PipelineTaskRead(BaseModel):
     dependencies: list[int] = []
     integration_hints: list[str] = []
     estimated_tokens: int = 0
+    retry_count: int = 0
     branch_name: str
     error: Optional[str] = None
     created_at: datetime
