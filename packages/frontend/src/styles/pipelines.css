@@ -489,6 +489,126 @@
   border-radius: 3px;
 }
 
+/* ─── Sandbox ──────────────────────────────────────────── */
+
+.pipeline-task-wrapper {
+  border-bottom: 1px solid var(--border);
+}
+
+.pipeline-task-wrapper:last-child {
+  border-bottom: none;
+}
+
+.pipeline-task-wrapper .pipeline-task-row {
+  border-bottom: none;
+}
+
+.sandbox-pill {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.sandbox-pill.none {
+  color: #6b7280;
+  background: rgba(107, 114, 128, 0.1);
+}
+
+.sandbox-pill.passed {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.sandbox-pill.failed {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.sandbox-pill.running {
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.sandbox-detail {
+  padding: 0.5rem 0 0.5rem 2rem;
+}
+
+.sandbox-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sandbox-output-toggle {
+  padding: 0.2rem 0.5rem;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.sandbox-output-toggle:hover {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.sandbox-trigger-btn {
+  font-size: 0.75rem !important;
+  padding: 0.2rem 0.5rem !important;
+  margin-left: auto;
+}
+
+.sandbox-output {
+  margin-top: 0.5rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.sandbox-output-section h5 {
+  margin: 0;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border);
+}
+
+.sandbox-output-section pre {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.sandbox-output-meta {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+}
+
 /* ─── Empty State ──────────────────────────────────────── */
 
 .empty-state {

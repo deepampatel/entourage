@@ -1848,6 +1848,67 @@ server.tool(
   }
 );
 
+// ═══════════════════════════════════════════════════════════
+// Phase 3B: Sandbox
+// ═══════════════════════════════════════════════════════════
+
+server.tool(
+  "list_sandbox_runs",
+  "List sandbox test runs for a pipeline task — shows pass/fail status, stdout/stderr, and duration.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+    task_id: z.number().describe("Pipeline task ID"),
+  },
+  async (params) => {
+    try {
+      const runs = await client.listSandboxRuns(params.pipeline_id, params.task_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(runs, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "trigger_sandbox_run",
+  "Trigger a Docker-based sandbox test run for a pipeline task. Returns 202 — the test runs asynchronously.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+    task_id: z.number().describe("Pipeline task ID"),
+    test_cmd: z.string().describe("Shell command to run tests (e.g., 'pytest tests/')"),
+    image: z.string().optional().describe("Docker image (default: python:3.12-slim)"),
+    setup_cmd: z.string().optional().describe("Optional setup command to run before tests"),
+    timeout: z.number().optional().describe("Timeout in seconds (default: 300)"),
+  },
+  async (params) => {
+    try {
+      const run = await client.triggerSandboxRun(
+        params.pipeline_id,
+        params.task_id,
+        params.test_cmd,
+        {
+          image: params.image,
+          setup_cmd: params.setup_cmd,
+          timeout: params.timeout,
+        }
+      );
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(run, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
 // ─── Start server ──────────────────────────────────────────
 
 async function main() {

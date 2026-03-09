@@ -14,7 +14,9 @@ import {
   usePipelines,
   usePipelineTasks,
   useRejectPlan,
+  useSandboxRuns,
   useStartPipeline,
+  useTriggerSandboxRun,
 } from "../hooks/useApi";
 import { useTeamSocket } from "../hooks/useTeamSocket";
 import {
@@ -23,6 +25,7 @@ import {
   type Pipeline,
   type PipelineStatus,
   type PipelineTask,
+  type SandboxRun,
 } from "../api/types";
 
 interface PipelinesProps {
@@ -89,6 +92,81 @@ function TaskProgress({ tasks }: { tasks: PipelineTask[] }) {
   );
 }
 
+function SandboxPill({ runs }: { runs: SandboxRun[] | undefined }) {
+  if (!runs || runs.length === 0) return <span className="sandbox-pill none">sandbox</span>;
+  const latest = runs[0];
+  if (latest.exit_code === null) return <span className="sandbox-pill running">running</span>;
+  return latest.passed ? (
+    <span className="sandbox-pill passed">passed</span>
+  ) : (
+    <span className="sandbox-pill failed">failed</span>
+  );
+}
+
+function TaskSandboxDetail({
+  pipelineId,
+  task,
+  teamId,
+}: {
+  pipelineId: string;
+  task: PipelineTask;
+  teamId: string;
+}) {
+  const [showOutput, setShowOutput] = useState(false);
+  const { data: runs } = useSandboxRuns(pipelineId, task.id);
+  const triggerRun = useTriggerSandboxRun(teamId);
+
+  const latest = runs?.[0];
+
+  return (
+    <div className="sandbox-detail" onClick={(e) => e.stopPropagation()}>
+      <div className="sandbox-detail-header">
+        <SandboxPill runs={runs} />
+        {latest && latest.exit_code !== null && (
+          <button
+            className="sandbox-output-toggle"
+            onClick={() => setShowOutput(!showOutput)}
+          >
+            {showOutput ? "Hide Output" : "Show Output"}
+          </button>
+        )}
+        <button
+          className="pipeline-btn sandbox-trigger-btn"
+          onClick={() =>
+            triggerRun.mutate({
+              pipelineId,
+              taskId: task.id,
+              testCmd: "pytest tests/",
+            })
+          }
+          disabled={triggerRun.isPending}
+        >
+          {triggerRun.isPending ? "Running..." : "Run Tests"}
+        </button>
+      </div>
+      {showOutput && latest && (
+        <div className="sandbox-output">
+          {latest.stdout && (
+            <div className="sandbox-output-section">
+              <h5>stdout</h5>
+              <pre>{latest.stdout}</pre>
+            </div>
+          )}
+          {latest.stderr && (
+            <div className="sandbox-output-section">
+              <h5>stderr</h5>
+              <pre>{latest.stderr}</pre>
+            </div>
+          )}
+          <div className="sandbox-output-meta">
+            exit={latest.exit_code} | {latest.duration_seconds.toFixed(1)}s | {latest.image}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PipelineCard({
   pipeline,
   teamId,
@@ -97,6 +175,7 @@ function PipelineCard({
   teamId: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [expandedTaskSandbox, setExpandedTaskSandbox] = useState<number | null>(null);
   const { data: tasks } = usePipelineTasks(expanded ? pipeline.id : undefined);
   const { data: contracts } = usePipelineContracts(expanded ? pipeline.id : undefined);
   const approvePlan = useApprovePlan(teamId);
@@ -182,49 +261,62 @@ function PipelineCard({
             const isRunning = task.status === "in_progress";
             const runningTasks = tasks.filter((t) => t.status === "in_progress");
             const isParallel = isRunning && runningTasks.length > 1;
+            const sandboxOpen = expandedTaskSandbox === task.id;
             return (
-              <div
-                key={task.id}
-                className={`pipeline-task-row${isParallel ? " parallel-running" : ""}`}
-              >
-                <span className="pipeline-task-idx">{i}</span>
-                <span
-                  className="pipeline-task-complexity"
-                  data-complexity={task.complexity}
-                >
-                  {task.complexity}
-                </span>
-                <span className="pipeline-task-title">{task.title}</span>
-                {isRunning && task.agent_id && (
-                  <span className="pipeline-task-agent" title={task.agent_id}>
-                    🤖 {task.agent_id.slice(0, 8)}
-                  </span>
-                )}
-                <span
-                  className="pipeline-task-status"
-                  style={{
-                    color:
-                      task.status === "done"
-                        ? "#10b981"
-                        : task.status === "failed"
-                          ? "#ef4444"
-                          : task.status === "in_progress"
-                            ? "#3b82f6"
-                            : "#6b7280",
+              <div key={task.id} className="pipeline-task-wrapper">
+                <div
+                  className={`pipeline-task-row${isParallel ? " parallel-running" : ""}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedTaskSandbox(sandboxOpen ? null : task.id);
                   }}
                 >
-                  {task.status}
-                  {isParallel && " ⚡"}
-                </span>
-                {task.retry_count > 0 && (
-                  <span className="pipeline-task-retry" title={`Retried ${task.retry_count} time(s)`}>
-                    🔄 {task.retry_count}
+                  <span className="pipeline-task-idx">{i}</span>
+                  <span
+                    className="pipeline-task-complexity"
+                    data-complexity={task.complexity}
+                  >
+                    {task.complexity}
                   </span>
-                )}
-                {task.dependencies.length > 0 && (
-                  <span className="pipeline-task-deps">
-                    deps: [{task.dependencies.join(", ")}]
+                  <span className="pipeline-task-title">{task.title}</span>
+                  {isRunning && task.agent_id && (
+                    <span className="pipeline-task-agent" title={task.agent_id}>
+                      {task.agent_id.slice(0, 8)}
+                    </span>
+                  )}
+                  <span
+                    className="pipeline-task-status"
+                    style={{
+                      color:
+                        task.status === "done"
+                          ? "#10b981"
+                          : task.status === "failed"
+                            ? "#ef4444"
+                            : task.status === "in_progress"
+                              ? "#3b82f6"
+                              : "#6b7280",
+                    }}
+                  >
+                    {task.status}
+                    {isParallel && " ⚡"}
                   </span>
+                  {task.retry_count > 0 && (
+                    <span className="pipeline-task-retry" title={`Retried ${task.retry_count} time(s)`}>
+                      {task.retry_count}
+                    </span>
+                  )}
+                  {task.dependencies.length > 0 && (
+                    <span className="pipeline-task-deps">
+                      deps: [{task.dependencies.join(", ")}]
+                    </span>
+                  )}
+                </div>
+                {sandboxOpen && (
+                  <TaskSandboxDetail
+                    pipelineId={pipeline.id}
+                    task={task}
+                    teamId={teamId}
+                  />
                 )}
               </div>
             );

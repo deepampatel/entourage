@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from openclaw.agent.runner import AgentRunner
 from openclaw.config import settings
 from openclaw.db.engine import async_session_factory
-from openclaw.db.models import Agent, Pipeline, PipelineTask
+from openclaw.db.models import Agent, Pipeline, PipelineTask, Repository, SandboxRun
 from openclaw.events.store import EventStore
 from openclaw.events.types import (
     PIPELINE_COMPLETED,
@@ -35,7 +35,10 @@ from openclaw.events.types import (
     PIPELINE_TASK_FAILED,
     PIPELINE_TASK_RETRIED,
     PIPELINE_TASK_STARTED,
+    SANDBOX_PASSED,
+    SANDBOX_FAILED,
 )
+from openclaw.services.sandbox_manager import SandboxManager
 from openclaw.services.pipeline_budget_service import (
     PipelineBudgetExceededError,
     PipelineBudgetService,
@@ -61,6 +64,7 @@ class ExecutionLoop:
 
     def __init__(self) -> None:
         self._resource_monitor = ResourceMonitor()
+        self._sandbox_mgr = SandboxManager()
 
     async def run(self, pipeline_id: uuid.UUID) -> dict:
         """Main loop: dispatch ready tasks in parallel until done or failure.
@@ -587,12 +591,42 @@ class ExecutionLoop:
             events = EventStore(db)
 
             if success:
-                ptask.status = "done"
-                ptask.completed_at = datetime.now(timezone.utc)
-                event_type = PIPELINE_TASK_COMPLETED
-                logger.info(
-                    "Pipeline task %d completed successfully", task_id
+                # Optionally run sandbox tests before marking done
+                sandbox_passed = await self._run_sandbox_if_configured(
+                    pipeline_id, task_id, team_id
                 )
+                if sandbox_passed is False:
+                    # Sandbox tests failed — retry the task
+                    if ptask.retry_count < settings.max_task_retries:
+                        ptask.retry_count += 1
+                        ptask.status = "todo"
+                        ptask.agent_id = None
+                        ptask.started_at = None
+                        ptask.error = "Sandbox tests failed"
+                        event_type = PIPELINE_TASK_RETRIED
+                        logger.warning(
+                            "Pipeline task %d sandbox failed, retrying (attempt %d/%d)",
+                            task_id,
+                            ptask.retry_count,
+                            settings.max_task_retries,
+                        )
+                    else:
+                        ptask.status = "failed"
+                        ptask.completed_at = datetime.now(timezone.utc)
+                        ptask.error = "Sandbox tests failed after all retries"
+                        event_type = PIPELINE_TASK_FAILED
+                        logger.error(
+                            "Pipeline task %d sandbox failed after %d retries",
+                            task_id,
+                            ptask.retry_count,
+                        )
+                else:
+                    ptask.status = "done"
+                    ptask.completed_at = datetime.now(timezone.utc)
+                    event_type = PIPELINE_TASK_COMPLETED
+                    logger.info(
+                        "Pipeline task %d completed successfully", task_id
+                    )
             elif ptask.retry_count < settings.max_task_retries:
                 # Retry: reset to todo with incremented retry count
                 ptask.retry_count += 1
@@ -637,6 +671,96 @@ class ExecutionLoop:
                 "pipeline_task_id": task_id,
             },
         )
+
+    # ─── Sandbox integration ──────────────────────────────────────
+
+    async def _run_sandbox_if_configured(
+        self,
+        pipeline_id: uuid.UUID,
+        task_id: int,
+        team_id: uuid.UUID,
+    ) -> bool | None:
+        """Run sandbox tests after task completion if configured.
+
+        Returns:
+            True if tests passed, False if failed, None if sandbox not configured/available.
+        """
+        if not settings.sandbox_enabled:
+            return None
+
+        docker_available = await self._sandbox_mgr.check_docker()
+        if not docker_available:
+            logger.debug("Docker not available, skipping sandbox for task %d", task_id)
+            return None
+
+        async with async_session_factory() as db:
+            pipeline = await db.get(Pipeline, pipeline_id)
+            if not pipeline or not pipeline.repository_id:
+                return None
+
+            repo = await db.get(Repository, pipeline.repository_id)
+            if not repo:
+                return None
+
+            test_cmd = repo.config.get("test_cmd") if repo.config else None
+            if not test_cmd:
+                return None
+
+            worktree_path = repo.local_path
+            image = repo.config.get(
+                "sandbox_image", settings.sandbox_default_image
+            )
+            setup_cmd = repo.config.get("setup_cmd")
+
+        logger.info(
+            "Running sandbox tests for task %d: %s",
+            task_id,
+            test_cmd,
+        )
+
+        result = await self._sandbox_mgr.run_tests(
+            worktree_path=worktree_path,
+            test_cmd=test_cmd,
+            image=image,
+            setup_cmd=setup_cmd,
+            timeout=settings.sandbox_timeout_seconds,
+        )
+
+        # Persist the sandbox run
+        async with async_session_factory() as db:
+            run = SandboxRun(
+                sandbox_id=result.sandbox_id,
+                pipeline_id=pipeline_id,
+                pipeline_task_id=task_id,
+                team_id=team_id,
+                test_cmd=test_cmd,
+                exit_code=result.exit_code,
+                stdout=result.stdout,
+                stderr=result.stderr,
+                passed=result.passed,
+                duration_seconds=result.duration_seconds,
+                image=image,
+                started_at=result.started_at,
+                ended_at=result.ended_at,
+            )
+            db.add(run)
+            await db.commit()
+
+        # Publish sandbox event
+        event_type = SANDBOX_PASSED if result.passed else SANDBOX_FAILED
+        await self._publish_event(
+            team_id,
+            event_type,
+            {
+                "pipeline_id": str(pipeline_id),
+                "pipeline_task_id": task_id,
+                "sandbox_id": result.sandbox_id,
+                "passed": result.passed,
+                "duration_seconds": result.duration_seconds,
+            },
+        )
+
+        return result.passed
 
     # ─── Cleanup ───────────────────────────────────────────────────
 

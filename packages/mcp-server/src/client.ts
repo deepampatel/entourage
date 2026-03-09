@@ -1207,3 +1207,50 @@ export async function generateContracts(
     method: "POST",
   });
 }
+
+// ─── Phase 3B: Sandbox ─────────────────────────────────
+
+export interface SandboxRun {
+  id: number;
+  sandbox_id: string;
+  pipeline_id: string | null;
+  pipeline_task_id: number | null;
+  team_id: string;
+  test_cmd: string;
+  exit_code: number | null;
+  passed: boolean;
+  stdout: string;
+  stderr: string;
+  duration_seconds: number;
+  image: string;
+  started_at: string;
+  ended_at: string | null;
+}
+
+export async function listSandboxRuns(
+  pipelineId: string,
+  taskId: number
+): Promise<SandboxRun[]> {
+  return request(`/api/v1/pipelines/${pipelineId}/tasks/${taskId}/sandbox-runs`);
+}
+
+export async function triggerSandboxRun(
+  pipelineId: string,
+  taskId: number,
+  testCmd: string,
+  opts: { image?: string; setup_cmd?: string; timeout?: number } = {}
+): Promise<SandboxRun> {
+  return request(`/api/v1/pipelines/${pipelineId}/tasks/${taskId}/sandbox-runs`, {
+    method: "POST",
+    body: {
+      test_cmd: testCmd,
+      image: opts.image || "python:3.12-slim",
+      setup_cmd: opts.setup_cmd,
+      timeout: opts.timeout || 300,
+    },
+  });
+}
+
+export async function getSandboxRun(sandboxId: string): Promise<SandboxRun> {
+  return request(`/api/v1/sandbox-runs/${sandboxId}`);
+}

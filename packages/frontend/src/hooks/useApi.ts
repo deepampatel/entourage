@@ -21,6 +21,7 @@ import type {
   PipelineMetrics,
   PipelineTask,
   Review,
+  SandboxRun,
   Task,
   TaskEvent,
   Team,
@@ -479,5 +480,54 @@ export function useMonthlyRollup(
       ),
     enabled: !!teamId,
     refetchInterval: 60_000,
+  });
+}
+
+// ─── Sandbox ──────────────────────────────────────────
+
+export function useSandboxRuns(
+  pipelineId: string | undefined,
+  taskId: number | undefined
+) {
+  return useQuery({
+    queryKey: ["sandbox-runs", pipelineId, taskId],
+    queryFn: () =>
+      apiClient.get<SandboxRun[]>(
+        `/api/v1/pipelines/${pipelineId}/tasks/${taskId}/sandbox-runs`
+      ),
+    enabled: !!pipelineId && !!taskId,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useTriggerSandboxRun(_teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      pipelineId,
+      taskId,
+      testCmd,
+      image,
+      setupCmd,
+    }: {
+      pipelineId: string;
+      taskId: number;
+      testCmd: string;
+      image?: string;
+      setupCmd?: string;
+    }) =>
+      apiClient.post<SandboxRun>(
+        `/api/v1/pipelines/${pipelineId}/tasks/${taskId}/sandbox-runs`,
+        {
+          test_cmd: testCmd,
+          image: image || "python:3.12-slim",
+          setup_cmd: setupCmd,
+        }
+      ),
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({
+        queryKey: ["sandbox-runs", vars.pipelineId, vars.taskId],
+      });
+    },
   });
 }

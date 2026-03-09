@@ -326,3 +326,22 @@ export interface MonthlyRollup {
   total_sessions: number;
   total_tasks: number;
 }
+
+// ─── Sandbox ────────────────────────────────────────────
+
+export interface SandboxRun {
+  id: number;
+  sandbox_id: string;
+  pipeline_id: string | null;
+  pipeline_task_id: number | null;
+  team_id: string;
+  test_cmd: string;
+  exit_code: number | null;
+  passed: boolean;
+  stdout: string;
+  stderr: string;
+  duration_seconds: number;
+  image: string;
+  started_at: string;
+  ended_at: string | null;
+}
