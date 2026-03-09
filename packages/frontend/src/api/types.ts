@@ -225,9 +225,24 @@ export interface PipelineTask {
   completed_at: string | null;
 }
 
+export interface Contract {
+  id: number;
+  pipeline_id: string;
+  pipeline_task_id: number | null;
+  contract_type: string;
+  name: string;
+  specification: Record<string, unknown>;
+  locked: boolean;
+  locked_by: string | null;
+  locked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type PipelineStatus =
   | "draft"
   | "planning"
+  | "contracting"
   | "awaiting_plan_approval"
   | "executing"
   | "reviewing"
@@ -240,6 +255,7 @@ export type PipelineStatus =
 export const PIPELINE_STATUS_LABELS: Record<PipelineStatus, string> = {
   draft: "Draft",
   planning: "Planning",
+  contracting: "Generating Contracts",
   awaiting_plan_approval: "Awaiting Approval",
   executing: "Executing",
   reviewing: "Reviewing",
@@ -253,6 +269,7 @@ export const PIPELINE_STATUS_LABELS: Record<PipelineStatus, string> = {
 export const PIPELINE_STATUS_COLORS: Record<PipelineStatus, string> = {
   draft: "#6b7280",
   planning: "#8b5cf6",
+  contracting: "#a855f7",
   awaiting_plan_approval: "#f59e0b",
   executing: "#3b82f6",
   reviewing: "#06b6d4",

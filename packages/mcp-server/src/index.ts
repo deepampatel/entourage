@@ -1759,6 +1759,95 @@ server.tool(
   }
 );
 
+// ─── Phase 2A: Contracts ────────────────────────────────────
+
+server.tool(
+  "list_pipeline_contracts",
+  "List all interface contracts for a pipeline — shows contract types, specs, and lock status.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const contracts = await client.listContracts(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(contracts, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "get_pipeline_contract",
+  "Get a specific contract by ID with full specification details.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+    contract_id: z.number().describe("Contract ID (integer)"),
+  },
+  async (params) => {
+    try {
+      const contract = await client.getContract(params.pipeline_id, params.contract_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(contract, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "lock_pipeline_contract",
+  "Agent acknowledges a contract before starting work — locks the contract to the agent.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+    contract_id: z.number().describe("Contract ID (integer)"),
+    agent_id: z.string().describe("Agent UUID that is acknowledging the contract"),
+  },
+  async (params) => {
+    try {
+      const contract = await client.lockContract(params.pipeline_id, params.contract_id, params.agent_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(contract, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "generate_pipeline_contracts",
+  "Trigger contract generation from the task graph — analyzes inter-task boundaries and generates typed interface contracts.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const pipeline = await client.generateContracts(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
 // ─── Start server ──────────────────────────────────────────
 
 async function main() {

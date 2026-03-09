@@ -1159,3 +1159,51 @@ export async function getPipelineBudget(
 ): Promise<PipelineBudgetLedger> {
   return request(`/api/v1/pipelines/${pipelineId}/budget`);
 }
+
+// ─── Phase 2A: Contracts ─────────────────────────────────
+
+export interface ContractInfo {
+  id: number;
+  pipeline_id: string;
+  pipeline_task_id: number | null;
+  contract_type: string;
+  name: string;
+  specification: Record<string, unknown>;
+  locked: boolean;
+  locked_by: string | null;
+  locked_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function listContracts(
+  pipelineId: string
+): Promise<ContractInfo[]> {
+  return request(`/api/v1/pipelines/${pipelineId}/contracts`);
+}
+
+export async function getContract(
+  pipelineId: string,
+  contractId: number
+): Promise<ContractInfo> {
+  return request(`/api/v1/pipelines/${pipelineId}/contracts/${contractId}`);
+}
+
+export async function lockContract(
+  pipelineId: string,
+  contractId: number,
+  agentId: string
+): Promise<ContractInfo> {
+  return request(`/api/v1/pipelines/${pipelineId}/contracts/${contractId}/lock`, {
+    method: "POST",
+    body: { agent_id: agentId },
+  });
+}
+
+export async function generateContracts(
+  pipelineId: string
+): Promise<Pipeline> {
+  return request(`/api/v1/pipelines/${pipelineId}/generate-contracts`, {
+    method: "POST",
+  });
+}

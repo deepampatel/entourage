@@ -15,12 +15,15 @@ from openclaw.db.engine import get_db
 from openclaw.schemas.pipeline import (
     BudgetEntryRead,
     BudgetLedgerRead,
+    ContractLock,
+    ContractRead,
     PipelineCreate,
     PipelineRead,
     PipelineTaskRead,
     PlanApproval,
     PlanRejection,
 )
+from openclaw.services.contract_builder import ContractBuilder
 from openclaw.services.execution_loop import ExecutionLoop
 from openclaw.services.pipeline_budget_service import PipelineBudgetService
 from openclaw.services.pipeline_service import (
@@ -278,6 +281,83 @@ async def set_task_graph(
         return await svc.set_task_graph(pipeline_id, body.task_graph)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ─── Contracts ────────────────────────────────────────────
+
+
+@router.get(
+    "/pipelines/{pipeline_id}/contracts",
+    response_model=list[ContractRead],
+)
+async def list_contracts(
+    pipeline_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """List all contracts for a pipeline."""
+    builder = ContractBuilder(db)
+    return await builder.get_contracts(pipeline_id)
+
+
+@router.get(
+    "/pipelines/{pipeline_id}/contracts/{contract_id}",
+    response_model=ContractRead,
+)
+async def get_contract(
+    pipeline_id: uuid.UUID,
+    contract_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a specific contract by ID."""
+    builder = ContractBuilder(db)
+    contract = await builder.get_contract(contract_id)
+    if not contract or contract.pipeline_id != pipeline_id:
+        raise HTTPException(status_code=404, detail="Contract not found")
+    return contract
+
+
+@router.post(
+    "/pipelines/{pipeline_id}/contracts/{contract_id}/lock",
+    response_model=ContractRead,
+)
+async def lock_contract(
+    pipeline_id: uuid.UUID,
+    contract_id: int,
+    body: ContractLock,
+    db: AsyncSession = Depends(get_db),
+):
+    """Agent acknowledges a contract before starting work."""
+    builder = ContractBuilder(db)
+    try:
+        return await builder.lock_contract(contract_id, body.agent_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post(
+    "/pipelines/{pipeline_id}/generate-contracts",
+    response_model=PipelineRead,
+)
+async def generate_contracts(
+    pipeline_id: uuid.UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger contract generation from the task graph — runs in background."""
+    svc = PipelineService(db)
+    pipeline = await svc.get_pipeline(pipeline_id)
+    if not pipeline:
+        raise HTTPException(status_code=404, detail="Pipeline not found")
+
+    async def _generate():
+        from openclaw.db.engine import async_session_factory
+
+        async with async_session_factory() as gen_db:
+            builder = ContractBuilder(gen_db)
+            await builder.generate_contracts(pipeline_id)
+
+    background_tasks.add_task(_generate)
+    return pipeline
 
 
 # ─── Budget ───────────────────────────────────────────────

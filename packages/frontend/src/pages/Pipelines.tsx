@@ -9,6 +9,8 @@ import { useState } from "react";
 import {
   useApprovePlan,
   useCreatePipeline,
+  useGenerateContracts,
+  usePipelineContracts,
   usePipelines,
   usePipelineTasks,
   useRejectPlan,
@@ -87,9 +89,11 @@ function PipelineCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const { data: tasks } = usePipelineTasks(expanded ? pipeline.id : undefined);
+  const { data: contracts } = usePipelineContracts(expanded ? pipeline.id : undefined);
   const approvePlan = useApprovePlan(teamId);
   const rejectPlan = useRejectPlan(teamId);
   const startPipeline = useStartPipeline(teamId);
+  const generateContracts = useGenerateContracts(teamId);
 
   const status = pipeline.status as PipelineStatus;
   const statusColor = PIPELINE_STATUS_COLORS[status] || "#6b7280";
@@ -148,7 +152,7 @@ function PipelineCard({
         )}
       </div>
 
-      {/* Expanded: show task graph */}
+      {/* Expanded: show task graph + contracts */}
       {expanded && tasks && (
         <div className="pipeline-tasks-list">
           <h4>Task Graph ({tasks.length} tasks)</h4>
@@ -184,6 +188,48 @@ function PipelineCard({
               )}
             </div>
           ))}
+
+          {/* Contracts section */}
+          {contracts && contracts.length > 0 && (
+            <div className="pipeline-contracts">
+              <h4>Contracts ({contracts.length})</h4>
+              {contracts.map((c) => (
+                <div key={c.id} className="pipeline-contract-row">
+                  <span
+                    className="contract-type-badge"
+                    data-type={c.contract_type}
+                  >
+                    {c.contract_type}
+                  </span>
+                  <span className="contract-name">{c.name}</span>
+                  <span
+                    className="contract-lock-status"
+                    style={{ color: c.locked ? "#10b981" : "#f59e0b" }}
+                  >
+                    {c.locked ? "locked" : "pending"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Generate contracts button for eligible pipelines */}
+          {status === "awaiting_plan_approval" &&
+            (!contracts || contracts.length === 0) &&
+            tasks.length >= 2 && (
+              <div
+                className="pipeline-actions"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  className="pipeline-btn pipeline-btn-secondary"
+                  onClick={() => generateContracts.mutate(pipeline.id)}
+                  disabled={generateContracts.isPending}
+                >
+                  Generate Contracts
+                </button>
+              </div>
+            )}
         </div>
       )}
     </div>

@@ -222,6 +222,16 @@
   background: #dc2626;
 }
 
+.pipeline-btn-secondary {
+  background: #374151;
+  border-color: #4b5563;
+  color: #d1d5db;
+}
+
+.pipeline-btn-secondary:hover {
+  background: #4b5563;
+}
+
 /* ─── Task Graph (expanded) ────────────────────────────── */
 
 .pipeline-tasks-list {
@@ -354,6 +364,75 @@
 .form-actions {
   display: flex;
   gap: 0.5rem;
+}
+
+/* ─── Contracts Section ───────────────────────────────── */
+
+.pipeline-contracts {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.pipeline-contracts h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.pipeline-contract-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+  font-size: 0.8rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.contract-type-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+  background: #1f2937;
+  color: #9ca3af;
+}
+
+.contract-type-badge[data-type="api"] {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.contract-type-badge[data-type="type"] {
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
+}
+
+.contract-type-badge[data-type="event"] {
+  color: #34d399;
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.contract-type-badge[data-type="database"] {
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+}
+
+.contract-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+}
+
+.contract-lock-status {
+  font-size: 0.7rem;
+  font-weight: 500;
+  flex-shrink: 0;
 }
 
 /* ─── Empty State ──────────────────────────────────────── */

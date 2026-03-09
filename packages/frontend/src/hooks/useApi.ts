@@ -10,6 +10,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import type {
   Agent,
+  Contract,
   CostSummary,
   HumanRequest,
   Org,
@@ -375,6 +376,34 @@ export function useRejectPlan(teamId: string) {
       apiClient.post<Pipeline>(
         `/api/v1/pipelines/${pipelineId}/reject-plan`,
         { feedback }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+    },
+  });
+}
+
+// ─── Contract hooks ──────────────────────────────────────
+
+export function usePipelineContracts(pipelineId: string | undefined) {
+  return useQuery({
+    queryKey: ["pipeline-contracts", pipelineId],
+    queryFn: () =>
+      apiClient.get<Contract[]>(
+        `/api/v1/pipelines/${pipelineId}/contracts`
+      ),
+    enabled: !!pipelineId,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useGenerateContracts(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (pipelineId: string) =>
+      apiClient.post<Pipeline>(
+        `/api/v1/pipelines/${pipelineId}/generate-contracts`,
+        {}
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
