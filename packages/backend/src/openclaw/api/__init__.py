@@ -21,6 +21,7 @@ from openclaw.api.sessions import router as sessions_router
 from openclaw.api.settings import router as settings_router
 from openclaw.api.tasks import router as tasks_router
 from openclaw.api.teams import router as teams_router
+from openclaw.api.pipelines import router as pipelines_router
 from openclaw.api.webhooks import router as webhooks_router
 from openclaw.auth.dependencies import get_current_user
 
@@ -43,4 +44,5 @@ api_router.include_router(reviews_router, tags=["reviews", "merge"], dependencie
 api_router.include_router(dispatch_router, tags=["dispatch"], dependencies=_auth)
 api_router.include_router(agent_runs_router, tags=["agent-runs"], dependencies=_auth)
 api_router.include_router(webhooks_router, tags=["webhooks"], dependencies=_auth)
+api_router.include_router(pipelines_router, tags=["pipelines"], dependencies=_auth)
 api_router.include_router(settings_router, tags=["settings"], dependencies=_auth)

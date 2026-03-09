@@ -154,6 +154,10 @@ def main():
     print("  (Engineer fixes sliding window + adds TTL...)")
     print("  (Engineer pushes updated branch...)")
 
+    # Task was moved back to in_progress by request_changes feedback loop.
+    # Transition back to in_review for the next round.
+    client.post(f"/tasks/{task['id']}/status", json={"status": "in_review"})
+
     resp = client.post(f"/tasks/{task['id']}/reviews", json={
         "reviewer_type": "agent",
     })

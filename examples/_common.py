@@ -5,6 +5,8 @@ Handles authentication (register + login) and workspace setup
 so each example can focus on its specific workflow.
 """
 
+from __future__ import annotations
+
 import sys
 import uuid
 
