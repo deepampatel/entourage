@@ -361,6 +361,12 @@
   font-size: 0.85rem;
 }
 
+.template-picker {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
 .form-actions {
   display: flex;
   gap: 0.5rem;

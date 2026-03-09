@@ -284,12 +284,18 @@ function CreatePipelineForm({
   const [title, setTitle] = useState("");
   const [intent, setIntent] = useState("");
   const [budget, setBudget] = useState(10);
+  const [template, setTemplate] = useState("");
   const createPipeline = useCreatePipeline(teamId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createPipeline.mutate(
-      { title, intent, budget_limit_usd: budget },
+      {
+        title,
+        intent,
+        budget_limit_usd: budget,
+        ...(template ? { template } : {}),
+      },
       { onSuccess: onClose }
     );
   };
@@ -297,6 +303,18 @@ function CreatePipelineForm({
   return (
     <form className="create-pipeline-form" onSubmit={handleSubmit}>
       <h3>New Pipeline</h3>
+      <div className="template-picker">
+        {["", "feature", "bugfix", "refactor", "migration"].map((t) => (
+          <button
+            key={t}
+            type="button"
+            className={`filter-tab${template === t ? " active" : ""}`}
+            onClick={() => setTemplate(t)}
+          >
+            {t || "Custom"}
+          </button>
+        ))}
+      </div>
       <input
         type="text"
         placeholder="Title (e.g. Add OAuth2 login)"

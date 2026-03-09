@@ -15,6 +15,7 @@ class PipelineCreate(BaseModel):
     intent: str = Field(..., min_length=1)
     budget_limit_usd: float = Field(default=10.0, ge=0.01, le=1000.0)
     repository_id: Optional[uuid.UUID] = None
+    template: Optional[str] = None  # feature, bugfix, refactor, migration
 
 
 class PipelineUpdate(BaseModel):

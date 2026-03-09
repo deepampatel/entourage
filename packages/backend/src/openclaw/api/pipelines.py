@@ -61,13 +61,30 @@ async def create_pipeline(
 ):
     """Create a new pipeline in draft status."""
     try:
+        # Use template budget if specified and no explicit budget override
+        budget = body.budget_limit_usd
+        if body.template:
+            from openclaw.services.planner_service import PIPELINE_TEMPLATES
+            tmpl = PIPELINE_TEMPLATES.get(body.template)
+            if tmpl and budget == 10.0:  # default budget → use template's
+                budget = float(tmpl["budget"])
+
         pipeline = await svc.create_pipeline(
             team_id=team_id,
             title=body.title,
             intent=body.intent,
-            budget_limit=body.budget_limit_usd,
+            budget_limit=budget,
             repository_id=body.repository_id,
         )
+
+        # Store template in metadata if specified
+        if body.template:
+            pipeline.pipeline_metadata = {
+                **(pipeline.pipeline_metadata or {}),
+                "template": body.template,
+            }
+            await svc.db.commit()
+
         return pipeline
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))

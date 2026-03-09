@@ -22,6 +22,43 @@ logger = logging.getLogger("openclaw.services.planner")
 
 
 # ═══════════════════════════════════════════════════════════
+# Pipeline Templates
+# ═══════════════════════════════════════════════════════════
+
+PIPELINE_TEMPLATES: dict[str, dict[str, object]] = {
+    "feature": {
+        "hints": (
+            "Include DB migration if schema changes are needed, service layer, "
+            "API endpoints, frontend components, and tests. Follow existing "
+            "patterns in the codebase."
+        ),
+        "budget": 15.0,
+    },
+    "bugfix": {
+        "hints": (
+            "First reproduce the bug with a failing test, then fix the root cause, "
+            "and add a regression test. Keep the fix minimal and focused."
+        ),
+        "budget": 5.0,
+    },
+    "refactor": {
+        "hints": (
+            "Keep behavior unchanged. Improve structure, reduce duplication, "
+            "and update tests to match. Run existing tests to ensure no regressions."
+        ),
+        "budget": 10.0,
+    },
+    "migration": {
+        "hints": (
+            "Create migration script, update code references, add rollback plan, "
+            "and test both upgrade and downgrade paths."
+        ),
+        "budget": 8.0,
+    },
+}
+
+
+# ═══════════════════════════════════════════════════════════
 # Task graph tool schema (for Claude's tool_use)
 # ═══════════════════════════════════════════════════════════
 
@@ -146,8 +183,14 @@ class PlannerService:
         if pipeline.status == "draft":
             await self.pipeline_svc.change_status(pipeline_id, "planning")
 
+        # Extract template from metadata (if set during creation)
+        meta = pipeline.pipeline_metadata or {}
+        template = meta.get("template")
+
         # Build prompt and call Claude
-        prompt = self._build_planning_prompt(pipeline.intent)
+        prompt = self._build_planning_prompt(
+            pipeline.intent, template=template
+        )
 
         logger.info("Calling Claude to plan pipeline %s", pipeline_id)
         response = await self.client.messages.create(
@@ -195,6 +238,7 @@ class PlannerService:
         self,
         intent: str,
         conventions: Optional[list[dict]] = None,
+        template: Optional[str] = None,
     ) -> str:
         """System prompt that instructs Claude to decompose intent into tasks."""
         parts = [
@@ -211,6 +255,14 @@ class PlannerService:
             "- Add a reviewer task for non-trivial changes\n"
             "- Description should include specific files, patterns, and acceptance criteria\n\n"
         ]
+
+        # Inject template hints if a template is specified
+        if template and template in PIPELINE_TEMPLATES:
+            tmpl = PIPELINE_TEMPLATES[template]
+            parts.append(
+                f"Pipeline template: {template}\n"
+                f"Template guidelines: {tmpl['hints']}\n\n"
+            )
 
         if conventions:
             parts.append("Team conventions to follow:\n")
