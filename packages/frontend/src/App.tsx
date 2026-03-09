@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Routes, Route, NavLink, Navigate } from "react-router-dom";
 import { getToken, clearToken } from "./api/client";
 import { useOrgs, useTeams } from "./hooks/useApi";
+import { Analytics } from "./pages/Analytics";
 import { Dashboard } from "./pages/Dashboard";
 import { HumanRequests } from "./pages/HumanRequests";
 import { Login } from "./pages/Login";
@@ -102,6 +103,9 @@ function AuthenticatedApp() {
           <NavLink to="/requests" className="nav-link">
             Requests
           </NavLink>
+          <NavLink to="/analytics" className="nav-link">
+            Analytics
+          </NavLink>
           <NavLink to="/settings" className="nav-link">
             Settings
           </NavLink>
@@ -142,6 +146,10 @@ function AuthenticatedApp() {
               <Route
                 path="/requests"
                 element={<HumanRequests teamId={teamId} />}
+              />
+              <Route
+                path="/analytics"
+                element={<Analytics teamId={teamId} />}
               />
               <Route
                 path="/settings"

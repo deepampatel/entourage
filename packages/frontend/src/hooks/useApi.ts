@@ -10,11 +10,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import type {
   Agent,
+  AgentPerformance,
   Contract,
   CostSummary,
+  CostTimeseriesPoint,
   HumanRequest,
+  MonthlyRollup,
   Org,
   Pipeline,
+  PipelineMetrics,
   PipelineTask,
   Review,
   Task,
@@ -408,5 +412,72 @@ export function useGenerateContracts(teamId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
     },
+  });
+}
+
+// ─── Analytics ────────────────────────────────────────
+
+export function usePipelineMetrics(
+  teamId: string | undefined,
+  period: string = "week"
+) {
+  return useQuery({
+    queryKey: ["analytics-pipeline-metrics", teamId, period],
+    queryFn: () =>
+      apiClient.get<PipelineMetrics>(
+        `/api/v1/analytics/${teamId}/pipelines`,
+        { period }
+      ),
+    enabled: !!teamId,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useAgentPerformance(
+  teamId: string | undefined,
+  period: string = "week"
+) {
+  return useQuery({
+    queryKey: ["analytics-agent-performance", teamId, period],
+    queryFn: () =>
+      apiClient.get<AgentPerformance[]>(
+        `/api/v1/analytics/${teamId}/agents`,
+        { period }
+      ),
+    enabled: !!teamId,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useCostTimeseries(
+  teamId: string | undefined,
+  granularity: string = "day",
+  days: number = 30
+) {
+  return useQuery({
+    queryKey: ["analytics-cost-timeseries", teamId, granularity, days],
+    queryFn: () =>
+      apiClient.get<CostTimeseriesPoint[]>(
+        `/api/v1/analytics/${teamId}/costs`,
+        { granularity, days: String(days) }
+      ),
+    enabled: !!teamId,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useMonthlyRollup(
+  teamId: string | undefined,
+  months: number = 6
+) {
+  return useQuery({
+    queryKey: ["analytics-monthly-rollup", teamId, months],
+    queryFn: () =>
+      apiClient.get<MonthlyRollup[]>(
+        `/api/v1/analytics/${teamId}/costs/monthly`,
+        { months: String(months) }
+      ),
+    enabled: !!teamId,
+    refetchInterval: 60_000,
   });
 }

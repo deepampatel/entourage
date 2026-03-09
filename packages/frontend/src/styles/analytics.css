@@ -1,0 +1,271 @@
+/* ─── Analytics Page ─────────────────────────────────── */
+
+.analytics-page {
+  padding: 0;
+}
+
+.analytics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.analytics-header h1 {
+  margin: 0;
+}
+
+.analytics-section {
+  margin-bottom: 2rem;
+}
+
+.analytics-section h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #e5e7eb;
+  margin-bottom: 0.75rem;
+}
+
+.analytics-loading {
+  color: #9ca3af;
+  padding: 2rem 0;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.analytics-empty {
+  color: #6b7280;
+  padding: 2rem 0;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+/* ─── Period Selector ────────────────────────────────── */
+
+.period-selector {
+  display: flex;
+  gap: 0.25rem;
+  background: #1f2937;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.period-btn {
+  padding: 0.35rem 0.75rem;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.period-btn:hover {
+  color: #e5e7eb;
+  background: #374151;
+}
+
+.period-btn-active {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.period-btn-active:hover {
+  background: #2563eb;
+  color: #fff;
+}
+
+/* ─── Gauge Row ──────────────────────────────────────── */
+
+.analytics-gauge-row {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  padding: 1rem 0;
+}
+
+.analytics-gauge {
+  flex-shrink: 0;
+}
+
+.gauge-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.gauge-label {
+  font-size: 11px;
+  fill: #9ca3af;
+}
+
+.analytics-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  flex: 1;
+}
+
+.status-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #1f2937;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.status-stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.status-stat-label {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-top: 0.25rem;
+}
+
+.status-completed {
+  color: #10b981;
+}
+
+.status-failed {
+  color: #ef4444;
+}
+
+.status-cancelled {
+  color: #6b7280;
+}
+
+.status-in-progress {
+  color: #3b82f6;
+}
+
+/* ─── Bar Chart ──────────────────────────────────────── */
+
+.analytics-chart-container {
+  background: #1f2937;
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+.analytics-bar-chart {
+  width: 100%;
+  max-width: 600px;
+}
+
+.chart-bar {
+  fill: #3b82f6;
+  transition: fill 0.15s ease;
+}
+
+.chart-bar:hover {
+  fill: #60a5fa;
+}
+
+.chart-label {
+  font-size: 10px;
+  fill: #9ca3af;
+}
+
+.chart-label-x {
+  font-size: 9px;
+  fill: #6b7280;
+}
+
+/* ─── Efficiency Table ───────────────────────────────── */
+
+.analytics-table-wrapper {
+  background: #1f2937;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.analytics-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.analytics-table thead th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  color: #9ca3af;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #374151;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.analytics-table thead th:hover {
+  color: #e5e7eb;
+}
+
+.analytics-table tbody td {
+  padding: 0.6rem 1rem;
+  color: #d1d5db;
+  border-bottom: 1px solid #111827;
+}
+
+.analytics-table tbody tr:hover {
+  background: #111827;
+}
+
+.agent-name-cell {
+  font-weight: 500;
+  color: #f3f4f6;
+}
+
+/* ─── Role Badges ────────────────────────────────────── */
+
+.role-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.role-engineer {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+.role-reviewer {
+  background: #312e81;
+  color: #a78bfa;
+}
+
+.role-architect {
+  background: #3b1f4e;
+  color: #c084fc;
+}
+
+.role-tester {
+  background: #1a3a2a;
+  color: #34d399;
+}
+
+/* ─── Success Rate Colors ────────────────────────────── */
+
+.success-high {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.success-medium {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.success-low {
+  color: #ef4444;
+  font-weight: 600;
+}

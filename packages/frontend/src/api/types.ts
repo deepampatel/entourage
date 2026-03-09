@@ -280,3 +280,49 @@ export const PIPELINE_STATUS_COLORS: Record<PipelineStatus, string> = {
   failed: "#ef4444",
   cancelled: "#6b7280",
 };
+
+// ─── Analytics ──────────────────────────────────────────
+
+export interface PipelineMetrics {
+  total_pipelines: number;
+  completed: number;
+  failed: number;
+  cancelled: number;
+  in_progress: number;
+  avg_duration_seconds: number;
+  avg_cost_usd: number;
+  total_cost_usd: number;
+  success_rate: number;
+  pipelines_by_status: Record<string, number>;
+  period_start: string;
+}
+
+export interface AgentPerformance {
+  agent_id: string;
+  agent_name: string;
+  role: string;
+  tasks_completed: number;
+  tasks_failed: number;
+  total_sessions: number;
+  avg_session_duration_seconds: number;
+  total_cost_usd: number;
+  avg_cost_per_task: number;
+  cache_hit_rate: number;
+  success_rate: number;
+}
+
+export interface CostTimeseriesPoint {
+  period: string;
+  cost_usd: number;
+  tokens_in: number;
+  tokens_out: number;
+  session_count: number;
+  task_count: number;
+}
+
+export interface MonthlyRollup {
+  month: string;
+  total_cost_usd: number;
+  total_sessions: number;
+  total_tasks: number;
+}
