@@ -1532,6 +1532,233 @@ server.tool(
   }
 );
 
+// ═══════════════════════════════════════════════════════════
+// Phase 12: Pipelines
+// ═══════════════════════════════════════════════════════════
+
+server.tool(
+  "create_pipeline",
+  "Create a new pipeline — a top-level orchestration unit that decomposes a human intent into a task graph, gets approval, and executes tasks automatically via AI agents.",
+  {
+    team_id: z.string().describe("Team UUID"),
+    title: z.string().describe("Short title for the pipeline"),
+    intent: z.string().describe("Human intent — what should be built. Be specific and detailed."),
+    budget_limit_usd: z.number().describe("Maximum budget in USD (default: 10.0)").default(10.0),
+    repository_id: z.string().describe("Repository UUID (optional)").optional(),
+  },
+  async (params) => {
+    try {
+      const pipeline = await client.createPipeline(params.team_id, params.title, params.intent, {
+        budget_limit_usd: params.budget_limit_usd,
+        repository_id: params.repository_id,
+      });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "list_pipelines",
+  "List pipelines for a team, optionally filtered by status.",
+  {
+    team_id: z.string().describe("Team UUID"),
+    status: z.string().describe("Filter by status (draft, planning, executing, done, failed, etc.)").optional(),
+  },
+  async (params) => {
+    try {
+      const pipelines = await client.listPipelines(params.team_id, {
+        status: params.status,
+      });
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(pipelines, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "get_pipeline",
+  "Get detailed information about a pipeline including its status, task graph, and budget.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const pipeline = await client.getPipeline(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "start_pipeline",
+  "Start planning for a pipeline — kicks off the LLM planner to decompose the intent into a task graph. Pipeline must be in 'draft' status.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const pipeline = await client.startPipeline(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: `Pipeline planning started. Status will transition to 'awaiting_plan_approval' when the plan is ready.\n\n${JSON.stringify(pipeline, null, 2)}` }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "get_pipeline_tasks",
+  "List all tasks in a pipeline's task graph with their status, dependencies, and assigned agents.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const tasks = await client.getPipelineTasks(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(tasks, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "approve_pipeline_plan",
+  "Approve a pipeline's generated plan — starts automated execution of all tasks in the task graph. Pipeline must be in 'awaiting_plan_approval' status.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const pipeline = await client.approvePipelinePlan(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: `Plan approved! Execution started.\n\n${JSON.stringify(pipeline, null, 2)}` }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "reject_pipeline_plan",
+  "Reject a pipeline's generated plan with optional feedback. The pipeline returns to draft status so it can be re-planned.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+    feedback: z.string().describe("Feedback explaining why the plan was rejected and what to change").optional(),
+  },
+  async (params) => {
+    try {
+      const pipeline = await client.rejectPipelinePlan(params.pipeline_id, {
+        feedback: params.feedback,
+      });
+      return {
+        content: [{ type: "text" as const, text: `Plan rejected. Pipeline returned to draft.\n\n${JSON.stringify(pipeline, null, 2)}` }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "pause_pipeline",
+  "Pause an executing pipeline. Running tasks will complete but no new tasks will start.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const pipeline = await client.pausePipeline(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "resume_pipeline",
+  "Resume a paused pipeline — continues executing tasks from where it left off.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const pipeline = await client.resumePipeline(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "get_pipeline_budget",
+  "Get the budget ledger for a pipeline — shows spent vs. limit and budget status.",
+  {
+    pipeline_id: z.string().describe("Pipeline UUID"),
+  },
+  async (params) => {
+    try {
+      const budget = await client.getPipelineBudget(params.pipeline_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(budget, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
 // ─── Start server ──────────────────────────────────────────
 
 async function main() {

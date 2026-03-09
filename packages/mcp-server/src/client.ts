@@ -1038,3 +1038,124 @@ export async function getContext(
 ): Promise<{ task_id: number; context: Record<string, string> }> {
   return request(`/api/v1/tasks/${taskId}/context`);
 }
+
+// ─── Phase 12: Pipelines ─────────────────────────────────
+
+export interface Pipeline {
+  id: string;
+  org_id: string;
+  team_id: string;
+  repository_id: string | null;
+  created_by: string | null;
+  title: string;
+  intent: string;
+  status: string;
+  task_graph: Record<string, unknown> | null;
+  estimated_cost_usd: number;
+  actual_cost_usd: number;
+  budget_limit_usd: number;
+  branch_name: string;
+  pr_url: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface PipelineTask {
+  id: number;
+  pipeline_id: string;
+  agent_id: string | null;
+  title: string;
+  description: string;
+  complexity: string;
+  assigned_role: string;
+  status: string;
+  dependencies: number[];
+  integration_hints: string[];
+  estimated_tokens: number;
+  branch_name: string;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface PipelineBudgetLedger {
+  id: string;
+  pipeline_id: string;
+  budget_limit_usd: number;
+  estimated_cost_usd: number;
+  actual_cost_usd: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function createPipeline(
+  teamId: string,
+  title: string,
+  intent: string,
+  opts: { budget_limit_usd?: number; repository_id?: string } = {}
+): Promise<Pipeline> {
+  return request(`/api/v1/teams/${teamId}/pipelines`, {
+    method: "POST",
+    body: { title, intent, ...opts },
+  });
+}
+
+export async function listPipelines(
+  teamId: string,
+  opts: { status?: string; limit?: number } = {}
+): Promise<Pipeline[]> {
+  const params: Record<string, string> = {};
+  if (opts.status) params.status = opts.status;
+  if (opts.limit) params.limit = String(opts.limit);
+  return request(`/api/v1/teams/${teamId}/pipelines`, { params });
+}
+
+export async function getPipeline(pipelineId: string): Promise<Pipeline> {
+  return request(`/api/v1/pipelines/${pipelineId}`);
+}
+
+export async function startPipeline(pipelineId: string): Promise<Pipeline> {
+  return request(`/api/v1/pipelines/${pipelineId}/start`, { method: "POST" });
+}
+
+export async function getPipelineTasks(pipelineId: string): Promise<PipelineTask[]> {
+  return request(`/api/v1/pipelines/${pipelineId}/tasks`);
+}
+
+export async function approvePipelinePlan(
+  pipelineId: string,
+  actorId?: string
+): Promise<Pipeline> {
+  return request(`/api/v1/pipelines/${pipelineId}/approve-plan`, {
+    method: "POST",
+    body: { actor_id: actorId },
+  });
+}
+
+export async function rejectPipelinePlan(
+  pipelineId: string,
+  opts: { feedback?: string; actor_id?: string } = {}
+): Promise<Pipeline> {
+  return request(`/api/v1/pipelines/${pipelineId}/reject-plan`, {
+    method: "POST",
+    body: opts,
+  });
+}
+
+export async function pausePipeline(pipelineId: string): Promise<Pipeline> {
+  return request(`/api/v1/pipelines/${pipelineId}/pause`, { method: "POST" });
+}
+
+export async function resumePipeline(pipelineId: string): Promise<Pipeline> {
+  return request(`/api/v1/pipelines/${pipelineId}/resume`, { method: "POST" });
+}
+
+export async function getPipelineBudget(
+  pipelineId: string
+): Promise<PipelineBudgetLedger> {
+  return request(`/api/v1/pipelines/${pipelineId}/budget`);
+}
