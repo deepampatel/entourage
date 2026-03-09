@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     task_polling_interval_seconds: float = 10.0
     max_task_retries: int = 2
 
+    # Agent memory + context
+    context_rotation_threshold_tokens: int = 150_000
+    enable_convention_discovery: bool = True
+    enable_agent_memory: bool = True
+
     model_config = {"env_prefix": "OPENCLAW_"}
 
     @model_validator(mode="after")
