@@ -13,6 +13,8 @@ import type {
   CostSummary,
   HumanRequest,
   Org,
+  Pipeline,
+  PipelineTask,
   Review,
   Task,
   TaskEvent,
@@ -28,6 +30,17 @@ export function useOrgs() {
   });
 }
 
+export function useCreateOrg() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; slug: string }) =>
+      apiClient.post<Org>("/api/v1/orgs", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orgs"] });
+    },
+  });
+}
+
 // ─── Teams ─────────────────────────────────────────────
 
 export function useTeams(orgId: string | undefined) {
@@ -35,6 +48,34 @@ export function useTeams(orgId: string | undefined) {
     queryKey: ["teams", orgId],
     queryFn: () => apiClient.get<Team[]>(`/api/v1/orgs/${orgId}/teams`),
     enabled: !!orgId,
+  });
+}
+
+export function useCreateTeam(orgId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { name: string; slug: string }) =>
+      apiClient.post<Team>(`/api/v1/orgs/${orgId}/teams`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["teams", orgId] });
+    },
+  });
+}
+
+// ─── Create Agent ─────────────────────────────────────
+
+export function useCreateAgent(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      role: string;
+      model: string;
+      config?: Record<string, unknown>;
+    }) => apiClient.post<Agent>(`/api/v1/teams/${teamId}/agents`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents", teamId] });
+    },
   });
 }
 
@@ -228,6 +269,115 @@ export function useRunAgent(teamId: string) {
       apiClient.post(`/api/v1/agents/${agentId}/run`, { task_id: taskId }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agents", teamId] });
+    },
+  });
+}
+
+// ─── Pipelines ────────────────────────────────────────
+
+export function usePipelines(
+  teamId: string | undefined,
+  status?: string
+) {
+  return useQuery({
+    queryKey: ["pipelines", teamId, status],
+    queryFn: () => {
+      const params: Record<string, string> = {};
+      if (status) params.status = status;
+      return apiClient.get<Pipeline[]>(
+        `/api/v1/teams/${teamId}/pipelines`,
+        params
+      );
+    },
+    enabled: !!teamId,
+    refetchInterval: 10_000,
+  });
+}
+
+export function usePipeline(pipelineId: string | undefined) {
+  return useQuery({
+    queryKey: ["pipeline", pipelineId],
+    queryFn: () =>
+      apiClient.get<Pipeline>(`/api/v1/pipelines/${pipelineId}`),
+    enabled: !!pipelineId,
+    refetchInterval: 5_000,
+  });
+}
+
+export function usePipelineTasks(pipelineId: string | undefined) {
+  return useQuery({
+    queryKey: ["pipeline-tasks", pipelineId],
+    queryFn: () =>
+      apiClient.get<PipelineTask[]>(
+        `/api/v1/pipelines/${pipelineId}/tasks`
+      ),
+    enabled: !!pipelineId,
+    refetchInterval: 10_000,
+  });
+}
+
+export function useCreatePipeline(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      title: string;
+      intent: string;
+      budget_limit_usd?: number;
+    }) =>
+      apiClient.post<Pipeline>(
+        `/api/v1/teams/${teamId}/pipelines`,
+        body
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+    },
+  });
+}
+
+export function useStartPipeline(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (pipelineId: string) =>
+      apiClient.post<Pipeline>(
+        `/api/v1/pipelines/${pipelineId}/start`,
+        {}
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+    },
+  });
+}
+
+export function useApprovePlan(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (pipelineId: string) =>
+      apiClient.post<Pipeline>(
+        `/api/v1/pipelines/${pipelineId}/approve-plan`,
+        {}
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+    },
+  });
+}
+
+export function useRejectPlan(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      pipelineId,
+      feedback,
+    }: {
+      pipelineId: string;
+      feedback?: string;
+    }) =>
+      apiClient.post<Pipeline>(
+        `/api/v1/pipelines/${pipelineId}/reject-plan`,
+        { feedback }
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
     },
   });
 }

@@ -10,10 +10,11 @@
     },
     {
       "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "/opt/homebrew/bin/node",
+      "runtimeArgs": ["/opt/homebrew/bin/npx", "vite"],
       "port": 5173,
-      "cwd": "packages/frontend"
+      "cwd": "packages/frontend",
+      "env": {"PATH": "/opt/homebrew/bin:/usr/bin:/bin"}
     }
   ]
 }

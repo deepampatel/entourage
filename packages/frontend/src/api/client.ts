@@ -2,13 +2,30 @@
  * API client — typed fetch wrapper for the backend.
  *
  * Learn: Centralized API client with base URL handling, error parsing,
- * and future auth token injection. All API calls go through here.
+ * and JWT auth token injection. All API calls go through here.
  *
  * In development, Vite's proxy forwards /api/* to http://localhost:8000.
  * In production, the frontend is served by the backend or a CDN.
  */
 
 const BASE_URL = import.meta.env.VITE_API_URL || "";
+const TOKEN_KEY = "openclaw_token";
+
+// ─── Token helpers ──────────────────────────────────────
+
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+// ─── API Client ─────────────────────────────────────────
 
 class ApiClient {
   private baseUrl: string;
@@ -61,9 +78,8 @@ class ApiClient {
     const h: Record<string, string> = {
       "Content-Type": "application/json",
     };
-    // Future: add JWT auth token
-    // const token = getStoredToken();
-    // if (token) h["Authorization"] = `Bearer ${token}`;
+    const token = getToken();
+    if (token) h["Authorization"] = `Bearer ${token}`;
     return h;
   }
 

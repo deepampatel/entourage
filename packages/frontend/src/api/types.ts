@@ -182,3 +182,83 @@ export interface MergeStatus {
   merge_jobs: MergeJob[];
   can_merge: boolean;
 }
+
+// ─── Pipelines ──────────────────────────────────────────
+
+export interface Pipeline {
+  id: string;
+  org_id: string;
+  team_id: string;
+  repository_id: string | null;
+  created_by: string | null;
+  title: string;
+  intent: string;
+  status: string;
+  task_graph: Record<string, unknown> | null;
+  estimated_cost_usd: number;
+  actual_cost_usd: number;
+  budget_limit_usd: number;
+  branch_name: string;
+  pr_url: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+}
+
+export interface PipelineTask {
+  id: number;
+  pipeline_id: string;
+  agent_id: string | null;
+  title: string;
+  description: string;
+  complexity: string;
+  assigned_role: string;
+  status: string;
+  dependencies: number[];
+  integration_hints: string[];
+  estimated_tokens: number;
+  branch_name: string;
+  error: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export type PipelineStatus =
+  | "draft"
+  | "planning"
+  | "awaiting_plan_approval"
+  | "executing"
+  | "reviewing"
+  | "merging"
+  | "done"
+  | "paused"
+  | "failed"
+  | "cancelled";
+
+export const PIPELINE_STATUS_LABELS: Record<PipelineStatus, string> = {
+  draft: "Draft",
+  planning: "Planning",
+  awaiting_plan_approval: "Awaiting Approval",
+  executing: "Executing",
+  reviewing: "Reviewing",
+  merging: "Merging",
+  done: "Done",
+  paused: "Paused",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
+
+export const PIPELINE_STATUS_COLORS: Record<PipelineStatus, string> = {
+  draft: "#6b7280",
+  planning: "#8b5cf6",
+  awaiting_plan_approval: "#f59e0b",
+  executing: "#3b82f6",
+  reviewing: "#06b6d4",
+  merging: "#8b5cf6",
+  done: "#10b981",
+  paused: "#f97316",
+  failed: "#ef4444",
+  cancelled: "#6b7280",
+};

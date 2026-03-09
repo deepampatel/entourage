@@ -1,0 +1,285 @@
+/* ─── Manage Page ─────────────────────────────────────── */
+
+.manage-page h1 {
+  font-size: 1.75rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.manage-tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #222;
+  padding-bottom: 0;
+}
+
+.manage-tab {
+  padding: 0.5rem 1rem;
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: all 0.15s;
+}
+
+.manage-tab:hover {
+  color: #e0e0e0;
+}
+
+.manage-tab.active {
+  color: #fff;
+  border-bottom-color: #10b981;
+}
+
+.manage-section {
+  margin-bottom: 2rem;
+}
+
+.manage-section-header {
+  margin-bottom: 1rem;
+}
+
+.manage-section-header h2,
+.manage-sub-heading {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* ─── Cards / Grid ───────────────────────────────────── */
+
+.manage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 1rem;
+}
+
+.manage-card {
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.manage-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.manage-card-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.manage-badge {
+  font-size: 0.7rem;
+  background: #1f2937;
+  color: #10b981;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 500;
+}
+
+/* ─── Agent List ─────────────────────────────────────── */
+
+.manage-agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.manage-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  background: #0a0a0a;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.manage-agent-name {
+  font-weight: 500;
+  color: #e0e0e0;
+  flex: 1;
+}
+
+.manage-role {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.manage-role-engineer {
+  background: #1e3a5f;
+  color: #3b82f6;
+}
+
+.manage-role-reviewer {
+  background: #3b1f4f;
+  color: #a855f7;
+}
+
+.manage-role-manager {
+  background: #1f3b2f;
+  color: #10b981;
+}
+
+.manage-agent-model {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+.manage-status {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.manage-status-idle {
+  color: #6b7280;
+}
+
+.manage-status-running {
+  color: #10b981;
+}
+
+/* ─── Org List ───────────────────────────────────────── */
+
+.manage-org-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.manage-org-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.manage-org-row:hover {
+  border-color: #333;
+  background: #151515;
+}
+
+.manage-org-row.active {
+  border-color: #10b981;
+  background: #0f1f17;
+}
+
+.manage-org-name {
+  font-weight: 500;
+  color: #e0e0e0;
+}
+
+.manage-org-slug {
+  font-size: 0.8rem;
+  color: #666;
+  flex: 1;
+}
+
+/* ─── Forms ──────────────────────────────────────────── */
+
+.manage-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.manage-input,
+.manage-select {
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.manage-input {
+  flex: 1;
+  min-width: 140px;
+}
+
+.manage-select {
+  min-width: 120px;
+}
+
+.manage-input:focus,
+.manage-select:focus {
+  outline: none;
+  border-color: #10b981;
+}
+
+.manage-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.manage-btn-primary {
+  background: #10b981;
+  color: #fff;
+}
+
+.manage-btn-primary:hover:not(:disabled) {
+  background: #059669;
+}
+
+.manage-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.manage-error {
+  font-size: 0.8rem;
+  color: #ef4444;
+}
+
+.manage-empty {
+  color: #666;
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+
+/* ─── Sidebar Org Selector ───────────────────────────── */
+
+.org-select {
+  width: 100%;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}

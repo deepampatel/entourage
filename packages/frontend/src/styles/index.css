@@ -16,4 +16,7 @@
 @import "./task-detail.css";
 @import "./settings.css";
 @import "./skeleton.css";
+@import "./login.css";
+@import "./manage.css";
+@import "./pipelines.css";
 @import "./utilities.css";

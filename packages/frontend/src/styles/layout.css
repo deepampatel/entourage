@@ -67,6 +67,32 @@
   background: #1f2937;
 }
 
+.sidebar-footer {
+  margin-top: auto;
+}
+
+.logout-btn {
+  width: 100%;
+  padding: 0.5rem;
+  background: none;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #666;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.logout-btn:hover {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.sidebar-empty {
+  font-size: 0.85rem;
+  color: #666;
+}
+
 .main-content {
   flex: 1;
   padding: 2rem;
