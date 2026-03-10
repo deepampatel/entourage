@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { useTeamSettings, useUpdateTeamSettings } from "../hooks/useApi";
+import { useToast } from "../components/Toast";
 import "../styles/settings.css";
 
 interface SettingsProps {
@@ -17,6 +18,7 @@ interface SettingsProps {
 export function Settings({ teamId }: SettingsProps) {
   const { data: teamSettings, isLoading } = useTeamSettings(teamId);
   const updateMut = useUpdateTeamSettings(teamId);
+  const { showToast } = useToast();
 
   const [form, setForm] = useState<Record<string, unknown>>({});
   const [saved, setSaved] = useState(false);
@@ -36,7 +38,10 @@ export function Settings({ teamId }: SettingsProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateMut.mutate(form, {
-      onSuccess: () => setSaved(true),
+      onSuccess: () => {
+        setSaved(true);
+        showToast("Settings saved!", "success");
+      },
     });
   };
 
@@ -72,6 +77,7 @@ export function Settings({ teamId }: SettingsProps) {
         {/* Cost Limits */}
         <div className="settings-section">
           <h2>Cost Controls</h2>
+          <p className="form-help">Limit how much agents can spend on API calls.</p>
           <div className="settings-field">
             <label>Daily Cost Limit (USD)</label>
             <input
@@ -107,6 +113,7 @@ export function Settings({ teamId }: SettingsProps) {
         {/* Agent Configuration */}
         <div className="settings-section">
           <h2>Agent Defaults</h2>
+          <p className="form-help">Default configuration for new agents.</p>
           <div className="settings-field">
             <label>Default Model</label>
             <input
@@ -134,6 +141,7 @@ export function Settings({ teamId }: SettingsProps) {
         {/* Workflow */}
         <div className="settings-section">
           <h2>Workflow</h2>
+          <p className="form-help">Control the code review and merge process.</p>
           <div className="settings-field settings-toggle">
             <label>
               <input
@@ -163,6 +171,7 @@ export function Settings({ teamId }: SettingsProps) {
         {/* Security */}
         <div className="settings-section">
           <h2>Security</h2>
+          <p className="form-help">Network access and file system restrictions for agents.</p>
           <div className="settings-field">
             <label>Security Mode</label>
             <select

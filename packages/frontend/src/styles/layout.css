@@ -182,3 +182,104 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
+
+/* ─── Onboarding ─────────────────────────────────────── */
+
+.onboarding-subtitle {
+  color: #999;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+.onboarding-checklist {
+  text-align: left;
+  display: inline-block;
+  background: #111;
+  border: 1px solid #222;
+  border-radius: 10px;
+  padding: 1.5rem 2rem;
+}
+
+.onboarding-checklist h3 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #666;
+  margin-bottom: 1rem;
+}
+
+.onboarding-step {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  font-size: 0.95rem;
+  color: #e0e0e0;
+}
+
+.onboarding-step.completed {
+  color: #666;
+}
+
+.onboarding-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #1f2937;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #999;
+  flex-shrink: 0;
+}
+
+.onboarding-step.completed .onboarding-step-icon {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.onboarding-step-label {
+  font-weight: 500;
+}
+
+.onboarding-step-desc {
+  color: #666;
+  font-size: 0.85rem;
+}
+
+/* ─── Shared UX Helpers ─────────────────────────────── */
+
+.form-help {
+  font-size: 0.8rem;
+  color: #666;
+  margin: 0.15rem 0 0.5rem;
+}
+
+.form-help-row {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.35rem;
+}
+
+.empty-state-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin: 0 0 0.35rem;
+}
+
+.empty-state-desc {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0 0 1rem;
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
+  line-height: 1.4;
+}
+
+.empty-state-cta {
+  margin-top: 0.5rem;
+}

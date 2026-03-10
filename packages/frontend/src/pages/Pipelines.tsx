@@ -19,6 +19,7 @@ import {
   useTriggerSandboxRun,
 } from "../hooks/useApi";
 import { useTeamSocket } from "../hooks/useTeamSocket";
+import { useToast } from "../components/Toast";
 import {
   PIPELINE_STATUS_COLORS,
   PIPELINE_STATUS_LABELS,
@@ -27,6 +28,28 @@ import {
   type PipelineTask,
   type SandboxRun,
 } from "../api/types";
+
+const STATUS_TOOLTIPS: Record<string, string> = {
+  draft: "Not started yet",
+  planning: "AI is breaking your intent into tasks...",
+  contracting: "Generating interface contracts between tasks...",
+  awaiting_plan_approval: "Review and approve the plan before execution",
+  executing: "Agents are working on tasks",
+  reviewing: "Code review in progress",
+  merging: "Merging code changes",
+  done: "Pipeline complete",
+  paused: "Pipeline is paused",
+  failed: "One or more tasks failed",
+  cancelled: "Pipeline was cancelled",
+};
+
+const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
+  "": "Full flexibility",
+  feature: "Add new functionality",
+  bugfix: "Fix a specific issue",
+  refactor: "Improve existing code",
+  migration: "Upgrade dependencies or infra",
+};
 
 interface PipelinesProps {
   teamId: string;
@@ -182,6 +205,7 @@ function PipelineCard({
   const rejectPlan = useRejectPlan(teamId);
   const startPipeline = useStartPipeline(teamId);
   const generateContracts = useGenerateContracts(teamId);
+  const { showToast } = useToast();
 
   const status = pipeline.status as PipelineStatus;
   const statusColor = PIPELINE_STATUS_COLORS[status] || "#6b7280";
@@ -195,6 +219,7 @@ function PipelineCard({
           <span
             className="pipeline-status-badge"
             style={{ backgroundColor: statusColor }}
+            title={STATUS_TOOLTIPS[status] || ""}
           >
             {statusLabel}
           </span>
@@ -222,7 +247,9 @@ function PipelineCard({
           <>
             <button
               className="pipeline-btn pipeline-btn-success"
-              onClick={() => approvePlan.mutate(pipeline.id)}
+              onClick={() => approvePlan.mutate(pipeline.id, {
+                onSuccess: () => showToast("Plan approved! Execution starting...", "success"),
+              })}
               disabled={approvePlan.isPending}
             >
               Approve Plan
@@ -383,6 +410,7 @@ function CreatePipelineForm({
   const [budget, setBudget] = useState(10);
   const [template, setTemplate] = useState("");
   const createPipeline = useCreatePipeline(teamId);
+  const { showToast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -393,13 +421,21 @@ function CreatePipelineForm({
         budget_limit_usd: budget,
         ...(template ? { template } : {}),
       },
-      { onSuccess: onClose }
+      {
+        onSuccess: () => {
+          showToast("Pipeline created! Planning will start shortly.", "success");
+          onClose();
+        },
+      }
     );
   };
 
   return (
     <form className="create-pipeline-form" onSubmit={handleSubmit}>
       <h3>New Pipeline</h3>
+      <p className="form-help">
+        A pipeline takes your description and turns it into working code.
+      </p>
       <div className="template-picker">
         {["", "feature", "bugfix", "refactor", "migration"].map((t) => (
           <button
@@ -407,11 +443,15 @@ function CreatePipelineForm({
             type="button"
             className={`filter-tab${template === t ? " active" : ""}`}
             onClick={() => setTemplate(t)}
+            title={TEMPLATE_DESCRIPTIONS[t]}
           >
             {t || "Custom"}
           </button>
         ))}
       </div>
+      <p className="form-help" style={{ marginTop: "-0.25rem" }}>
+        {TEMPLATE_DESCRIPTIONS[template]}
+      </p>
       <input
         type="text"
         placeholder="Title (e.g. Add OAuth2 login)"
@@ -420,23 +460,28 @@ function CreatePipelineForm({
         required
       />
       <textarea
-        placeholder="Intent — describe what you want built in detail..."
+        placeholder={"Describe what you want built in detail. The AI planner will decompose this into tasks.\n\nExample: Add user authentication with JWT tokens. Create login/register endpoints, password hashing with bcrypt, and protect all API routes with auth middleware."}
         value={intent}
         onChange={(e) => setIntent(e.target.value)}
-        rows={4}
+        rows={5}
         required
       />
-      <label>
-        Budget limit (USD):
-        <input
-          type="number"
-          min={0.01}
-          max={1000}
-          step={0.01}
-          value={budget}
-          onChange={(e) => setBudget(Number(e.target.value))}
-        />
-      </label>
+      <div>
+        <label>
+          Budget limit (USD):
+          <input
+            type="number"
+            min={0.01}
+            max={1000}
+            step={0.01}
+            value={budget}
+            onChange={(e) => setBudget(Number(e.target.value))}
+          />
+        </label>
+        <p className="form-help">
+          Max spend on AI API calls. $5-10 for small tasks, $20-50 for features.
+        </p>
+      </div>
       <div className="form-actions">
         <button type="submit" className="pipeline-btn pipeline-btn-primary" disabled={createPipeline.isPending}>
           Create
@@ -502,7 +547,17 @@ export function Pipelines({ teamId }: PipelinesProps) {
       <div className="pipeline-list">
         {pipelines?.length === 0 && (
           <div className="empty-state">
-            No pipelines yet. Create one to get started.
+            <p className="empty-state-title">No pipelines yet</p>
+            <p className="empty-state-desc">
+              A pipeline takes your description and turns it into working code.
+              Agents plan the work, write code, run tests, and open a PR.
+            </p>
+            <button
+              className="pipeline-btn pipeline-btn-primary empty-state-cta"
+              onClick={() => setShowCreate(true)}
+            >
+              + Create Your First Pipeline
+            </button>
           </div>
         )}
         {pipelines?.map((p) => (

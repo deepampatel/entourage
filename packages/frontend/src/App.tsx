@@ -21,6 +21,45 @@ import { Pipelines } from "./pages/Pipelines";
 import { Tasks } from "./pages/Tasks";
 import "./styles/index.css";
 
+function OnboardingChecklist({ hasOrgs, hasTeams }: { hasOrgs: boolean; hasTeams: boolean }) {
+  const steps = [
+    { done: hasOrgs, label: "Create an Organization", desc: "Your top-level workspace" },
+    { done: hasTeams, label: "Create a Team", desc: "A project with its own agents" },
+    { done: false, label: "Add Agents", desc: "AI engineers that write code" },
+    { done: false, label: "Create a Pipeline", desc: "Describe what you want built" },
+  ];
+
+  return (
+    <div className="empty-state-page">
+      <h2>Welcome to Entourage</h2>
+      <p className="onboarding-subtitle">
+        Your AI agent team that plans, builds, reviews, and ships code.
+      </p>
+      <div className="onboarding-checklist">
+        <h3>Get Started</h3>
+        {steps.map((step, i) => (
+          <div key={i} className={`onboarding-step${step.done ? " completed" : ""}`}>
+            <span className="onboarding-step-icon">
+              {step.done ? "\u2705" : `${i + 1}`}
+            </span>
+            <div>
+              <span className="onboarding-step-label">{step.label}</span>
+              <span className="onboarding-step-desc"> — {step.desc}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <NavLink
+        to="/manage"
+        className="manage-btn manage-btn-primary"
+        style={{ display: "inline-block", marginTop: "1.5rem", textDecoration: "none" }}
+      >
+        Go to Setup
+      </NavLink>
+    </div>
+  );
+}
+
 function AuthenticatedApp() {
   const { data: orgs } = useOrgs();
   const [orgId, setOrgId] = useState<string>("");
@@ -160,23 +199,7 @@ function AuthenticatedApp() {
           ) : (
             <Route
               path="*"
-              element={
-                <div className="empty-state-page">
-                  <h2>Welcome to Entourage</h2>
-                  <p>Create an organization and team to get started.</p>
-                  <NavLink
-                    to="/manage"
-                    className="manage-btn manage-btn-primary"
-                    style={{
-                      display: "inline-block",
-                      marginTop: "1rem",
-                      textDecoration: "none",
-                    }}
-                  >
-                    Go to Manage
-                  </NavLink>
-                </div>
-              }
+              element={<OnboardingChecklist hasOrgs={!!orgs?.length} hasTeams={!!teams?.length} />}
             />
           )}
         </Routes>

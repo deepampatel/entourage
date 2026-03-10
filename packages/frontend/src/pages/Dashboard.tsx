@@ -7,11 +7,13 @@
  * - Stats row with pending request count
  */
 
+import { NavLink } from "react-router-dom";
 import { AgentCard } from "../components/AgentCard";
 import { HumanRequestCard } from "../components/HumanRequestCard";
 import { SkeletonGrid, SkeletonList } from "../components/Skeleton";
 import { StatCard } from "../components/StatCard";
 import { TaskCard } from "../components/TaskCard";
+import { useToast } from "../components/Toast";
 import {
   useAcknowledgeAlert,
   useAgents,
@@ -40,6 +42,7 @@ export function Dashboard({ teamId }: DashboardProps) {
   const respondMutation = useRespondToRequest(teamId);
   const runAgentMutation = useRunAgent(teamId);
   const acknowledgeMutation = useAcknowledgeAlert(teamId);
+  const { showToast } = useToast();
 
   const activeTasks = tasks?.filter(
     (t) => !["done", "cancelled"].includes(t.status)
@@ -72,7 +75,9 @@ export function Dashboard({ teamId }: DashboardProps) {
               <span className="alert-message">{alert.message}</span>
               <button
                 className="alert-dismiss"
-                onClick={() => acknowledgeMutation.mutate(alert.id)}
+                onClick={() => acknowledgeMutation.mutate(alert.id, {
+                  onSuccess: () => showToast("Alert dismissed", "info"),
+                })}
                 disabled={acknowledgeMutation.isPending}
               >
                 Dismiss
@@ -138,7 +143,13 @@ export function Dashboard({ teamId }: DashboardProps) {
               />
             ))}
             {agents?.length === 0 && (
-              <p className="empty-state">No agents configured</p>
+              <div className="empty-state">
+                <p className="empty-state-title">No agents yet</p>
+                <p className="empty-state-desc">Agents are AI workers that execute your tasks.</p>
+                <NavLink to="/manage" className="pipeline-btn pipeline-btn-primary empty-state-cta" style={{ textDecoration: "none" }}>
+                  Add agents in Manage
+                </NavLink>
+              </div>
             )}
           </div>
         )}
@@ -155,7 +166,13 @@ export function Dashboard({ teamId }: DashboardProps) {
               <TaskCard key={task.id} task={task} agents={agents} />
             ))}
             {activeTasks?.length === 0 && (
-              <p className="empty-state">No active tasks</p>
+              <div className="empty-state">
+                <p className="empty-state-title">No active tasks</p>
+                <p className="empty-state-desc">Tasks are created when you run a pipeline.</p>
+                <NavLink to="/pipelines" className="pipeline-btn pipeline-btn-primary empty-state-cta" style={{ textDecoration: "none" }}>
+                  Create a pipeline
+                </NavLink>
+              </div>
             )}
           </div>
         )}
