@@ -5,11 +5,25 @@ failure handling, and budget enforcement.
 """
 
 import uuid
-from unittest.mock import AsyncMock, patch
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from openclaw.services.execution_loop import ExecutionLoop
+
+
+def _make_session_factory(db_session):
+    """Create a mock async_session_factory that yields the test db_session.
+
+    Learn: ExecutionLoop.run() bypasses FastAPI DI and directly imports
+    async_session_factory. In tests, we patch it to return the test session
+    so the loop operates within the test's savepoint transaction.
+    """
+    @asynccontextmanager
+    async def factory():
+        yield db_session
+    return factory
 
 
 # ═══════════════════════════════════════════════════════════
@@ -188,14 +202,29 @@ def test_find_ready_task_all_done():
 
 @pytest.mark.asyncio
 async def test_execution_loop_completes(
-    client, executing_pipeline, engineer_agent
+    client, executing_pipeline, engineer_agent, db_session
 ):
     """Execution loop runs all tasks and transitions to reviewing."""
     pid = uuid.UUID(executing_pipeline["id"])
 
     with patch.object(
         ExecutionLoop, "_run_task", new_callable=AsyncMock, return_value=True
-    ):
+    ), patch(
+        "openclaw.services.execution_loop.async_session_factory",
+        _make_session_factory(db_session),
+    ), patch.object(
+        ExecutionLoop, "_publish_event", new_callable=AsyncMock,
+    ), patch.object(
+        ExecutionLoop, "_run_sandbox_if_configured",
+        new_callable=AsyncMock, return_value=None,
+    ), patch(
+        "openclaw.services.execution_loop.settings"
+    ) as mock_settings:
+        mock_settings.task_polling_interval_seconds = 0
+        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_task_retries = 0
+        mock_settings.sandbox_enabled = False
+
         loop = ExecutionLoop()
         result = await loop.run(pid)
 
@@ -216,7 +245,7 @@ async def test_execution_loop_completes(
 
 @pytest.mark.asyncio
 async def test_execution_loop_task_failure(
-    client, executing_pipeline, engineer_agent
+    client, executing_pipeline, engineer_agent, db_session
 ):
     """If a task fails, the pipeline is marked failed."""
     pid = uuid.UUID(executing_pipeline["id"])
@@ -229,7 +258,24 @@ async def test_execution_loop_task_failure(
         call_count += 1
         return call_count <= 1  # First returns True, second False
 
-    with patch.object(ExecutionLoop, "_run_task", side_effect=_mock_run_task):
+    with patch.object(
+        ExecutionLoop, "_run_task", side_effect=_mock_run_task
+    ), patch(
+        "openclaw.services.execution_loop.async_session_factory",
+        _make_session_factory(db_session),
+    ), patch.object(
+        ExecutionLoop, "_publish_event", new_callable=AsyncMock,
+    ), patch.object(
+        ExecutionLoop, "_run_sandbox_if_configured",
+        new_callable=AsyncMock, return_value=None,
+    ), patch(
+        "openclaw.services.execution_loop.settings"
+    ) as mock_settings:
+        mock_settings.task_polling_interval_seconds = 0
+        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_task_retries = 0
+        mock_settings.sandbox_enabled = False
+
         loop = ExecutionLoop()
         result = await loop.run(pid)
 
@@ -242,13 +288,10 @@ async def test_execution_loop_task_failure(
 
 @pytest.mark.asyncio
 async def test_execution_loop_no_idle_agent(
-    client, executing_pipeline
+    client, executing_pipeline, db_session
 ):
     """Loop stops if pipeline is no longer executing (e.g. cancelled while waiting)."""
     pid = uuid.UUID(executing_pipeline["id"])
-
-    # Cancel the pipeline after the loop starts looking for agents
-    original_find = ExecutionLoop._find_idle_agent
 
     call_count = 0
 
@@ -261,13 +304,25 @@ async def test_execution_loop_no_idle_agent(
                 f"/api/v1/pipelines/{executing_pipeline['id']}/status",
                 json={"status": "cancelled"},
             )
-        return None  # No idle agent
+        return []  # No idle agents
 
     with patch.object(
         ExecutionLoop,
-        "_find_idle_agent",
+        "_find_idle_agents",
         side_effect=_cancel_after_first,
-    ):
+    ), patch(
+        "openclaw.services.execution_loop.async_session_factory",
+        _make_session_factory(db_session),
+    ), patch.object(
+        ExecutionLoop, "_publish_event", new_callable=AsyncMock,
+    ), patch(
+        "openclaw.services.execution_loop.settings"
+    ) as mock_settings:
+        mock_settings.task_polling_interval_seconds = 0
+        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_task_retries = 0
+        mock_settings.sandbox_enabled = False
+
         loop = ExecutionLoop()
         result = await loop.run(pid)
 

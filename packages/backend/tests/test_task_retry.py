@@ -36,6 +36,7 @@ class TestHandleTaskCompletion:
         mock_db = AsyncMock()
         mock_db.get = AsyncMock(return_value=mock_task)
         mock_db.commit = AsyncMock()
+        mock_db.add = MagicMock()
 
         mock_events = MagicMock()
         mock_events.append = AsyncMock()
@@ -45,9 +46,13 @@ class TestHandleTaskCompletion:
             mock_sf.return_value.__aexit__ = AsyncMock()
             with patch("openclaw.services.execution_loop.EventStore", return_value=mock_events):
                 with patch.object(loop, "_publish_event", new_callable=AsyncMock):
-                    await loop._handle_task_completion(
-                        "pipeline-1", 1, True, "team-1"
-                    )
+                    with patch.object(
+                        loop, "_run_sandbox_if_configured",
+                        new_callable=AsyncMock, return_value=None,
+                    ):
+                        await loop._handle_task_completion(
+                            "pipeline-1", 1, True, "team-1"
+                        )
 
         assert mock_task.status == "done"
         assert mock_task.completed_at is not None
