@@ -165,14 +165,19 @@ async def test_plan_generates_task_graph(client, draft_pipeline, db_session):
     mock_response = _mock_claude_response(mock_tasks)
 
     with patch(
-        "openclaw.services.planner_service.anthropic.AsyncAnthropic"
-    ) as MockAnthropic:
-        mock_client = AsyncMock()
-        mock_client.messages.create = AsyncMock(return_value=mock_response)
-        MockAnthropic.return_value = mock_client
+        "openclaw.services.planner_service.settings"
+    ) as mock_settings:
+        mock_settings.anthropic_api_key = "test-key-for-mocking"
 
-        planner = PlannerService(db_session)
-        result = await planner.plan(pipeline_id)
+        with patch(
+            "openclaw.services.planner_service.anthropic.AsyncAnthropic"
+        ) as MockAnthropic:
+            mock_client = AsyncMock()
+            mock_client.messages.create = AsyncMock(return_value=mock_response)
+            MockAnthropic.return_value = mock_client
+
+            planner = PlannerService(db_session)
+            result = await planner.plan(pipeline_id)
 
     assert "tasks" in result
     assert len(result["tasks"]) == 2

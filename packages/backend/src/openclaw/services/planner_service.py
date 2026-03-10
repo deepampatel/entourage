@@ -156,20 +156,39 @@ COMPLEXITY_COST_ESTIMATE: dict[str, float] = {
 
 
 class PlannerService:
-    """Decomposes a human intent into a TaskGraph using Claude."""
+    """Decomposes a human intent into a TaskGraph using Claude.
+
+    When ANTHROPIC_API_KEY is set, calls Claude for intelligent decomposition.
+    When empty, falls back to template-based task graphs so the platform
+    is usable without an API key.
+    """
 
     def __init__(self, db: AsyncSession):
         self.db = db
         self.events = EventStore(db)
         self.pipeline_svc = PipelineService(db)
-        self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        self._client = None  # Lazy init — only when Claude is actually needed
+
+    @property
+    def client(self):
+        """Lazy-init Anthropic client — avoids crash when API key is empty."""
+        if self._client is None:
+            if not settings.anthropic_api_key:
+                raise RuntimeError(
+                    "ANTHROPIC_API_KEY not set. Use template-based planning "
+                    "or set the key to enable AI planning."
+                )
+            self._client = anthropic.AsyncAnthropic(
+                api_key=settings.anthropic_api_key
+            )
+        return self._client
 
     async def plan(self, pipeline_id: uuid.UUID) -> dict:
         """Generate a TaskGraph for a pipeline's intent.
 
         1. Load pipeline (get intent)
         2. Transition pipeline → planning
-        3. Call Claude with tool_use for structured TaskGraph output
+        3. Call Claude (or fallback to template) for TaskGraph
         4. Validate output
         5. Estimate cost per task
         6. Store task_graph in pipeline, create PipelineTask rows
@@ -186,6 +205,16 @@ class PlannerService:
         # Extract template from metadata (if set during creation)
         meta = pipeline.pipeline_metadata or {}
         template = meta.get("template")
+
+        # Fallback to template-based planning when no API key
+        if not settings.anthropic_api_key:
+            logger.info(
+                "No ANTHROPIC_API_KEY set, using template-based planning "
+                "for pipeline %s", pipeline_id
+            )
+            return await self._plan_from_template(
+                pipeline_id, pipeline.intent, template
+            )
 
         # Build prompt and call Claude
         prompt = self._build_planning_prompt(
@@ -296,3 +325,164 @@ class PlannerService:
             complexity = task.get("complexity", "M")
             total += COMPLEXITY_COST_ESTIMATE.get(complexity, 0.50)
         return round(total, 2)
+
+    # ── Template-based fallback ─────────────────────────────────
+
+    TEMPLATE_TASK_GRAPHS: dict[str, list[dict]] = {
+        "feature": [
+            {
+                "title": "Create data models",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [],
+            },
+            {
+                "title": "Implement core logic",
+                "complexity": "M",
+                "assigned_role": "engineer",
+                "dependencies": [0],
+            },
+            {
+                "title": "Add API endpoints",
+                "complexity": "M",
+                "assigned_role": "engineer",
+                "dependencies": [1],
+            },
+            {
+                "title": "Write tests",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [2],
+            },
+        ],
+        "bugfix": [
+            {
+                "title": "Reproduce and diagnose bug",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [],
+            },
+            {
+                "title": "Implement fix",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [0],
+            },
+            {
+                "title": "Add regression test",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [1],
+            },
+        ],
+        "refactor": [
+            {
+                "title": "Analyze existing code",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [],
+            },
+            {
+                "title": "Refactor implementation",
+                "complexity": "M",
+                "assigned_role": "engineer",
+                "dependencies": [0],
+            },
+            {
+                "title": "Update tests",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [1],
+            },
+        ],
+        "migration": [
+            {
+                "title": "Create migration script",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [],
+            },
+            {
+                "title": "Update code references",
+                "complexity": "M",
+                "assigned_role": "engineer",
+                "dependencies": [0],
+            },
+            {
+                "title": "Test upgrade and rollback",
+                "complexity": "S",
+                "assigned_role": "engineer",
+                "dependencies": [1],
+            },
+        ],
+    }
+
+    # Default for custom/unknown templates
+    TEMPLATE_TASK_GRAPHS["custom"] = [
+        {
+            "title": "Implement changes",
+            "complexity": "M",
+            "assigned_role": "engineer",
+            "dependencies": [],
+        },
+        {
+            "title": "Write tests and verify",
+            "complexity": "S",
+            "assigned_role": "engineer",
+            "dependencies": [0],
+        },
+    ]
+
+    async def _plan_from_template(
+        self,
+        pipeline_id: uuid.UUID,
+        intent: str,
+        template: Optional[str] = None,
+    ) -> dict:
+        """Generate a task graph from templates without calling Claude.
+
+        This enables the platform to work without an ANTHROPIC_API_KEY.
+        The generated tasks use the pipeline intent as their description.
+        """
+        import copy
+
+        template_key = template if template in self.TEMPLATE_TASK_GRAPHS else "feature"
+        tasks = copy.deepcopy(self.TEMPLATE_TASK_GRAPHS[template_key])
+
+        # Inject the intent into each task's description
+        for task in tasks:
+            task["description"] = f"{task['title']}: {intent}"
+
+        task_graph = {"tasks": tasks}
+
+        # Estimate costs
+        estimated_cost = self._estimate_cost(task_graph)
+        task_graph["estimated_cost_usd"] = estimated_cost
+
+        # Store task graph + create PipelineTask rows
+        await self.pipeline_svc.set_task_graph(pipeline_id, task_graph)
+
+        # Update estimated cost on pipeline
+        pipeline = await self.db.get(Pipeline, pipeline_id)
+        pipeline.estimated_cost_usd = estimated_cost
+        await self.db.flush()
+
+        # Record event
+        await self.events.append(
+            stream_id=f"pipeline:{pipeline_id}",
+            event_type=PIPELINE_PLAN_GENERATED,
+            data={
+                "pipeline_id": str(pipeline_id),
+                "task_count": len(tasks),
+                "estimated_cost_usd": estimated_cost,
+                "source": "template",
+                "template": template_key,
+            },
+        )
+
+        # Transition to awaiting approval
+        await self.pipeline_svc.change_status(
+            pipeline_id, "awaiting_plan_approval"
+        )
+
+        return task_graph

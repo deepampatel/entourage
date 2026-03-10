@@ -612,6 +612,397 @@ async def _costs_impl(team_id: Optional[str], days: int):
 
 
 # ---------------------------------------------------------------------------
+# entourage pipeline (group)
+# ---------------------------------------------------------------------------
+
+
+@main.group()
+def pipeline():
+    """Manage pipelines — create, plan, approve, and execute."""
+
+
+async def _resolve_team_id(c: httpx.AsyncClient, team_id: Optional[str]) -> str:
+    """Resolve team_id: use flag, env var, or auto-pick the first team."""
+    tid = team_id or os.environ.get("ENTOURAGE_TEAM_ID")
+    if tid:
+        return tid
+
+    # Auto-discover: first org → first team
+    r = await c.get("/api/v1/orgs")
+    r.raise_for_status()
+    orgs = r.json()
+    if not orgs:
+        click.secho(
+            "No organizations found. Create one first:\n"
+            "  Visit /manage in the web UI or POST /api/v1/orgs",
+            fg="red", err=True,
+        )
+        sys.exit(1)
+
+    org_id = orgs[0]["id"]
+    r = await c.get(f"/api/v1/orgs/{org_id}/teams")
+    r.raise_for_status()
+    teams = r.json()
+    if not teams:
+        click.secho(
+            f"No teams in org '{orgs[0]['name']}'. Create one first:\n"
+            "  Visit /manage in the web UI",
+            fg="red", err=True,
+        )
+        sys.exit(1)
+
+    tid = teams[0]["id"]
+    click.echo(f"Auto-selected team: {teams[0]['name']} ({tid[:8]}...)")
+    return tid
+
+
+@pipeline.command("list")
+@click.option("--team-id", "-t", help="Team UUID (auto-detects if omitted)")
+def pipeline_list(team_id: Optional[str]):
+    """List pipelines for a team."""
+    _run(_pipeline_list_impl(team_id))
+
+
+async def _pipeline_list_impl(team_id: Optional[str]):
+    async with _client() as c:
+        tid = await _resolve_team_id(c, team_id)
+        r = await c.get(f"/api/v1/teams/{tid}/pipelines")
+        r.raise_for_status()
+        pipelines = r.json()
+
+        if not pipelines:
+            click.echo("No pipelines yet. Create one with: entourage pipeline create \"your intent\"")
+            return
+
+        click.secho(f"Pipelines ({len(pipelines)}):", bold=True)
+        click.echo()
+        for p in pipelines:
+            status_str = click.style(p["status"], fg=_status_color(p.get("status", "draft")))
+            pid = p["id"][:8]
+            title = p.get("title", "—")[:50]
+            cost = p.get("estimated_cost_usd")
+            cost_str = f"  ~${cost:.2f}" if cost else ""
+            click.echo(f"  {pid}  {status_str:20s}  {title}{cost_str}")
+
+
+@pipeline.command("create")
+@click.argument("intent")
+@click.option("--team-id", "-t", help="Team UUID (auto-detects if omitted)")
+@click.option("--template", "-T", type=click.Choice(["feature", "bugfix", "refactor", "migration"]), default="feature")
+@click.option("--budget", "-b", type=float, default=10.0, help="Budget limit in USD (default: 10)")
+def pipeline_create(intent: str, team_id: Optional[str], template: str, budget: float):
+    """Create a new pipeline from an intent description.
+
+    INTENT is what you want built (e.g. "Add user authentication with JWT").
+    """
+    _run(_pipeline_create_impl(intent, team_id, template, budget))
+
+
+async def _pipeline_create_impl(intent: str, team_id: Optional[str], template: str, budget: float):
+    async with _client() as c:
+        tid = await _resolve_team_id(c, team_id)
+
+        r = await c.post(f"/api/v1/teams/{tid}/pipelines", json={
+            "title": intent[:200],
+            "intent": intent,
+            "budget_limit_usd": budget,
+            "template": template,
+        })
+        r.raise_for_status()
+        pipeline = r.json()
+
+        click.secho(f"Pipeline created!", fg="green")
+        click.echo(f"  ID:       {pipeline['id']}")
+        click.echo(f"  Template: {template}")
+        click.echo(f"  Budget:   ${budget:.2f}")
+        click.echo(f"\nNext: entourage pipeline plan {pipeline['id']}")
+
+
+@pipeline.command("status")
+@click.argument("pipeline_id")
+def pipeline_status(pipeline_id: str):
+    """Show status of a pipeline."""
+    _run(_pipeline_status_impl(pipeline_id))
+
+
+async def _pipeline_status_impl(pipeline_id: str):
+    async with _client() as c:
+        r = await c.get(f"/api/v1/pipelines/{pipeline_id}")
+        if r.status_code == 404:
+            click.secho(f"Pipeline {pipeline_id} not found.", fg="red")
+            sys.exit(1)
+        r.raise_for_status()
+        p = r.json()
+
+        status_str = click.style(p["status"], fg=_status_color(p.get("status", "draft")))
+        click.secho("Pipeline Status", bold=True)
+        click.echo(f"  ID:       {p['id']}")
+        click.echo(f"  Title:    {p.get('title', '—')}")
+        click.echo(f"  Status:   {status_str}")
+        click.echo(f"  Budget:   ${p.get('budget_limit_usd', 0):.2f}")
+        if p.get("estimated_cost_usd"):
+            click.echo(f"  Est cost: ${p['estimated_cost_usd']:.2f}")
+
+        # Show tasks if available
+        r = await c.get(f"/api/v1/pipelines/{pipeline_id}/tasks")
+        if r.status_code == 200:
+            tasks = r.json()
+            if tasks:
+                click.echo()
+                click.secho(f"Tasks ({len(tasks)}):", bold=True)
+                for i, t in enumerate(tasks):
+                    t_status = click.style(t["status"], fg=_status_color(t["status"]))
+                    deps = t.get("dependencies", [])
+                    dep_str = f" (depends on: {deps})" if deps else ""
+                    click.echo(f"  {i}. [{t_status}] {t['title']}{dep_str}")
+
+
+@pipeline.command("plan")
+@click.argument("pipeline_id")
+def pipeline_plan(pipeline_id: str):
+    """Start planning — AI decomposes intent into tasks."""
+    _run(_pipeline_plan_impl(pipeline_id))
+
+
+async def _pipeline_plan_impl(pipeline_id: str):
+    async with _client() as c:
+        click.echo("Starting planning...")
+        r = await c.post(f"/api/v1/pipelines/{pipeline_id}/start")
+        if r.status_code == 404:
+            click.secho(f"Pipeline {pipeline_id} not found.", fg="red")
+            sys.exit(1)
+        r.raise_for_status()
+
+        click.secho("Planning started!", fg="green")
+
+        # Poll until planning completes
+        click.echo("Waiting for plan...")
+        for _ in range(120):  # 2 minutes max
+            await asyncio.sleep(1)
+            r = await c.get(f"/api/v1/pipelines/{pipeline_id}")
+            r.raise_for_status()
+            p = r.json()
+            status = p["status"]
+
+            if status == "awaiting_plan_approval":
+                click.secho("Plan ready for review!", fg="green")
+                # Show the tasks
+                r = await c.get(f"/api/v1/pipelines/{pipeline_id}/tasks")
+                r.raise_for_status()
+                tasks = r.json()
+                click.echo()
+                click.secho(f"Task plan ({len(tasks)} tasks):", bold=True)
+                for i, t in enumerate(tasks):
+                    complexity = t.get("complexity", "?")
+                    click.echo(f"  {i}. [{complexity}] {t['title']}")
+
+                if p.get("estimated_cost_usd"):
+                    click.echo(f"\nEstimated cost: ${p['estimated_cost_usd']:.2f}")
+
+                click.echo(f"\nApprove: entourage pipeline approve {pipeline_id}")
+                return
+
+            if status in ("failed", "cancelled"):
+                click.secho(f"Planning failed (status: {status}).", fg="red")
+                sys.exit(1)
+
+        click.secho("Planning timed out. Check status with: entourage pipeline status " + pipeline_id, fg="yellow")
+
+
+@pipeline.command("approve")
+@click.argument("pipeline_id")
+def pipeline_approve(pipeline_id: str):
+    """Approve the plan and start execution."""
+    _run(_pipeline_approve_impl(pipeline_id))
+
+
+async def _pipeline_approve_impl(pipeline_id: str):
+    async with _client() as c:
+        r = await c.post(f"/api/v1/pipelines/{pipeline_id}/approve-plan", json={})
+        if r.status_code == 404:
+            click.secho(f"Pipeline {pipeline_id} not found.", fg="red")
+            sys.exit(1)
+        r.raise_for_status()
+
+        click.secho("Plan approved! Execution starting...", fg="green")
+        click.echo(f"Monitor: entourage pipeline status {pipeline_id}")
+
+
+@pipeline.command("tasks")
+@click.argument("pipeline_id")
+def pipeline_tasks(pipeline_id: str):
+    """List tasks for a pipeline."""
+    _run(_pipeline_tasks_impl(pipeline_id))
+
+
+async def _pipeline_tasks_impl(pipeline_id: str):
+    async with _client() as c:
+        r = await c.get(f"/api/v1/pipelines/{pipeline_id}/tasks")
+        if r.status_code == 404:
+            click.secho(f"Pipeline {pipeline_id} not found.", fg="red")
+            sys.exit(1)
+        r.raise_for_status()
+        tasks = r.json()
+
+        if not tasks:
+            click.echo("No tasks yet. Run planning first: entourage pipeline plan " + pipeline_id)
+            return
+
+        click.secho(f"Pipeline tasks ({len(tasks)}):", bold=True)
+        click.echo()
+        for i, t in enumerate(tasks):
+            t_status = click.style(t["status"], fg=_status_color(t["status"]))
+            complexity = t.get("complexity", "?")
+            deps = t.get("dependencies", [])
+            dep_str = f" → deps: {deps}" if deps else ""
+            click.echo(f"  {i}. [{complexity}] {t_status}  {t['title']}{dep_str}")
+            if t.get("description"):
+                # Show first 100 chars of description
+                desc = t["description"][:100]
+                click.echo(f"     {desc}")
+
+
+@pipeline.command("go")
+@click.argument("intent")
+@click.option("--team-id", "-t", help="Team UUID (auto-detects if omitted)")
+@click.option("--template", "-T", type=click.Choice(["feature", "bugfix", "refactor", "migration"]), default="feature")
+@click.option("--budget", "-b", type=float, default=10.0, help="Budget limit in USD (default: 10)")
+@click.option("--no-approve", is_flag=True, help="Stop after planning (don't auto-approve)")
+def pipeline_go(intent: str, team_id: Optional[str], template: str, budget: float, no_approve: bool):
+    """One-liner: create → plan → approve → execute.
+
+    INTENT is what you want built. This command does everything:
+    creates a pipeline, runs planning, auto-approves, and polls until done.
+
+    \b
+    Examples:
+        entourage pipeline go "Add a healthcheck endpoint at /health"
+        entourage pipeline go "Fix the N+1 query in user list" --template bugfix
+    """
+    _run(_pipeline_go_impl(intent, team_id, template, budget, no_approve))
+
+
+async def _pipeline_go_impl(
+    intent: str, team_id: Optional[str], template: str,
+    budget: float, no_approve: bool,
+):
+    async with _client() as c:
+        tid = await _resolve_team_id(c, team_id)
+
+        # 1. Create pipeline
+        click.echo(f"Creating pipeline ({template}, ${budget:.0f} budget)...")
+        r = await c.post(f"/api/v1/teams/{tid}/pipelines", json={
+            "title": intent[:200],
+            "intent": intent,
+            "budget_limit_usd": budget,
+            "template": template,
+        })
+        r.raise_for_status()
+        pipeline = r.json()
+        pid = pipeline["id"]
+        click.secho(f"Pipeline {pid[:8]}... created", fg="green")
+
+        # 2. Start planning
+        click.echo("Starting planning...")
+        r = await c.post(f"/api/v1/pipelines/{pid}/start")
+        r.raise_for_status()
+
+        # 3. Wait for plan
+        start = time.time()
+        for _ in range(120):
+            await asyncio.sleep(1)
+            r = await c.get(f"/api/v1/pipelines/{pid}")
+            r.raise_for_status()
+            p = r.json()
+            status = p["status"]
+            elapsed = time.time() - start
+
+            click.echo(f"\r  [{elapsed:.0f}s] Status: {status}    ", nl=False)
+
+            if status == "awaiting_plan_approval":
+                click.echo()
+                # Show tasks
+                r = await c.get(f"/api/v1/pipelines/{pid}/tasks")
+                r.raise_for_status()
+                tasks = r.json()
+                click.secho(f"Plan ready ({len(tasks)} tasks):", fg="green")
+                for i, t in enumerate(tasks):
+                    click.echo(f"  {i}. [{t.get('complexity', '?')}] {t['title']}")
+                break
+
+            if status in ("failed", "cancelled"):
+                click.echo()
+                click.secho(f"Planning failed: {status}", fg="red")
+                sys.exit(1)
+        else:
+            click.echo()
+            click.secho("Planning timed out after 2 minutes.", fg="yellow")
+            sys.exit(1)
+
+        if no_approve:
+            click.echo(f"\nPlan ready. Approve with: entourage pipeline approve {pid}")
+            return
+
+        # 4. Approve
+        click.echo("\nAuto-approving plan...")
+        r = await c.post(f"/api/v1/pipelines/{pid}/approve-plan", json={})
+        r.raise_for_status()
+        click.secho("Approved! Execution starting...", fg="green")
+
+        # 5. Poll execution
+        click.echo()
+        exec_start = time.time()
+        last_status = "executing"
+
+        while True:
+            await asyncio.sleep(5)
+            elapsed = time.time() - exec_start
+
+            r = await c.get(f"/api/v1/pipelines/{pid}")
+            r.raise_for_status()
+            p = r.json()
+            status = p["status"]
+
+            status_str = click.style(status, fg=_status_color(status))
+            click.echo(f"\r  [{elapsed:.0f}s] {status_str}    ", nl=False)
+
+            if status != last_status:
+                click.echo()
+                last_status = status
+
+            if status in ("reviewing", "done", "merging"):
+                click.echo()
+                break
+
+            if status in ("failed", "cancelled", "paused"):
+                click.echo()
+                click.secho(f"Pipeline ended: {status}", fg="red")
+                break
+
+            # Timeout after 30 minutes
+            if elapsed > 1800:
+                click.echo()
+                click.secho("Execution timed out (30 min).", fg="yellow")
+                break
+
+        # 6. Summary
+        r = await c.get(f"/api/v1/pipelines/{pid}")
+        r.raise_for_status()
+        p = r.json()
+        r = await c.get(f"/api/v1/pipelines/{pid}/tasks")
+        r.raise_for_status()
+        tasks = r.json()
+
+        total_elapsed = time.time() - start
+        click.echo()
+        click.secho("─── Pipeline Summary ───", bold=True)
+        click.echo(f"  ID:       {pid}")
+        click.echo(f"  Status:   {click.style(p['status'], fg=_status_color(p['status']))}")
+        click.echo(f"  Duration: {total_elapsed:.0f}s")
+        click.echo(f"  Tasks:    {len([t for t in tasks if t['status'] == 'done'])}/{len(tasks)} done")
+
+
+# ---------------------------------------------------------------------------
 # entourage adapters
 # ---------------------------------------------------------------------------
 
