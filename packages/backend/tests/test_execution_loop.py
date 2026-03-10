@@ -209,9 +209,6 @@ async def test_execution_loop_completes(
 
     with patch.object(
         ExecutionLoop, "_run_task", new_callable=AsyncMock, return_value=True
-    ), patch(
-        "openclaw.services.execution_loop.async_session_factory",
-        _make_session_factory(db_session),
     ), patch.object(
         ExecutionLoop, "_publish_event", new_callable=AsyncMock,
     ), patch.object(
@@ -225,7 +222,7 @@ async def test_execution_loop_completes(
         mock_settings.max_task_retries = 0
         mock_settings.sandbox_enabled = False
 
-        loop = ExecutionLoop()
+        loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
         result = await loop.run(pid)
 
     assert result["status"] == "reviewing"
@@ -260,9 +257,6 @@ async def test_execution_loop_task_failure(
 
     with patch.object(
         ExecutionLoop, "_run_task", side_effect=_mock_run_task
-    ), patch(
-        "openclaw.services.execution_loop.async_session_factory",
-        _make_session_factory(db_session),
     ), patch.object(
         ExecutionLoop, "_publish_event", new_callable=AsyncMock,
     ), patch.object(
@@ -276,7 +270,7 @@ async def test_execution_loop_task_failure(
         mock_settings.max_task_retries = 0
         mock_settings.sandbox_enabled = False
 
-        loop = ExecutionLoop()
+        loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
         result = await loop.run(pid)
 
     assert result["status"] == "failed"
@@ -310,9 +304,6 @@ async def test_execution_loop_no_idle_agent(
         ExecutionLoop,
         "_find_idle_agents",
         side_effect=_cancel_after_first,
-    ), patch(
-        "openclaw.services.execution_loop.async_session_factory",
-        _make_session_factory(db_session),
     ), patch.object(
         ExecutionLoop, "_publish_event", new_callable=AsyncMock,
     ), patch(
@@ -323,7 +314,7 @@ async def test_execution_loop_no_idle_agent(
         mock_settings.max_task_retries = 0
         mock_settings.sandbox_enabled = False
 
-        loop = ExecutionLoop()
+        loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
         result = await loop.run(pid)
 
     # Pipeline should have been cancelled

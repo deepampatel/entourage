@@ -24,7 +24,6 @@ import redis.asyncio as aioredis
 
 from openclaw.agent.adapters import AdapterConfig, get_adapter
 from openclaw.config import settings
-from openclaw.db.engine import async_session_factory
 from openclaw.db.models import Agent, Task, Team
 from openclaw.events.store import EventStore
 from openclaw.events.types import (
@@ -72,6 +71,12 @@ class AgentRunner:
     and the API endpoint (FastAPI BackgroundTasks).
     """
 
+    def __init__(self, session_factory=None) -> None:
+        if session_factory is None:
+            from openclaw.db.engine import async_session_factory
+            session_factory = async_session_factory
+        self._session_factory = session_factory
+
     async def run_agent(
         self,
         agent_id: str,
@@ -84,7 +89,7 @@ class AgentRunner:
 
         Returns dict with: session_id, exit_code, duration_seconds, error
         """
-        async with async_session_factory() as db:
+        async with self._session_factory() as db:
             # ── Load agent ────────────────────────────────────
             agent = await db.get(Agent, _uuid.UUID(agent_id))
             if not agent:
@@ -142,7 +147,7 @@ class AgentRunner:
 
         # ── Load team conventions ─────────────────────────────
         conventions = []
-        async with async_session_factory() as db:
+        async with self._session_factory() as db:
             team = await db.get(Team, _uuid.UUID(effective_team_id))
             if team and team.config:
                 conventions = [
@@ -197,7 +202,7 @@ class AgentRunner:
             # ── Record result ─────────────────────────────────
             error = result.error if not result.ok else None
 
-            async with async_session_factory() as db:
+            async with self._session_factory() as db:
                 session_svc = SessionService(db)
                 await session_svc.end_session(session.id, error=error)
 
@@ -265,7 +270,7 @@ class AgentRunner:
             # ── Handle unexpected errors ──────────────────────
             logger.exception("Agent %s run failed unexpectedly", agent_id)
 
-            async with async_session_factory() as db:
+            async with self._session_factory() as db:
                 session_svc = SessionService(db)
                 await session_svc.end_session(session.id, error=str(e))
 

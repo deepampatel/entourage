@@ -214,9 +214,6 @@ async def test_execution_loop_runs_sandbox_on_success(
 
     with patch.object(
         ExecutionLoop, "_run_task", new_callable=AsyncMock, return_value=True
-    ), patch(
-        "openclaw.services.execution_loop.async_session_factory",
-        _make_session_factory(db_session),
     ), patch.object(
         ExecutionLoop, "_publish_event", new_callable=AsyncMock,
     ), patch.object(
@@ -230,7 +227,7 @@ async def test_execution_loop_runs_sandbox_on_success(
         mock_settings.max_concurrent_pipeline_tasks = 1
         mock_settings.max_task_retries = 0
 
-        loop = ExecutionLoop()
+        loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
         result = await loop.run(pid)
 
     # Pipeline should reach reviewing — sandbox skipped via mock
@@ -257,9 +254,6 @@ async def test_execution_loop_retries_on_sandbox_failure(
 
     with patch.object(
         ExecutionLoop, "_run_task", side_effect=mock_run_task
-    ), patch(
-        "openclaw.services.execution_loop.async_session_factory",
-        _make_session_factory(db_session),
     ), patch.object(
         ExecutionLoop, "_publish_event", new_callable=AsyncMock,
     ), patch.object(
@@ -273,7 +267,7 @@ async def test_execution_loop_retries_on_sandbox_failure(
         mock_settings.max_concurrent_pipeline_tasks = 1
         mock_settings.max_task_retries = 2
 
-        loop = ExecutionLoop()
+        loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
         result = await loop.run(pid)
 
     # The loop should have retried tasks that failed sandbox
@@ -289,9 +283,6 @@ async def test_execution_loop_skips_sandbox_no_docker(
 
     with patch.object(
         ExecutionLoop, "_run_task", new_callable=AsyncMock, return_value=True
-    ), patch(
-        "openclaw.services.execution_loop.async_session_factory",
-        _make_session_factory(db_session),
     ), patch.object(
         ExecutionLoop, "_publish_event", new_callable=AsyncMock,
     ), patch.object(
@@ -305,7 +296,7 @@ async def test_execution_loop_skips_sandbox_no_docker(
         mock_settings.max_concurrent_pipeline_tasks = 1
         mock_settings.max_task_retries = 0
 
-        loop = ExecutionLoop()
+        loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
         result = await loop.run(pid)
 
     # Pipeline should complete normally — sandbox skipped

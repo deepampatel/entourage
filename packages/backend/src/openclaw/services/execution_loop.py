@@ -23,7 +23,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from openclaw.agent.runner import AgentRunner
 from openclaw.config import settings
-from openclaw.db.engine import async_session_factory
 from openclaw.db.models import Agent, Pipeline, PipelineTask, Repository, SandboxRun
 from openclaw.events.store import EventStore
 from openclaw.events.types import (
@@ -64,7 +63,11 @@ class ExecutionLoop:
     - ResourceMonitor gates dispatch on CPU/memory/disk
     """
 
-    def __init__(self) -> None:
+    def __init__(self, session_factory=None) -> None:
+        if session_factory is None:
+            from openclaw.db.engine import async_session_factory
+            session_factory = async_session_factory
+        self._session_factory = session_factory
         self._resource_monitor = ResourceMonitor()
         self._sandbox_mgr = SandboxManager()
 
@@ -87,7 +90,7 @@ class ExecutionLoop:
         try:
             while True:
                 # Open a fresh session each iteration (no stale reads)
-                async with async_session_factory() as db:
+                async with self._session_factory() as db:
                     pipeline = await db.get(Pipeline, pipeline_id)
                     if not pipeline:
                         raise ValueError(f"Pipeline {pipeline_id} not found")
@@ -145,7 +148,7 @@ class ExecutionLoop:
                         del running[tid]
 
                 # ── Re-read task state after completions ───────────────
-                async with async_session_factory() as db:
+                async with self._session_factory() as db:
                     result = await db.execute(
                         select(PipelineTask)
                         .where(PipelineTask.pipeline_id == pipeline_id)
@@ -296,7 +299,7 @@ class ExecutionLoop:
 
                 # ── Check budget ────────────────────────────────────────
                 try:
-                    async with async_session_factory() as db:
+                    async with self._session_factory() as db:
                         budget_svc = PipelineBudgetService(db)
                         budget = await budget_svc.check_budget(pipeline_id)
                         if not budget.get("within_budget", True):
@@ -314,7 +317,7 @@ class ExecutionLoop:
                             }
                 except PipelineBudgetExceededError:
                     await self._cancel_running(running)
-                    async with async_session_factory() as db:
+                    async with self._session_factory() as db:
                         svc = PipelineService(db)
                         await svc.change_status(pipeline_id, "paused")
                     return {
@@ -331,7 +334,7 @@ class ExecutionLoop:
             )
             await self._cancel_running(running)
             try:
-                async with async_session_factory() as db:
+                async with self._session_factory() as db:
                     svc = PipelineService(db)
                     await svc.change_status(pipeline_id, "failed")
             except Exception:
@@ -357,7 +360,7 @@ class ExecutionLoop:
         """
         logger.info("Resuming pipeline %s", pipeline_id)
 
-        async with async_session_factory() as db:
+        async with self._session_factory() as db:
             pipeline = await db.get(Pipeline, pipeline_id)
             if not pipeline:
                 raise ValueError(f"Pipeline {pipeline_id} not found")
@@ -511,7 +514,7 @@ class ExecutionLoop:
             task_id=pipeline_task_id, agent_id=agent_id,
             pipeline_id=str(pipeline_id), title=task_title,
         )
-        runner = AgentRunner()
+        runner = AgentRunner(session_factory=self._session_factory)
 
         # Build prompt for the agent
         prompt = (
@@ -530,7 +533,7 @@ class ExecutionLoop:
 
             if result.get("error"):
                 # Record the error on the pipeline task
-                async with async_session_factory() as db:
+                async with self._session_factory() as db:
                     ptask = await db.get(PipelineTask, pipeline_task_id)
                     if ptask:
                         ptask.error = result["error"]
@@ -543,7 +546,7 @@ class ExecutionLoop:
             logger.exception(
                 "Agent run failed for pipeline task %d", pipeline_task_id
             )
-            async with async_session_factory() as db:
+            async with self._session_factory() as db:
                 ptask = await db.get(PipelineTask, pipeline_task_id)
                 if ptask:
                     ptask.error = str(e)
@@ -561,7 +564,7 @@ class ExecutionLoop:
         team_id: uuid.UUID,
     ) -> None:
         """Record task started event in EventStore and publish via Redis."""
-        async with async_session_factory() as db:
+        async with self._session_factory() as db:
             events = EventStore(db)
             await events.append(
                 stream_id=f"pipeline:{pipeline_id}",
@@ -596,7 +599,7 @@ class ExecutionLoop:
 
         On failure, retries up to max_task_retries before marking as failed.
         """
-        async with async_session_factory() as db:
+        async with self._session_factory() as db:
             ptask = await db.get(PipelineTask, task_id)
             if not ptask:
                 logger.error("Pipeline task %d not found for completion", task_id)
@@ -707,7 +710,7 @@ class ExecutionLoop:
             logger.debug("Docker not available, skipping sandbox for task %d", task_id)
             return None
 
-        async with async_session_factory() as db:
+        async with self._session_factory() as db:
             pipeline = await db.get(Pipeline, pipeline_id)
             if not pipeline or not pipeline.repository_id:
                 return None
@@ -741,7 +744,7 @@ class ExecutionLoop:
         )
 
         # Persist the sandbox run
-        async with async_session_factory() as db:
+        async with self._session_factory() as db:
             run = SandboxRun(
                 sandbox_id=result.sandbox_id,
                 pipeline_id=pipeline_id,
