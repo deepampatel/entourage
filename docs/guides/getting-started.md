@@ -58,37 +58,56 @@ curl http://localhost:8000/api/v1/health
 # {"status":"ok","postgres":true,"redis":true}
 ```
 
-You now have a fully operational Entourage backend with 55+ API endpoints.
+You now have a fully operational Entourage backend with 60+ API endpoints.
 
 ## Step 4: Install and authenticate the CLI
 
-The Entourage CLI gives you 8 commands for managing agents, tasks, and adapters from your terminal.
+The Entourage CLI gives you commands for managing agents, tasks, pipelines, and adapters from your terminal.
 
 ```bash
-pip install entourage-cli
+cd packages/backend
+uv sync   # installs the CLI as part of the backend package
 ```
 
 Log in with your API key:
 
 ```bash
-entourage login --api-key oc_your_key_here
+uv run entourage login --api-key oc_your_key_here
 ```
 
 Verify your connection:
 
 ```bash
-entourage status
+uv run entourage status
 ```
 
 Check which agent adapters are available:
 
 ```bash
-entourage adapters
+uv run entourage adapters
 ```
 
 Entourage ships with 3 agent adapters out of the box: **Claude Code**, **Codex**, and **Aider**. Use `entourage adapters` to see which are configured and ready.
 
-Other useful CLI commands: `entourage agents`, `entourage tasks`, `entourage run`, `entourage respond`, `entourage logout`.
+### CLI commands
+
+| Command | What it does |
+|---------|-------------|
+| `entourage status` | Team status (agents, tasks, requests) |
+| `entourage agents` | List agents and their state |
+| `entourage tasks` | List tasks with optional status filter |
+| `entourage run AGENT_ID` | Dispatch an agent to work on a task |
+| `entourage respond REQUEST_ID MSG` | Respond to a human-in-the-loop request |
+| `entourage adapters` | Show available adapters + readiness |
+| `entourage login` | Authenticate (JWT or API key) |
+| `entourage logout` | Remove stored credentials |
+| `entourage pipeline go INTENT` | One-liner: create → plan → approve → execute |
+| `entourage pipeline list` | List all pipelines for the current team |
+| `entourage pipeline create INTENT` | Create a new pipeline |
+| `entourage pipeline status ID` | Show pipeline status and progress |
+| `entourage pipeline plan ID` | Start AI/template planning |
+| `entourage pipeline approve ID` | Approve the plan and start execution |
+| `entourage pipeline tasks ID` | Show task graph with dependencies |
 
 ## Step 5: Create your workspace
 
@@ -150,7 +169,43 @@ My Company (org)
         └── my-project (repo)
 ```
 
-## Step 6: Create your first task
+## Step 6: Ship something
+
+The fastest way to go from intent to running agents is the `pipeline go` command:
+
+```bash
+cd packages/backend
+uv run entourage pipeline go "Add input validation to login endpoint"
+```
+
+This single command: creates a pipeline → plans tasks (AI or template-based) → auto-approves → starts execution. You can watch progress in real time.
+
+> **No Anthropic API key?** No problem. The planner falls back to template-based task decomposition (feature, bugfix, refactor, migration) so the full platform works without any AI provider configured.
+
+### Or do it step-by-step
+
+If you prefer more control, use the individual pipeline commands:
+
+```bash
+# Create the pipeline
+uv run entourage pipeline create "Add input validation to login endpoint" --template feature
+
+# Plan the tasks (AI-generated or template-based)
+uv run entourage pipeline plan {pipeline_id}
+
+# Review the task graph
+uv run entourage pipeline tasks {pipeline_id}
+
+# Approve the plan and start execution
+uv run entourage pipeline approve {pipeline_id}
+
+# Check progress
+uv run entourage pipeline status {pipeline_id}
+```
+
+### Or create tasks manually via API
+
+You can also create individual tasks directly:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/teams/{team_id}/tasks \
@@ -163,17 +218,13 @@ curl -X POST http://localhost:8000/api/v1/teams/{team_id}/tasks \
   }'
 ```
 
-The task starts in `todo` status. Assign it to your engineer:
+Assign it to an agent and move it to in-progress:
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/tasks/{task_id}/assign \
   -H "Content-Type: application/json" \
   -d '{"assignee_id": "{eng-1 agent id}"}'
-```
 
-Move it to in-progress:
-
-```bash
 curl -X POST http://localhost:8000/api/v1/tasks/{task_id}/status \
   -H "Content-Type: application/json" \
   -d '{"status": "in_progress"}'
@@ -181,7 +232,7 @@ curl -X POST http://localhost:8000/api/v1/tasks/{task_id}/status \
 
 ## Step 7: Build the MCP server
 
-The MCP server is how AI agents connect to Entourage. It exposes 47 tools via the Model Context Protocol.
+The MCP server is how AI agents connect to Entourage. It exposes 58 tools via the Model Context Protocol.
 
 ```bash
 cd packages/mcp-server
@@ -207,7 +258,7 @@ Add this to your Claude Desktop MCP config (`~/Library/Application Support/Claud
 }
 ```
 
-Now Claude can call tools like `create_task`, `send_message`, `ask_human`, `request_review`, `create_tasks_batch`, `wait_for_task_completion`, `list_team_agents`, and 40 more — all backed by Entourage's state management, auth, and audit trail.
+Now Claude can call tools like `create_task`, `send_message`, `ask_human`, `request_review`, `create_tasks_batch`, `wait_for_task_completion`, `list_team_agents`, and 50+ more — all backed by Entourage's state management, auth, and audit trail.
 
 ## Step 8: Start the dashboard (optional)
 

@@ -8,7 +8,7 @@
 │                                                                  │
 │   ┌──────────┐    MCP (stdio)    ┌──────────────────────────┐   │
 │   │ AI Agent │◄─────────────────►│     MCP Server (TS)      │   │
-│   │ (Claude, │    50 tools       │  tasks, git, reviews,    │   │
+│   │ (Claude, │    58 tools       │  tasks, git, reviews,    │   │
 │   │  etc.)   │                   │  sessions, webhooks, ... │   │
 │   └──────────┘                   └────────────┬─────────────┘   │
 │                                               │ REST             │
@@ -82,7 +82,7 @@ GitHub POST → /webhooks/{id}/receive → Verify HMAC-SHA256 signature
 ## Layer Separation
 
 ```
-MCP Tool Definition (index.ts)      What agents see (50 tools)
+MCP Tool Definition (index.ts)      What agents see (58 tools)
         │
         ▼
 HTTP Client (client.ts)              Protocol bridge (MCP → HTTP)
@@ -104,6 +104,41 @@ SQLAlchemy Models (db/models.py)     Database schema (15 models)
 ```
 
 Each layer has a single responsibility. API routes never contain business logic. Services never touch HTTP concepts. The EventStore is the only writer to the events table.
+
+### Dependency Injection
+
+`ExecutionLoop` and `AgentRunner` accept a `session_factory` parameter via constructor injection with lazy fallback:
+
+```python
+class ExecutionLoop:
+    def __init__(self, session_factory=None) -> None:
+        from openclaw.db.engine import async_session_factory
+        self._session_factory = session_factory or async_session_factory
+```
+
+This makes both classes fully testable without monkeypatching — tests inject a savepoint-wrapped factory, production code uses the default. The `AgentRunner` is instantiated by `ExecutionLoop._run_task()` and receives the same factory:
+
+```python
+runner = AgentRunner(session_factory=self._session_factory)
+```
+
+### Template-Based Planner
+
+When no `ANTHROPIC_API_KEY` is configured, the `PlannerService` generates task graphs from built-in templates instead of calling Claude. Five templates are available: **feature**, **bugfix**, **refactor**, **migration**, and **custom**.
+
+The Anthropic client is lazily initialized (only created when actually needed), preventing crashes from missing config:
+
+```python
+@property
+def client(self):
+    if self._client is None:
+        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    return self._client
+```
+
+### Pipeline Execution Loop
+
+The `ExecutionLoop` manages the full pipeline lifecycle: DRAFT → PLANNING → AWAITING_PLAN_APPROVAL → EXECUTING → REVIEWING → DONE. It handles task dispatch, agent supervision, retry logic with backoff, and progress tracking — all with budget enforcement and graceful shutdown.
 
 ## Tech Stack
 

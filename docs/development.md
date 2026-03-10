@@ -66,7 +66,7 @@ All config is via environment variables with the `OPENCLAW_` prefix.
 
 ```bash
 cd packages/backend
-uv run pytest tests/ -v        # all 156 tests, ~10s
+uv run pytest tests/ -v        # all 395 tests, ~23s
 uv run pytest tests/ -v -k auth   # run only auth tests
 ```
 
@@ -82,7 +82,7 @@ This means:
 - Tests run against the real database (not mocks)
 - Tests are fully isolated — no data leaks between tests
 - No cleanup needed — rollback handles everything
-- Fast — 156 tests in ~10 seconds
+- Fast — 395 tests in ~23 seconds
 
 ### Test Structure
 
@@ -99,6 +99,13 @@ tests/
   test_dispatch_api.py             Phase 6: dispatch status, PG triggers (8 tests)
   test_auth_api.py                 Phase 9: register, login, JWT, API keys (16 tests)
   test_webhooks_settings_api.py    Phase 10: webhooks, settings (19 tests)
+  test_pipelines_api.py            Pipelines: CRUD, lifecycle, task graph (35 tests)
+  test_planner_service.py          Planner: AI + template fallback (18 tests)
+  test_execution_loop.py           Execution loop: dispatch, retry, budget (42 tests)
+  test_pipeline_resume.py          Pipeline resume + recovery (12 tests)
+  test_sandbox_integration.py      Sandbox: isolation, resource limits (15 tests)
+  test_task_retry.py               Task retry: backoff, max attempts (11 tests)
+  test_e2e_lifecycle.py            Full lifecycle integration test (1 test)
 ```
 
 ### Writing New Tests
@@ -248,21 +255,29 @@ openclaw/
 │   │   │   │   ├── session_service.py  Session + cost management
 │   │   │   │   ├── human_loop.py       Human request lifecycle
 │   │   │   │   ├── review_service.py   Reviews + merge jobs
-│   │   │   │   └── webhook_service.py  Webhook CRUD + event processing
+│   │   │   │   ├── webhook_service.py  Webhook CRUD + event processing
+│   │   │   │   ├── pipeline_service.py Pipeline CRUD + lifecycle
+│   │   │   │   ├── planner_service.py  AI + template task planning
+│   │   │   │   └── execution_loop.py   Pipeline execution + dispatch
 │   │   │   ├── events/
 │   │   │   │   ├── store.py            Append-only EventStore
 │   │   │   │   └── types.py            Event type constants (30+ types)
+│   │   │   ├── agent/
+│   │   │   │   ├── runner.py            AgentRunner (DI-ready)
+│   │   │   │   └── adapters/            Claude Code, Codex, Aider
+│   │   │   ├── cli/
+│   │   │   │   └── main.py              CLI entry point (8 commands + pipeline group)
 │   │   │   └── schemas/
 │   │   │       ├── team.py             Pydantic models (request/response)
 │   │   │       ├── task.py
 │   │   │       ├── session.py
 │   │   │       ├── human_request.py
 │   │   │       └── review.py
-│   │   └── tests/                      156 tests across 11 files
+│   │   └── tests/                      395 tests across 18 files
 │   │
 │   ├── mcp-server/                     TypeScript — MCP tools
 │   │   ├── src/
-│   │   │   ├── index.ts                47 tool definitions
+│   │   │   ├── index.ts                58 tool definitions
 │   │   │   └── client.ts               Typed HTTP client
 │   │   ├── tsconfig.json
 │   │   └── package.json
@@ -279,7 +294,7 @@ openclaw/
     ├── architecture.md                 System design, data flow
     ├── database.md                     All tables, relationships
     ├── tasks.md                        State machine, DAG, events
-    ├── mcp-tools.md                    47 tools with parameters
+    ├── mcp-tools.md                    58 tools with parameters
     └── development.md                  (this file)
 ```
 
@@ -323,6 +338,24 @@ class TaskRead(BaseModel):      # What the API returns
     status: str
     created_at: datetime
     model_config = {"from_attributes": True}
+```
+
+### Constructor Injection (ExecutionLoop / AgentRunner)
+
+Both `ExecutionLoop` and `AgentRunner` accept an optional `session_factory` parameter. In production, the default lazy import is used. In tests, a savepoint-wrapped factory is injected:
+
+```python
+# Production — default factory
+loop = ExecutionLoop()
+
+# Tests — inject savepoint-wrapped factory
+loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
+```
+
+This eliminates fragile `patch()` calls and makes tests deterministic. The `AgentRunner` receives the same factory from `ExecutionLoop`:
+
+```python
+runner = AgentRunner(session_factory=self._session_factory)
 ```
 
 ### Auth Patterns

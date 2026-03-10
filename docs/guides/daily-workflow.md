@@ -20,16 +20,24 @@ The difference: **structure**. Tasks have states. Code has reviews. Budgets have
 
 ## Morning: Check what happened overnight
 
-If you have agents running async work, start by checking the dashboard or querying the API:
+If you have agents running async work, start by checking status via the CLI or dashboard:
 
 ```bash
+# Quick overview — agents, tasks, pending requests
+entourage status
+
 # What tasks are in progress?
+entourage tasks --status in_progress
+
+# Check pipeline progress
+entourage pipeline list
+```
+
+Or query the API directly:
+
+```bash
 curl http://localhost:8000/api/v1/teams/{team_id}/tasks
-
-# Any agents waiting for human input?
 curl http://localhost:8000/api/v1/teams/{team_id}/human-requests
-
-# How much did overnight work cost?
 curl http://localhost:8000/api/v1/teams/{team_id}/costs
 ```
 
@@ -50,14 +58,40 @@ The agent gets unblocked and continues working.
 
 ## Mid-morning: Create new work
 
-A bug report comes in. If you've set up [webhook automation](webhook-automation.md), the GitHub issue automatically becomes a task with the right priority (mapped from labels). Otherwise, you create a structured task manually:
+A bug report comes in. If you've set up [webhook automation](webhook-automation.md), the GitHub issue automatically becomes a task with the right priority (mapped from labels). Otherwise, use the pipeline CLI:
+
+### The fast way — `pipeline go`
+
+```bash
+entourage pipeline go "Fix: login endpoint returns 500 for special characters in email"
+```
+
+One command: creates a pipeline → plans tasks → approves → starts execution. The template planner will auto-detect this as a bugfix and generate appropriate tasks (diagnose → fix → test).
+
+### The controlled way — step by step
+
+```bash
+# Create the pipeline with a bugfix template
+entourage pipeline create "Fix login 500 for special chars in email" --template bugfix
+
+# Plan the tasks
+entourage pipeline plan {pipeline_id}
+
+# Review the task graph before approving
+entourage pipeline tasks {pipeline_id}
+
+# Approve and start execution
+entourage pipeline approve {pipeline_id}
+```
+
+### Or create a single task manually
 
 ```bash
 curl -X POST http://localhost:8000/api/v1/teams/{team_id}/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Fix: login endpoint returns 500 for special characters in email",
-    "description": "Steps to reproduce: POST /auth/login with email containing + symbol. Expected: 400 validation error. Actual: 500 unhandled exception. Root cause likely in email regex in auth/password.py.",
+    "description": "Steps to reproduce: POST /auth/login with email containing + symbol. Expected: 400 validation error. Actual: 500 unhandled exception.",
     "priority": "high",
     "task_type": "bugfix"
   }'
@@ -81,7 +115,11 @@ The agent picks it up through the MCP dispatcher. It will:
 All of this is tracked. You can check progress anytime:
 
 ```bash
-# Task status + event history
+# Pipeline-level progress (all tasks at a glance)
+entourage pipeline status {pipeline_id}
+entourage pipeline tasks {pipeline_id}
+
+# Individual task status + event history
 curl http://localhost:8000/api/v1/tasks/{task_id}/events
 
 # What files changed?
