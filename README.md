@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-201_passing-6366f1?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/tests-395_passing-6366f1?style=flat-square" alt="Tests" />
   <img src="https://img.shields.io/badge/MCP_tools-58-8b5cf6?style=flat-square" alt="MCP Tools" />
   <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
@@ -125,14 +125,17 @@ npm install && npm run build
 cd packages/frontend
 npm install && npm run dev        # http://localhost:5173
 
-# 5. CLI — run an agent
+# 5. CLI — ship something
 cd packages/backend
-uv run entourage login --api-key oc_your_key_here
-uv run entourage status           # See your team
-uv run entourage run AGENT_ID --task 1
+uv run entourage login
+uv run entourage pipeline go "Add a healthcheck endpoint at /health"
 ```
 
+The `pipeline go` command does everything: creates the pipeline, plans tasks (AI or template-based), auto-approves, and starts execution. One line from intent to running agents.
+
 > **Prerequisites:** Docker Desktop, Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node.js 18+
+>
+> **No Anthropic API key?** No problem. The planner falls back to template-based task decomposition (feature, bugfix, refactor, migration) so the full platform works without any AI provider configured.
 
 ## MCP tools
 
@@ -166,6 +169,11 @@ packages/
 
 15 database models, 8 Alembic migrations, 11 API routers, event sourcing throughout.
 
+**Key architectural patterns:**
+- **Dependency injection** — `ExecutionLoop` and `AgentRunner` accept a `session_factory` parameter (constructor injection with lazy fallback), making them fully testable without monkeypatching
+- **Template-based planner fallback** — When no `ANTHROPIC_API_KEY` is set, the `PlannerService` generates task graphs from built-in templates (feature, bugfix, refactor, migration) instead of calling Claude
+- **Lazy client initialization** — External API clients (Anthropic) are only created when actually needed, preventing crashes from missing config
+
 ### Agent Adapters
 
 Entourage dispatches work to pluggable coding agent backends:
@@ -181,6 +189,7 @@ Check adapter availability: `entourage adapters`
 ### CLI Reference
 
 ```bash
+# Team & agent management
 entourage status                     # Show team status (agents, tasks, requests)
 entourage agents                     # List agents and their current state
 entourage tasks [--status STATUS]    # List tasks with optional filter
@@ -189,13 +198,22 @@ entourage adapters                   # Show available adapters + readiness
 entourage respond REQUEST_ID MSG     # Respond to a human-in-the-loop request
 entourage login [--api-key KEY]      # Authenticate (JWT or API key)
 entourage logout                     # Remove stored credentials
+
+# Pipeline lifecycle
+entourage pipeline go INTENT         # One-liner: create → plan → approve → execute
+entourage pipeline list              # List all pipelines for the current team
+entourage pipeline create INTENT     # Create a new pipeline (--template, --budget)
+entourage pipeline status ID         # Show pipeline status, tasks, and progress
+entourage pipeline plan ID           # Start AI/template planning for a pipeline
+entourage pipeline approve ID        # Approve the plan and start execution
+entourage pipeline tasks ID          # Show task graph with dependencies
 ```
 
 ## Tests
 
 ```bash
 cd packages/backend
-uv run pytest tests/ -v          # 167 tests, ~21s
+uv run pytest tests/ -v          # 395 tests, ~23s
 uv run pytest tests/ --run-e2e   # Include live agent E2E tests
 ```
 
@@ -259,6 +277,8 @@ python examples/batch_orchestration.py  # DAG decomposition + 4 specialist agent
 | 15 | Dashboard polish (human requests, reviews, agent status) | ✅ |
 | 16 | Multi-agent orchestration (batch tasks, wait, team agents) | ✅ |
 | 17 | Full-flow E2E test + docs | ✅ |
+| 18 | UX overhaul — onboarding, toasts, guided empty states | ✅ |
+| 19 | Architecture — DI refactor, pipeline CLI, template planner | ✅ |
 
 ## License
 
