@@ -3,9 +3,9 @@
 </p>
 
 <p align="center">
-  <strong>One agent writes code. An entourage ships it.</strong>
+  <strong>Ship code with AI teams, not AI chat.</strong>
   <br />
-  The orchestration layer that turns solo AI agents into governed, coordinated engineering teams.
+  One command turns intent into planned, executed, reviewed, and merged code — with budget controls, human checkpoints, and full audit trails.
   <br /><br />
   <a href="https://modelcontextprotocol.io">MCP-native</a> · Event-sourced · Human-in-the-loop
 </p>
@@ -21,59 +21,49 @@
 
 ---
 
-## Why not just use Claude?
+## The 30-second pitch
 
-You absolutely should. Entourage doesn't replace your agent — it gives it a production-grade backbone.
-
-| Solo agent | With Entourage |
-|:-----------|:---------------|
-| One agent, one chat thread | Multiple agents coordinated across tasks |
-| Context window is the only memory | Persistent tasks, events, sessions — survive restarts |
-| No spending limits — hope for the best | Per-session and daily budget caps, cost tracking per task |
-| Freeform execution — anything goes | State machine enforces valid transitions (can't merge without review) |
-| You manually review everything | Structured review cycles with file-anchored comments and verdicts |
-| Agent works silently until done | Agent pauses to ask you questions, waits for approval |
-| Code goes straight to a branch | Isolated git worktrees per task — agents can't stomp each other |
-| Chat history is the audit trail | Every action is an immutable event (who did what, when, why) |
-| You trigger work manually | GitHub webhooks auto-create tasks from issues and PRs |
-| One project, one person | Multi-tenant: orgs → teams → agents, API key scoping |
-
-**In short:** Claude is the developer. Entourage is the engineering org that developer works inside — with task boards, code review, access controls, cost tracking, and human oversight.
-
-## How it works
-
-```
-┌─────────────┐         ┌─────────────┐         ┌──────────────┐
-│  AI Agents  │──MCP───▶│  Entourage  │◀──HTTP──│   Dashboard  │
-│  (Claude,   │  stdio  │   Backend   │         │   (React)    │
-│   etc.)     │◀────────│             │────────▶│              │
-└─────────────┘         └──────┬──────┘         └──────────────┘
-                               │
-                    ┌──────────┼──────────┐
-                    │          │          │
-               PostgreSQL    Redis      Git
-              (all state)  (pub/sub)  (worktrees)
+```bash
+entourage pipeline go "Add rate limiting middleware to all API routes"
 ```
 
-1. You define tasks. Entourage assigns them to agents.
-2. Agents write code in isolated git worktrees via MCP tools.
-3. When stuck, agents **ask humans** — and wait for a response.
-4. Finished work goes through **code review** with approve/reject/request-changes.
-5. Approved tasks merge via a managed queue. Every step is event-sourced.
+That single command:
+1. **Creates** a pipeline from your intent
+2. **Plans** a task graph (AI-generated or template-based — works without an API key)
+3. **Dispatches** agents to work in parallel, in isolated git worktrees
+4. **Pauses** when agents hit ambiguity — they ask you, not guess
+5. **Reviews** code with file-anchored comments and approve/reject verdicts
+6. **Merges** via a managed queue with squash/rebase strategies
 
-Humans stay in control. Agents stay productive. Nothing ships without oversight.
+Every step is event-sourced. Every dollar is tracked. Nothing ships without your approval.
+
+## Why not just use Claude / Codex directly?
+
+You should. Entourage doesn't replace your coding agent — it gives it an engineering org to work inside.
+
+| | Solo agent | With Entourage |
+|:--|:-----------|:---------------|
+| **Work intake** | Copy-paste into chat | `pipeline go "intent"` → task graph → execution |
+| **Coordination** | One agent, one thread | Multiple agents working in parallel across tasks |
+| **Memory** | Context window only | Persistent tasks, events, sessions — survives restarts |
+| **Safety** | Hope for the best | Budget caps, state machine, human checkpoints |
+| **Review** | Read the chat output | File-anchored comments, approve/reject/request-changes |
+| **Ambiguity** | Agent guesses | Agent calls `ask_human` and waits for your answer |
+| **Isolation** | Shared workspace | Branch-per-task git worktrees — agents can't stomp each other |
+| **Audit** | Scroll through chat history | Immutable event store (who did what, when, why) |
+| **Cost** | Check the Anthropic dashboard | Per-session, per-task, per-team tracking with daily caps |
 
 ## Screenshots
 
 <table>
 <tr>
 <td width="50%">
-<strong>Dashboard</strong> — Team overview with active tasks, agents, cost tracking
+<strong>Dashboard</strong> — Active tasks, agent status, cost tracking
 <br /><br />
 <img src="docs/assets/screenshot-dashboard.png" alt="Dashboard" width="100%" />
 </td>
 <td width="50%">
-<strong>Pipelines</strong> — Create, plan, approve, and monitor execution pipelines
+<strong>Pipelines</strong> — Create, plan, approve, and monitor execution
 <br /><br />
 <img src="docs/assets/screenshot-pipelines.png" alt="Pipelines" width="100%" />
 </td>
@@ -85,7 +75,7 @@ Humans stay in control. Agents stay productive. Nothing ships without oversight.
 <img src="docs/assets/screenshot-pipeline-detail.png" alt="Pipeline Detail" width="100%" />
 </td>
 <td width="50%">
-<strong>Analytics</strong> — Pipeline health, cost trends, and agent efficiency
+<strong>Analytics</strong> — Pipeline health, cost trends, agent efficiency
 <br /><br />
 <img src="docs/assets/screenshot-analytics.png" alt="Analytics" width="100%" />
 </td>
@@ -99,48 +89,35 @@ Humans stay in control. Agents stay productive. Nothing ships without oversight.
 </tr>
 </table>
 
-## What you get
+## How it works
 
-<table>
-<tr>
-<td width="50%">
+```
+You say "Add rate limiting"
+         │
+         ▼
+┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
+│  Pipeline CLI   │────▶│  Task Planner    │────▶│  Execution     │
+│  pipeline go    │     │  AI or template  │     │  Loop          │
+└─────────────────┘     └──────────────────┘     └───────┬────────┘
+                                                         │
+                              ┌───────────────────────────┼────────────────┐
+                              │                           │                │
+                              ▼                           ▼                ▼
+                     ┌────────────────┐         ┌────────────────┐  ┌──────────┐
+                     │  Agent 1       │         │  Agent 2       │  │  Agent 3 │
+                     │  (Claude Code) │         │  (Codex)       │  │  (Aider) │
+                     │  worktree: A   │         │  worktree: B   │  │  wt: C   │
+                     └───────┬────────┘         └───────┬────────┘  └────┬─────┘
+                             │                          │                │
+                             ▼                          ▼                ▼
+                     ┌──────────────────────────────────────────────────────────┐
+                     │  58 MCP Tools — tasks, git, reviews, sessions, budgets  │
+                     ├──────────────────────────────────────────────────────────┤
+                     │  FastAPI Backend — PostgreSQL + Redis + Event Store      │
+                     └──────────────────────────────────────────────────────────┘
+```
 
-**Governed task workflow**
-- 7-state machine with enforced transitions
-- DAG dependencies — Task B blocks until Task A completes
-- Full event-sourced audit trail for every action
-
-**Safe git operations**
-- Branch-per-task with isolated worktrees
-- Agents can't interfere with each other's code
-- Merge queue with rebase/squash strategies
-
-**Cost controls**
-- Per-session token and dollar tracking
-- Daily and per-task budget caps
-- Kill a runaway agent before it burns your API credits
-
-</td>
-<td width="50%">
-
-**Human oversight**
-- Agents pause and ask before risky decisions
-- File-anchored review comments (not just "LGTM")
-- Approve / reject / request-changes verdicts
-
-**Multi-agent coordination**
-- PG LISTEN/NOTIFY instant dispatch
-- Message routing between agents
-- Concurrent agent execution with semaphore limits
-
-**Production-ready integrations**
-- GitHub webhooks → auto-create tasks from issues/PRs
-- JWT + API key auth with org-scoped access
-- Real-time dashboard via WebSocket + Redis pub/sub
-
-</td>
-</tr>
-</table>
+Agents connect via [MCP](https://modelcontextprotocol.io) (Model Context Protocol). The backend manages all state. Humans stay in control through the dashboard, CLI, or API.
 
 ## Quick start
 
@@ -161,24 +138,91 @@ npm install && npm run build
 cd packages/frontend
 npm install && npm run dev        # http://localhost:5173
 
-# 5. CLI — ship something
+# 5. Ship something
 cd packages/backend
 uv run entourage login
 uv run entourage pipeline go "Add a healthcheck endpoint at /health"
 ```
 
-The `pipeline go` command does everything: creates the pipeline, plans tasks (AI or template-based), auto-approves, and starts execution. One line from intent to running agents.
-
 > **Prerequisites:** Docker Desktop, Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node.js 18+
 >
-> **No Anthropic API key?** No problem. The planner falls back to template-based task decomposition (feature, bugfix, refactor, migration) so the full platform works without any AI provider configured.
+> **No Anthropic API key?** No problem. The planner falls back to built-in templates (feature, bugfix, refactor, migration) so the full platform works without any AI provider configured.
+
+## Core capabilities
+
+<table>
+<tr>
+<td width="50%">
+
+**Pipeline-driven execution**
+- Intent → task graph → parallel execution → review → merge
+- AI planner decomposes work into dependency DAGs
+- Template fallback when no AI provider is configured
+- `pipeline go` one-liner or step-by-step control
+
+**Governed task workflow**
+- 7-state machine with enforced transitions
+- DAG dependencies — Task B blocks until Task A completes
+- Full event-sourced audit trail for every action
+
+**Cost controls**
+- Per-session token and dollar tracking
+- Daily and per-task budget caps
+- Kill a runaway agent before it burns your API credits
+
+</td>
+<td width="50%">
+
+**Human oversight**
+- Agents pause and ask before risky decisions
+- File-anchored review comments (not just "LGTM")
+- Approve / reject / request-changes verdicts
+
+**Multi-agent teams**
+- Org → team → agent hierarchy with role-based access
+- Manager agents delegate to engineer agents
+- PG LISTEN/NOTIFY instant dispatch
+- Concurrent execution with configurable limits
+
+**Production integrations**
+- GitHub webhooks auto-create tasks from issues/PRs
+- JWT + API key auth with org-scoped access
+- Real-time dashboard via WebSocket + Redis pub/sub
+- 3 agent adapters: Claude Code, Codex, Aider
+
+</td>
+</tr>
+</table>
+
+## CLI
+
+```bash
+# Pipeline lifecycle (the main workflow)
+entourage pipeline go INTENT         # One-liner: create → plan → approve → execute
+entourage pipeline list              # List all pipelines for the current team
+entourage pipeline create INTENT     # Create a new pipeline (--template, --budget)
+entourage pipeline status ID         # Show pipeline status, tasks, and progress
+entourage pipeline plan ID           # Start AI/template planning for a pipeline
+entourage pipeline approve ID        # Approve the plan and start execution
+entourage pipeline tasks ID          # Show task graph with dependencies
+
+# Team & agent management
+entourage status                     # Team overview (agents, tasks, requests)
+entourage agents                     # List agents and their current state
+entourage tasks [--status STATUS]    # List tasks with optional filter
+entourage run AGENT_ID [--task N]    # Dispatch an agent to work on a task
+entourage adapters                   # Show available adapters + readiness
+entourage respond REQUEST_ID MSG     # Respond to a human-in-the-loop request
+entourage login [--api-key KEY]      # Authenticate (JWT or API key)
+entourage logout                     # Remove stored credentials
+```
 
 ## MCP tools
 
-50 tools across 14 categories. Agents discover and call these via the [Model Context Protocol](https://modelcontextprotocol.io).
+58 tools across 14 categories. Agents discover and call these via the [Model Context Protocol](https://modelcontextprotocol.io).
 
-| Category | Tools | Count |
-|----------|-------|:-----:|
+| Category | Tools | # |
+|----------|-------|:-:|
 | **Platform** | `ping` | 1 |
 | **Orgs & Teams** | `list_orgs` `create_org` `list_teams` `create_team` `get_team` | 5 |
 | **Agents** | `list_agents` `create_agent` | 2 |
@@ -193,24 +237,9 @@ The `pipeline go` command does everything: creates the pipeline, plans tasks (AI
 | **Webhooks** | `create_webhook` `list_webhooks` `update_webhook` | 3 |
 | **Settings** | `get_team_settings` `update_team_settings` `get_team_conventions` `add_team_convention` | 4 |
 | **Orchestration** | `create_tasks_batch` `wait_for_task_completion` `list_team_agents` | 3 |
+| **Pipelines** | `create_pipeline` `get_pipeline` `list_pipelines` `plan_pipeline` `approve_pipeline` `get_pipeline_tasks` `cancel_pipeline` `retry_pipeline` | 8 |
 
-## Architecture
-
-```
-packages/
-  backend/        Python — FastAPI + SQLAlchemy 2.0 + Alembic
-  mcp-server/     TypeScript — 47 MCP tool definitions
-  frontend/       React 19 + Vite + TanStack Query
-```
-
-15 database models, 8 Alembic migrations, 11 API routers, event sourcing throughout.
-
-**Key architectural patterns:**
-- **Dependency injection** — `ExecutionLoop` and `AgentRunner` accept a `session_factory` parameter (constructor injection with lazy fallback), making them fully testable without monkeypatching
-- **Template-based planner fallback** — When no `ANTHROPIC_API_KEY` is set, the `PlannerService` generates task graphs from built-in templates (feature, bugfix, refactor, migration) instead of calling Claude
-- **Lazy client initialization** — External API clients (Anthropic) are only created when actually needed, preventing crashes from missing config
-
-### Agent Adapters
+## Agent adapters
 
 Entourage dispatches work to pluggable coding agent backends:
 
@@ -222,28 +251,21 @@ Entourage dispatches work to pluggable coding agent backends:
 
 Check adapter availability: `entourage adapters`
 
-### CLI Reference
+## Architecture
 
-```bash
-# Team & agent management
-entourage status                     # Show team status (agents, tasks, requests)
-entourage agents                     # List agents and their current state
-entourage tasks [--status STATUS]    # List tasks with optional filter
-entourage run AGENT_ID [--task N]    # Dispatch an agent to work on a task
-entourage adapters                   # Show available adapters + readiness
-entourage respond REQUEST_ID MSG     # Respond to a human-in-the-loop request
-entourage login [--api-key KEY]      # Authenticate (JWT or API key)
-entourage logout                     # Remove stored credentials
-
-# Pipeline lifecycle
-entourage pipeline go INTENT         # One-liner: create → plan → approve → execute
-entourage pipeline list              # List all pipelines for the current team
-entourage pipeline create INTENT     # Create a new pipeline (--template, --budget)
-entourage pipeline status ID         # Show pipeline status, tasks, and progress
-entourage pipeline plan ID           # Start AI/template planning for a pipeline
-entourage pipeline approve ID        # Approve the plan and start execution
-entourage pipeline tasks ID          # Show task graph with dependencies
 ```
+packages/
+  backend/        Python — FastAPI + SQLAlchemy 2.0 async + Alembic
+  mcp-server/     TypeScript — 58 MCP tool definitions
+  frontend/       React 19 + Vite 6 + TanStack Query
+```
+
+15 database models, 8 Alembic migrations, 11 API routers, event sourcing throughout.
+
+**Key patterns:**
+- **Constructor injection** — `ExecutionLoop` and `AgentRunner` accept `session_factory` for full testability without monkeypatching
+- **Template planner fallback** — Built-in task decomposition templates when no AI provider is configured
+- **Lazy client init** — External API clients created on first use, not at import time
 
 ## Tests
 
@@ -253,12 +275,9 @@ uv run pytest tests/ -v          # 395 tests, ~23s
 uv run pytest tests/ --run-e2e   # Include live agent E2E tests
 ```
 
-Per-test savepoint rollback — fully isolated, no cleanup, runs against real Postgres.
-Includes a full lifecycle integration test exercising: task creation → assignment → human-in-the-loop → code review → approval → merge → done.
+Per-test savepoint rollback — fully isolated, no cleanup, runs against real Postgres. Includes a full lifecycle integration test: task creation → assignment → human-in-the-loop → code review → approval → merge → done.
 
-## Guides
-
-Learn how to actually use Entourage day-to-day:
+## Documentation
 
 | Guide | What you'll learn |
 |-------|-------------------|
@@ -268,9 +287,17 @@ Learn how to actually use Entourage day-to-day:
 | [Cost Control](docs/guides/cost-control.md) | Budget caps, per-task tracking, preventing runaway spend |
 | [Webhook Automation](docs/guides/webhook-automation.md) | GitHub issues auto-create tasks for your agents |
 
+| Reference | What's inside |
+|-----------|--------------|
+| [Architecture](docs/architecture.md) | System design, data flow, DI patterns, planner service |
+| [Database Schema](docs/database.md) | 15 tables, relationships, migrations |
+| [Task State Machine](docs/tasks.md) | Transitions, DAG, review flow, event types |
+| [MCP Tools Reference](docs/mcp-tools.md) | All 58 tools with parameters and examples |
+| [Development Guide](docs/development.md) | Setup, testing, patterns, project structure |
+
 ## Examples
 
-Runnable scripts you can try right now ([examples/](examples/)). All examples handle auth automatically — each run registers a fresh user and authenticates via JWT.
+Runnable scripts — each handles auth automatically (registers a fresh user per run):
 
 ```bash
 python examples/quickstart.py           # Full lifecycle in 30 seconds
@@ -281,40 +308,18 @@ python examples/webhook_automation.py   # GitHub webhook + HMAC verification
 python examples/batch_orchestration.py  # DAG decomposition + 4 specialist agents
 ```
 
-## Documentation
-
-| Doc | What's inside |
-|-----|--------------|
-| [Architecture](docs/architecture.md) | System design, data flow, subsystems |
-| [Database Schema](docs/database.md) | 15 tables, relationships, migrations |
-| [Task State Machine](docs/tasks.md) | Transitions, DAG, review flow, event types |
-| [MCP Tools Reference](docs/mcp-tools.md) | All 47 tools with parameters |
-| [Development Guide](docs/development.md) | Setup, testing, patterns, project structure |
-
 ## Roadmap
 
 | Phase | What | Status |
 |:-----:|------|:------:|
-| 0 | Project skeleton + MCP | ✅ |
-| 1 | Orgs, teams, agents, repos | ✅ |
-| 2 | Tasks, state machine, messages, events | ✅ |
-| 3 | Git integration (worktrees, branch-per-task) | ✅ |
-| 4 | Agent sessions + cost controls | ✅ |
-| 5 | Real-time dashboard (WebSocket + Redis) | ✅ |
-| 6 | Multi-agent dispatch (PG LISTEN/NOTIFY) | ✅ |
-| 7 | Human-in-the-loop (approvals, questions) | ✅ |
-| 8 | Code review + merge worker | ✅ |
-| 9 | Auth + multi-tenant (JWT, API keys) | ✅ |
-| 10 | Webhooks + team settings | ✅ |
-| 11 | Agent adapters + CLI + runner | ✅ |
-| 12 | Codex + Aider adapters | ✅ |
-| 13 | Merge worker (git merge/rebase/squash) | ✅ |
-| 14 | Auth on all API routes + CLI login | ✅ |
-| 15 | Dashboard polish (human requests, reviews, agent status) | ✅ |
-| 16 | Multi-agent orchestration (batch tasks, wait, team agents) | ✅ |
-| 17 | Full-flow E2E test + docs | ✅ |
-| 18 | UX overhaul — onboarding, toasts, guided empty states | ✅ |
-| 19 | Architecture — DI refactor, pipeline CLI, template planner | ✅ |
+| 0-4 | Foundation: MCP, orgs, tasks, git, sessions, cost tracking | ✅ |
+| 5-8 | Core: real-time dashboard, dispatch, human-in-the-loop, code review | ✅ |
+| 9-12 | Production: auth, webhooks, CLI, agent adapters (Claude Code, Codex, Aider) | ✅ |
+| 13-17 | Polish: merge worker, multi-agent orchestration, E2E tests, full docs | ✅ |
+| 18-19 | Architecture: UX overhaul, DI refactor, pipeline CLI, template planner | ✅ |
+| 20 | Project config (`ENTOURAGE.md` in-repo workflow policy) | 🔜 |
+| 21 | Issue tracker integration (Linear, GitHub Issues) | 🔜 |
+| 22 | Proof-of-work validation (CI status, test results before review) | 🔜 |
 
 ## License
 
