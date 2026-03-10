@@ -90,6 +90,13 @@ Humans stay in control. Agents stay productive. Nothing ships without oversight.
 <img src="docs/assets/screenshot-analytics.png" alt="Analytics" width="100%" />
 </td>
 </tr>
+<tr>
+<td colspan="2">
+<strong>Teams & Agents</strong> — Multi-team management with role badges, model selection, and live status
+<br /><br />
+<img src="docs/assets/screenshot-manage.png" alt="Teams & Agents" width="100%" />
+</td>
+</tr>
 </table>
 
 ## What you get
