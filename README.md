@@ -63,6 +63,35 @@ You absolutely should. Entourage doesn't replace your agent — it gives it a pr
 
 Humans stay in control. Agents stay productive. Nothing ships without oversight.
 
+## Screenshots
+
+<table>
+<tr>
+<td width="50%">
+<strong>Dashboard</strong> — Team overview with active tasks, agents, cost tracking
+<br /><br />
+<img src="docs/assets/screenshot-dashboard.png" alt="Dashboard" width="100%" />
+</td>
+<td width="50%">
+<strong>Pipelines</strong> — Create, plan, approve, and monitor execution pipelines
+<br /><br />
+<img src="docs/assets/screenshot-pipelines.png" alt="Pipelines" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="50%">
+<strong>Task Graph</strong> — Dependency DAG with complexity ratings and live status
+<br /><br />
+<img src="docs/assets/screenshot-pipeline-detail.png" alt="Pipeline Detail" width="100%" />
+</td>
+<td width="50%">
+<strong>Analytics</strong> — Pipeline health, cost trends, and agent efficiency
+<br /><br />
+<img src="docs/assets/screenshot-analytics.png" alt="Analytics" width="100%" />
+</td>
+</tr>
+</table>
+
 ## What you get
 
 <table>
