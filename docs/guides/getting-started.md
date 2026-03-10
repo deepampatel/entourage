@@ -62,7 +62,7 @@ You now have a fully operational Entourage backend with 60+ API endpoints.
 
 ## Step 4: Install and authenticate the CLI
 
-The Entourage CLI gives you commands for managing agents, tasks, pipelines, and adapters from your terminal.
+The Entourage CLI gives you commands for managing agents, tasks, runs, and adapters from your terminal.
 
 ```bash
 cd packages/backend
@@ -101,13 +101,13 @@ Entourage ships with 3 agent adapters out of the box: **Claude Code**, **Codex**
 | `entourage adapters` | Show available adapters + readiness |
 | `entourage login` | Authenticate (JWT or API key) |
 | `entourage logout` | Remove stored credentials |
-| `entourage pipeline go INTENT` | One-liner: create → plan → approve → execute |
-| `entourage pipeline list` | List all pipelines for the current team |
-| `entourage pipeline create INTENT` | Create a new pipeline |
-| `entourage pipeline status ID` | Show pipeline status and progress |
-| `entourage pipeline plan ID` | Start AI/template planning |
-| `entourage pipeline approve ID` | Approve the plan and start execution |
-| `entourage pipeline tasks ID` | Show task graph with dependencies |
+| `entourage run INTENT` | One-liner: create → plan → approve → execute |
+| `entourage run list` | List all runs for the current team |
+| `entourage run create INTENT` | Create a new run |
+| `entourage run status ID` | Show run status and progress |
+| `entourage run plan ID` | Start AI/template planning |
+| `entourage run approve ID` | Approve the plan and start execution |
+| `entourage run tasks ID` | Show task graph with dependencies |
 
 ## Step 5: Create your workspace
 
@@ -171,36 +171,36 @@ My Company (org)
 
 ## Step 6: Ship something
 
-The fastest way to go from intent to running agents is the `pipeline go` command:
+The fastest way to go from intent to running agents is the `run` command:
 
 ```bash
 cd packages/backend
-uv run entourage pipeline go "Add input validation to login endpoint"
+uv run entourage run "Add input validation to login endpoint"
 ```
 
-This single command: creates a pipeline → plans tasks (AI or template-based) → auto-approves → starts execution. You can watch progress in real time.
+This single command: creates a run → plans tasks (AI or template-based) → auto-approves → starts execution. You can watch progress in real time.
 
 > **No Anthropic API key?** No problem. The planner falls back to template-based task decomposition (feature, bugfix, refactor, migration) so the full platform works without any AI provider configured.
 
 ### Or do it step-by-step
 
-If you prefer more control, use the individual pipeline commands:
+If you prefer more control, use the individual run subcommands:
 
 ```bash
-# Create the pipeline
-uv run entourage pipeline create "Add input validation to login endpoint" --template feature
+# Create the run
+uv run entourage run create "Add input validation to login endpoint" --template feature
 
 # Plan the tasks (AI-generated or template-based)
-uv run entourage pipeline plan {pipeline_id}
+uv run entourage run plan {run_id}
 
 # Review the task graph
-uv run entourage pipeline tasks {pipeline_id}
+uv run entourage run tasks {run_id}
 
 # Approve the plan and start execution
-uv run entourage pipeline approve {pipeline_id}
+uv run entourage run approve {run_id}
 
 # Check progress
-uv run entourage pipeline status {pipeline_id}
+uv run entourage run status {run_id}
 ```
 
 ### Or create tasks manually via API

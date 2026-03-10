@@ -25,28 +25,28 @@ def test_security_violation_dataclass():
         kind="write_path",
         agent_id=uuid.uuid4(),
         team_id=uuid.uuid4(),
-        pipeline_task_id=42,
+        run_task_id=42,
         detail="/etc/passwd",
         rule="outside_worktree",
         action="blocked",
     )
     assert v.kind == "write_path"
     assert v.action == "blocked"
-    assert v.pipeline_task_id == 42
+    assert v.run_task_id == 42
 
 
 def test_security_violation_nullable_task():
-    """SecurityViolation works without pipeline_task_id."""
+    """SecurityViolation works without run_task_id."""
     v = SecurityViolation(
         kind="network",
         agent_id=uuid.uuid4(),
         team_id=uuid.uuid4(),
-        pipeline_task_id=None,
+        run_task_id=None,
         detail="evil.com",
         rule="not_in_allowlist",
         action="logged",
     )
-    assert v.pipeline_task_id is None
+    assert v.run_task_id is None
 
 
 # ═══════════════════════════════════════════════════════════
@@ -308,7 +308,7 @@ async def test_violation_persisted_to_db():
         kind="write_path",
         agent_id=uuid.uuid4(),
         team_id=uuid.uuid4(),
-        pipeline_task_id=10,
+        run_task_id=10,
         detail="/etc/passwd",
         rule="outside_allowed_paths",
         action="blocked",

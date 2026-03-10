@@ -9,8 +9,8 @@ included in every log entry, enabling log correlation across services.
 
 Usage:
     trace = new_trace()
-    span = new_span("pipeline.execute")
-    log_structured(logger, logging.INFO, "pipeline started", pipeline_id="abc")
+    span = new_span("run.execute")
+    log_structured(logger, logging.INFO, "run started", run_id="abc")
 """
 
 import contextvars
@@ -42,7 +42,7 @@ def new_trace() -> str:
     """Generate a 32-char hex trace ID and set it in the contextvar.
 
     Learn: Trace IDs follow the W3C Trace Context format length (32 hex chars).
-    Each high-level operation (HTTP request, pipeline run) gets a unique trace.
+    Each high-level operation (HTTP request, run execution) gets a unique trace.
     """
     tid = uuid.uuid4().hex
     trace_id_var.set(tid)
@@ -150,7 +150,7 @@ class SpanTimer:
     """Context manager that creates a span and measures duration.
 
     Usage:
-        with SpanTimer("pipeline.execute") as timer:
+        with SpanTimer("run.execute") as timer:
             await do_work()
         print(timer.duration_ms)  # elapsed milliseconds
     """

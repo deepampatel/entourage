@@ -1039,9 +1039,9 @@ export async function getContext(
   return request(`/api/v1/tasks/${taskId}/context`);
 }
 
-// ─── Phase 12: Pipelines ─────────────────────────────────
+// ─── Phase 12: Runs ─────────────────────────────────
 
-export interface Pipeline {
+export interface Run {
   id: string;
   org_id: string;
   team_id: string;
@@ -1061,9 +1061,9 @@ export interface Pipeline {
   completed_at: string | null;
 }
 
-export interface PipelineTask {
+export interface RunTask {
   id: number;
-  pipeline_id: string;
+  run_id: string;
   agent_id: string | null;
   title: string;
   description: string;
@@ -1081,9 +1081,9 @@ export interface PipelineTask {
   completed_at: string | null;
 }
 
-export interface PipelineBudgetLedger {
+export interface RunBudgetLedger {
   id: string;
-  pipeline_id: string;
+  run_id: string;
   budget_limit_usd: number;
   estimated_cost_usd: number;
   actual_cost_usd: number;
@@ -1092,80 +1092,80 @@ export interface PipelineBudgetLedger {
   updated_at: string;
 }
 
-export async function createPipeline(
+export async function createRun(
   teamId: string,
   title: string,
   intent: string,
   opts: { budget_limit_usd?: number; repository_id?: string } = {}
-): Promise<Pipeline> {
-  return request(`/api/v1/teams/${teamId}/pipelines`, {
+): Promise<Run> {
+  return request(`/api/v1/teams/${teamId}/runs`, {
     method: "POST",
     body: { title, intent, ...opts },
   });
 }
 
-export async function listPipelines(
+export async function listRuns(
   teamId: string,
   opts: { status?: string; limit?: number } = {}
-): Promise<Pipeline[]> {
+): Promise<Run[]> {
   const params: Record<string, string> = {};
   if (opts.status) params.status = opts.status;
   if (opts.limit) params.limit = String(opts.limit);
-  return request(`/api/v1/teams/${teamId}/pipelines`, { params });
+  return request(`/api/v1/teams/${teamId}/runs`, { params });
 }
 
-export async function getPipeline(pipelineId: string): Promise<Pipeline> {
-  return request(`/api/v1/pipelines/${pipelineId}`);
+export async function getRun(runId: string): Promise<Run> {
+  return request(`/api/v1/runs/${runId}`);
 }
 
-export async function startPipeline(pipelineId: string): Promise<Pipeline> {
-  return request(`/api/v1/pipelines/${pipelineId}/start`, { method: "POST" });
+export async function startRun(runId: string): Promise<Run> {
+  return request(`/api/v1/runs/${runId}/start`, { method: "POST" });
 }
 
-export async function getPipelineTasks(pipelineId: string): Promise<PipelineTask[]> {
-  return request(`/api/v1/pipelines/${pipelineId}/tasks`);
+export async function getRunTasks(runId: string): Promise<RunTask[]> {
+  return request(`/api/v1/runs/${runId}/tasks`);
 }
 
-export async function approvePipelinePlan(
-  pipelineId: string,
+export async function approveRunPlan(
+  runId: string,
   actorId?: string
-): Promise<Pipeline> {
-  return request(`/api/v1/pipelines/${pipelineId}/approve-plan`, {
+): Promise<Run> {
+  return request(`/api/v1/runs/${runId}/approve-plan`, {
     method: "POST",
     body: { actor_id: actorId },
   });
 }
 
-export async function rejectPipelinePlan(
-  pipelineId: string,
+export async function rejectRunPlan(
+  runId: string,
   opts: { feedback?: string; actor_id?: string } = {}
-): Promise<Pipeline> {
-  return request(`/api/v1/pipelines/${pipelineId}/reject-plan`, {
+): Promise<Run> {
+  return request(`/api/v1/runs/${runId}/reject-plan`, {
     method: "POST",
     body: opts,
   });
 }
 
-export async function pausePipeline(pipelineId: string): Promise<Pipeline> {
-  return request(`/api/v1/pipelines/${pipelineId}/pause`, { method: "POST" });
+export async function pauseRun(runId: string): Promise<Run> {
+  return request(`/api/v1/runs/${runId}/pause`, { method: "POST" });
 }
 
-export async function resumePipeline(pipelineId: string): Promise<Pipeline> {
-  return request(`/api/v1/pipelines/${pipelineId}/resume`, { method: "POST" });
+export async function resumeRun(runId: string): Promise<Run> {
+  return request(`/api/v1/runs/${runId}/resume`, { method: "POST" });
 }
 
-export async function getPipelineBudget(
-  pipelineId: string
-): Promise<PipelineBudgetLedger> {
-  return request(`/api/v1/pipelines/${pipelineId}/budget`);
+export async function getRunBudget(
+  runId: string
+): Promise<RunBudgetLedger> {
+  return request(`/api/v1/runs/${runId}/budget`);
 }
 
 // ─── Phase 2A: Contracts ─────────────────────────────────
 
 export interface ContractInfo {
   id: number;
-  pipeline_id: string;
-  pipeline_task_id: number | null;
+  run_id: string;
+  run_task_id: number | null;
   contract_type: string;
   name: string;
   specification: Record<string, unknown>;
@@ -1177,33 +1177,33 @@ export interface ContractInfo {
 }
 
 export async function listContracts(
-  pipelineId: string
+  runId: string
 ): Promise<ContractInfo[]> {
-  return request(`/api/v1/pipelines/${pipelineId}/contracts`);
+  return request(`/api/v1/runs/${runId}/contracts`);
 }
 
 export async function getContract(
-  pipelineId: string,
+  runId: string,
   contractId: number
 ): Promise<ContractInfo> {
-  return request(`/api/v1/pipelines/${pipelineId}/contracts/${contractId}`);
+  return request(`/api/v1/runs/${runId}/contracts/${contractId}`);
 }
 
 export async function lockContract(
-  pipelineId: string,
+  runId: string,
   contractId: number,
   agentId: string
 ): Promise<ContractInfo> {
-  return request(`/api/v1/pipelines/${pipelineId}/contracts/${contractId}/lock`, {
+  return request(`/api/v1/runs/${runId}/contracts/${contractId}/lock`, {
     method: "POST",
     body: { agent_id: agentId },
   });
 }
 
 export async function generateContracts(
-  pipelineId: string
-): Promise<Pipeline> {
-  return request(`/api/v1/pipelines/${pipelineId}/generate-contracts`, {
+  runId: string
+): Promise<Run> {
+  return request(`/api/v1/runs/${runId}/generate-contracts`, {
     method: "POST",
   });
 }
@@ -1213,8 +1213,8 @@ export async function generateContracts(
 export interface SandboxRun {
   id: number;
   sandbox_id: string;
-  pipeline_id: string | null;
-  pipeline_task_id: number | null;
+  run_id: string | null;
+  run_task_id: number | null;
   team_id: string;
   test_cmd: string;
   exit_code: number | null;
@@ -1228,19 +1228,19 @@ export interface SandboxRun {
 }
 
 export async function listSandboxRuns(
-  pipelineId: string,
+  runId: string,
   taskId: number
 ): Promise<SandboxRun[]> {
-  return request(`/api/v1/pipelines/${pipelineId}/tasks/${taskId}/sandbox-runs`);
+  return request(`/api/v1/runs/${runId}/tasks/${taskId}/sandbox-runs`);
 }
 
 export async function triggerSandboxRun(
-  pipelineId: string,
+  runId: string,
   taskId: number,
   testCmd: string,
   opts: { image?: string; setup_cmd?: string; timeout?: number } = {}
 ): Promise<SandboxRun> {
-  return request(`/api/v1/pipelines/${pipelineId}/tasks/${taskId}/sandbox-runs`, {
+  return request(`/api/v1/runs/${runId}/tasks/${taskId}/sandbox-runs`, {
     method: "POST",
     body: {
       test_cmd: testCmd,

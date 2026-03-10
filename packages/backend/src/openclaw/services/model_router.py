@@ -2,7 +2,7 @@
 
 Selects the appropriate Claude model for each agent role, with automatic
 downgrade when budget pressure exceeds a threshold. This prevents expensive
-model usage from draining the pipeline budget on later tasks.
+model usage from draining the run budget on later tasks.
 
 Learn: The router uses a simple profile-based strategy. Each role has a
 default and fallback model. Budget pressure (actual/limit ratio) determines
@@ -16,7 +16,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from openclaw.db.models import Pipeline
+from openclaw.db.models import Run
 
 logger = logging.getLogger("openclaw.services.model_router")
 
@@ -63,14 +63,14 @@ class ModelRouter:
     async def select_model(
         self,
         role: str,
-        pipeline_id: Optional[uuid.UUID] = None,
+        run_id: Optional[uuid.UUID] = None,
         strategy: str = "default",
     ) -> str:
         """Select model based on role + budget pressure.
 
         Args:
             role: Agent role (planner, engineer, reviewer, summarizer)
-            pipeline_id: Optional pipeline ID for budget-aware selection
+            run_id: Optional run ID for budget-aware selection
             strategy: "default" (auto), "budget" (always cheap), "quality" (always best)
 
         Returns the model name string.
@@ -92,8 +92,8 @@ class ModelRouter:
             return model
 
         # Default strategy: check budget pressure
-        if pipeline_id and self.db:
-            pressure = await self._get_budget_pressure(pipeline_id)
+        if run_id and self.db:
+            pressure = await self._get_budget_pressure(run_id)
             if pressure >= BUDGET_PRESSURE_THRESHOLD:
                 model = profile["fallback"]
                 logger.info(
@@ -111,20 +111,20 @@ class ModelRouter:
         logger.debug("Selected %s for role=%s", model, role)
         return model
 
-    async def _get_budget_pressure(self, pipeline_id: uuid.UUID) -> float:
+    async def _get_budget_pressure(self, run_id: uuid.UUID) -> float:
         """Return 0.0-1.0 budget usage ratio."""
         if not self.db:
             return 0.0
 
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        if not pipeline:
+        run = await self.db.get(Run, run_id)
+        if not run:
             return 0.0
 
-        limit = float(pipeline.budget_limit_usd)
+        limit = float(run.budget_limit_usd)
         if limit <= 0:
             return 0.0
 
-        actual = float(pipeline.actual_cost_usd)
+        actual = float(run.actual_cost_usd)
         return min(actual / limit, 1.0)
 
     @staticmethod

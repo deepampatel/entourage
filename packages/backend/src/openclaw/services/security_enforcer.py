@@ -49,7 +49,7 @@ class SecurityViolation:
     kind: str  # network|write_path|denied_bash
     agent_id: str
     team_id: str
-    pipeline_task_id: Optional[int]
+    run_task_id: Optional[int]
     detail: str  # what was attempted
     rule: str  # which rule matched
     action: str  # blocked|logged
@@ -87,7 +87,7 @@ class SecurityEnforcer:
                 kind="write_path",
                 agent_id=agent_id,
                 team_id=team_id,
-                pipeline_task_id=task_id,
+                run_task_id=task_id,
                 detail=f"Parent traversal in path: {path}",
                 rule="no_parent_traversal",
                 action="blocked" if self._mode == "strict" else "logged",
@@ -103,7 +103,7 @@ class SecurityEnforcer:
             kind="write_path",
             agent_id=agent_id,
             team_id=team_id,
-            pipeline_task_id=task_id,
+            run_task_id=task_id,
             detail=f"Write outside allowed paths: {path}",
             rule=f"allowed_paths:{','.join(allowed_paths)}",
             action="blocked" if self._mode == "strict" else "logged",
@@ -129,7 +129,7 @@ class SecurityEnforcer:
             kind="network",
             agent_id=agent_id,
             team_id=team_id,
-            pipeline_task_id=task_id,
+            run_task_id=task_id,
             detail=f"Network access to unauthorized domain: {domain}",
             rule=f"not_in_allowlist",
             action="blocked" if self._mode == "strict" else "logged",
@@ -152,7 +152,7 @@ class SecurityEnforcer:
                     kind="denied_bash",
                     agent_id=agent_id,
                     team_id=team_id,
-                    pipeline_task_id=task_id,
+                    run_task_id=task_id,
                     detail=f"Denied bash command: {command[:200]}",
                     rule=pattern,
                     action="blocked" if self._mode == "strict" else "logged",
@@ -166,7 +166,7 @@ class SecurityEnforcer:
             kind=violation.kind,
             agent_id=violation.agent_id,
             team_id=violation.team_id,
-            pipeline_task_id=violation.pipeline_task_id,
+            run_task_id=violation.run_task_id,
             detail=violation.detail,
             rule=violation.rule,
             action=violation.action,

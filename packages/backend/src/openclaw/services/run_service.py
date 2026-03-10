@@ -1,6 +1,6 @@
-"""Pipeline service — business logic for pipeline CRUD and state machine.
+"""Run service — business logic for run CRUD and state machine.
 
-The pipeline state machine enforces the orchestration workflow:
+The run state machine enforces the orchestration workflow:
   draft → planning → awaiting_plan_approval → executing →
   reviewing → merging → done
 
@@ -16,13 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
-from openclaw.db.models import BudgetLedger, Pipeline, PipelineTask, Team
+from openclaw.db.models import BudgetLedger, Run, RunTask, Team
 from openclaw.events.store import EventStore
 from openclaw.events.types import (
-    PIPELINE_CREATED,
-    PIPELINE_PLAN_APPROVED,
-    PIPELINE_PLAN_REJECTED,
-    PIPELINE_STATUS_CHANGED,
+    RUN_CREATED,
+    RUN_PLAN_APPROVED,
+    RUN_PLAN_REJECTED,
+    RUN_STATUS_CHANGED,
 )
 
 
@@ -30,7 +30,7 @@ from openclaw.events.types import (
 # State Machine
 # ═══════════════════════════════════════════════════════════
 
-VALID_PIPELINE_TRANSITIONS: dict[str, set[str]] = {
+VALID_RUN_TRANSITIONS: dict[str, set[str]] = {
     "draft": {"planning", "cancelled"},
     "planning": {"contracting", "awaiting_plan_approval", "failed", "cancelled"},
     "contracting": {"awaiting_plan_approval", "failed", "cancelled"},
@@ -45,8 +45,8 @@ VALID_PIPELINE_TRANSITIONS: dict[str, set[str]] = {
 }
 
 
-class InvalidPipelineTransitionError(Exception):
-    """Raised when a pipeline status transition is not allowed."""
+class InvalidRunTransitionError(Exception):
+    """Raised when a run status transition is not allowed."""
     pass
 
 
@@ -55,8 +55,8 @@ class InvalidPipelineTransitionError(Exception):
 # ═══════════════════════════════════════════════════════════
 
 
-class PipelineService:
-    """Business logic for pipeline CRUD and state management."""
+class RunService:
+    """Business logic for run CRUD and state management."""
 
     def __init__(self, db: AsyncSession):
         self.db = db
@@ -64,7 +64,7 @@ class PipelineService:
 
     # ─── Create ──────────────────────────────────────────
 
-    async def create_pipeline(
+    async def create_run(
         self,
         team_id: uuid.UUID,
         title: str,
@@ -72,14 +72,14 @@ class PipelineService:
         created_by: Optional[uuid.UUID] = None,
         budget_limit: float = 10.0,
         repository_id: Optional[uuid.UUID] = None,
-    ) -> Pipeline:
-        """Create a new pipeline in draft status."""
+    ) -> Run:
+        """Create a new run in draft status."""
         # Look up org_id from team
         team = await self.db.get(Team, team_id)
         if not team:
             raise ValueError(f"Team {team_id} not found")
 
-        pipeline = Pipeline(
+        run = Run(
             org_id=team.org_id,
             team_id=team_id,
             title=title,
@@ -89,12 +89,12 @@ class PipelineService:
             repository_id=repository_id,
             status="draft",
         )
-        self.db.add(pipeline)
+        self.db.add(run)
         await self.db.flush()
 
         # Create budget ledger
         ledger = BudgetLedger(
-            pipeline_id=pipeline.id,
+            run_id=run.id,
             org_id=team.org_id,
             team_id=team_id,
             budget_limit_usd=budget_limit,
@@ -102,10 +102,10 @@ class PipelineService:
         self.db.add(ledger)
 
         await self.events.append(
-            stream_id=f"pipeline:{pipeline.id}",
-            event_type=PIPELINE_CREATED,
+            stream_id=f"run:{run.id}",
+            event_type=RUN_CREATED,
             data={
-                "pipeline_id": str(pipeline.id),
+                "run_id": str(run.id),
                 "team_id": str(team_id),
                 "title": title,
                 "intent": intent,
@@ -113,47 +113,47 @@ class PipelineService:
             },
         )
         await self.db.commit()
-        return pipeline
+        return run
 
     # ─── Read ────────────────────────────────────────────
 
-    async def get_pipeline(self, pipeline_id: uuid.UUID) -> Optional[Pipeline]:
-        """Get a pipeline by ID with tasks eagerly loaded."""
+    async def get_run(self, run_id: uuid.UUID) -> Optional[Run]:
+        """Get a run by ID with tasks eagerly loaded."""
         result = await self.db.execute(
-            select(Pipeline)
-            .where(Pipeline.id == pipeline_id)
-            .options(selectinload(Pipeline.pipeline_tasks))
+            select(Run)
+            .where(Run.id == run_id)
+            .options(selectinload(Run.run_tasks))
         )
         return result.scalars().first()
 
-    async def list_pipelines(
+    async def list_runs(
         self,
         team_id: uuid.UUID,
         status: Optional[str] = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[Pipeline]:
-        """List pipelines for a team, optionally filtered by status."""
+    ) -> list[Run]:
+        """List runs for a team, optionally filtered by status."""
         q = (
-            select(Pipeline)
-            .where(Pipeline.team_id == team_id)
-            .order_by(Pipeline.created_at.desc())
+            select(Run)
+            .where(Run.team_id == team_id)
+            .order_by(Run.created_at.desc())
             .limit(limit)
             .offset(offset)
         )
         if status:
-            q = q.where(Pipeline.status == status)
+            q = q.where(Run.status == status)
         result = await self.db.execute(q)
         return list(result.scalars().all())
 
-    async def list_pipeline_tasks(
-        self, pipeline_id: uuid.UUID
-    ) -> list[PipelineTask]:
-        """List all tasks for a pipeline."""
+    async def list_run_tasks(
+        self, run_id: uuid.UUID
+    ) -> list[RunTask]:
+        """List all tasks for a run."""
         result = await self.db.execute(
-            select(PipelineTask)
-            .where(PipelineTask.pipeline_id == pipeline_id)
-            .order_by(PipelineTask.id)
+            select(RunTask)
+            .where(RunTask.run_id == run_id)
+            .order_by(RunTask.id)
         )
         return list(result.scalars().all())
 
@@ -161,125 +161,125 @@ class PipelineService:
 
     async def change_status(
         self,
-        pipeline_id: uuid.UUID,
+        run_id: uuid.UUID,
         new_status: str,
         actor_id: Optional[uuid.UUID] = None,
-    ) -> Pipeline:
-        """Transition pipeline to a new status (validated)."""
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        if not pipeline:
-            raise ValueError(f"Pipeline {pipeline_id} not found")
+    ) -> Run:
+        """Transition run to a new status (validated)."""
+        run = await self.db.get(Run, run_id)
+        if not run:
+            raise ValueError(f"Run {run_id} not found")
 
-        old_status = pipeline.status
-        valid = VALID_PIPELINE_TRANSITIONS.get(old_status, set())
+        old_status = run.status
+        valid = VALID_RUN_TRANSITIONS.get(old_status, set())
         if new_status not in valid:
-            raise InvalidPipelineTransitionError(
+            raise InvalidRunTransitionError(
                 f"Cannot transition from '{old_status}' to '{new_status}'. "
                 f"Valid: {valid}"
             )
 
-        pipeline.status = new_status
+        run.status = new_status
         if new_status == "done":
-            pipeline.completed_at = datetime.now(timezone.utc)
+            run.completed_at = datetime.now(timezone.utc)
 
         await self.events.append(
-            stream_id=f"pipeline:{pipeline_id}",
-            event_type=PIPELINE_STATUS_CHANGED,
+            stream_id=f"run:{run_id}",
+            event_type=RUN_STATUS_CHANGED,
             data={
-                "pipeline_id": str(pipeline_id),
+                "run_id": str(run_id),
                 "from": old_status,
                 "to": new_status,
                 "actor_id": str(actor_id) if actor_id else None,
             },
         )
         await self.db.commit()
-        return pipeline
+        return run
 
     async def approve_plan(
         self,
-        pipeline_id: uuid.UUID,
+        run_id: uuid.UUID,
         actor_id: Optional[uuid.UUID] = None,
-    ) -> Pipeline:
+    ) -> Run:
         """Approve the plan — transitions from awaiting_plan_approval to executing."""
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        if not pipeline:
-            raise ValueError(f"Pipeline {pipeline_id} not found")
-        if pipeline.status != "awaiting_plan_approval":
-            raise InvalidPipelineTransitionError(
-                f"Cannot approve plan: pipeline is '{pipeline.status}', "
+        run = await self.db.get(Run, run_id)
+        if not run:
+            raise ValueError(f"Run {run_id} not found")
+        if run.status != "awaiting_plan_approval":
+            raise InvalidRunTransitionError(
+                f"Cannot approve plan: run is '{run.status}', "
                 f"expected 'awaiting_plan_approval'"
             )
 
-        pipeline.status = "executing"
+        run.status = "executing"
         await self.events.append(
-            stream_id=f"pipeline:{pipeline_id}",
-            event_type=PIPELINE_PLAN_APPROVED,
+            stream_id=f"run:{run_id}",
+            event_type=RUN_PLAN_APPROVED,
             data={
-                "pipeline_id": str(pipeline_id),
+                "run_id": str(run_id),
                 "actor_id": str(actor_id) if actor_id else None,
             },
         )
         await self.db.commit()
-        return pipeline
+        return run
 
     async def reject_plan(
         self,
-        pipeline_id: uuid.UUID,
+        run_id: uuid.UUID,
         actor_id: Optional[uuid.UUID] = None,
         feedback: Optional[str] = None,
-    ) -> Pipeline:
+    ) -> Run:
         """Reject the plan — transitions back to draft with feedback."""
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        if not pipeline:
-            raise ValueError(f"Pipeline {pipeline_id} not found")
-        if pipeline.status != "awaiting_plan_approval":
-            raise InvalidPipelineTransitionError(
-                f"Cannot reject plan: pipeline is '{pipeline.status}', "
+        run = await self.db.get(Run, run_id)
+        if not run:
+            raise ValueError(f"Run {run_id} not found")
+        if run.status != "awaiting_plan_approval":
+            raise InvalidRunTransitionError(
+                f"Cannot reject plan: run is '{run.status}', "
                 f"expected 'awaiting_plan_approval'"
             )
 
-        pipeline.status = "draft"
+        run.status = "draft"
         if feedback:
-            meta = pipeline.pipeline_metadata or {}
+            meta = run.run_metadata or {}
             rejections = meta.get("plan_rejections", [])
             rejections.append({
                 "feedback": feedback,
                 "actor_id": str(actor_id) if actor_id else None,
                 "at": datetime.now(timezone.utc).isoformat(),
             })
-            pipeline.pipeline_metadata = {**meta, "plan_rejections": rejections}
-            flag_modified(pipeline, "pipeline_metadata")
+            run.run_metadata = {**meta, "plan_rejections": rejections}
+            flag_modified(run, "run_metadata")
 
         await self.events.append(
-            stream_id=f"pipeline:{pipeline_id}",
-            event_type=PIPELINE_PLAN_REJECTED,
+            stream_id=f"run:{run_id}",
+            event_type=RUN_PLAN_REJECTED,
             data={
-                "pipeline_id": str(pipeline_id),
+                "run_id": str(run_id),
                 "feedback": feedback,
                 "actor_id": str(actor_id) if actor_id else None,
             },
         )
         await self.db.commit()
-        return pipeline
+        return run
 
     # ─── Task graph ──────────────────────────────────────
 
     async def set_task_graph(
-        self, pipeline_id: uuid.UUID, task_graph: dict
-    ) -> Pipeline:
-        """Store the task graph and create PipelineTask rows from it."""
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        if not pipeline:
-            raise ValueError(f"Pipeline {pipeline_id} not found")
+        self, run_id: uuid.UUID, task_graph: dict
+    ) -> Run:
+        """Store the task graph and create RunTask rows from it."""
+        run = await self.db.get(Run, run_id)
+        if not run:
+            raise ValueError(f"Run {run_id} not found")
 
-        pipeline.task_graph = task_graph
-        flag_modified(pipeline, "task_graph")
+        run.task_graph = task_graph
+        flag_modified(run, "task_graph")
 
-        # Create PipelineTask rows from the task_graph
+        # Create RunTask rows from the task_graph
         tasks_data = task_graph.get("tasks", [])
         for i, t in enumerate(tasks_data):
-            ptask = PipelineTask(
-                pipeline_id=pipeline_id,
+            ptask = RunTask(
+                run_id=run_id,
                 title=t["title"],
                 description=t.get("description", ""),
                 complexity=t.get("complexity", "M"),
@@ -291,18 +291,18 @@ class PipelineService:
             self.db.add(ptask)
 
         await self.db.commit()
-        return pipeline
+        return run
 
     # ─── Cost tracking ───────────────────────────────────
 
     async def update_cost(
-        self, pipeline_id: uuid.UUID, cost_delta: float
-    ) -> Pipeline:
-        """Add cost to the pipeline's running total."""
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        if not pipeline:
-            raise ValueError(f"Pipeline {pipeline_id} not found")
+        self, run_id: uuid.UUID, cost_delta: float
+    ) -> Run:
+        """Add cost to the run's running total."""
+        run = await self.db.get(Run, run_id)
+        if not run:
+            raise ValueError(f"Run {run_id} not found")
 
-        pipeline.actual_cost_usd = float(pipeline.actual_cost_usd) + cost_delta
+        run.actual_cost_usd = float(run.actual_cost_usd) + cost_delta
         await self.db.commit()
-        return pipeline
+        return run

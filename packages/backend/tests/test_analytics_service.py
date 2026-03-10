@@ -12,8 +12,8 @@ from openclaw.services.analytics_service import AnalyticsService, _period_start
 # ─── Helpers ─────────────────────────────────────────────────
 
 
-def _make_pipeline(status="done", cost=1.5, created_days_ago=3, duration_hours=2):
-    """Create a mock Pipeline object."""
+def _make_run(status="done", cost=1.5, created_days_ago=3, duration_hours=2):
+    """Create a mock Run object."""
     now = datetime.now(timezone.utc)
     created = now - timedelta(days=created_days_ago)
     completed = created + timedelta(hours=duration_hours) if status == "done" else None
@@ -24,7 +24,7 @@ def _make_pipeline(status="done", cost=1.5, created_days_ago=3, duration_hours=2
     p.created_at = created
     p.completed_at = completed
     p.id = uuid.uuid4()
-    p.title = f"Pipeline {status}"
+    p.title = f"Run {status}"
     return p
 
 
@@ -53,7 +53,7 @@ def _make_session(cost=0.5, tokens_in=1000, tokens_out=500, cache_read=200,
     return s
 
 
-def _make_pipeline_task(status="done", agent_id=None):
+def _make_run_task(status="done", agent_id=None):
     t = MagicMock()
     t.id = 1
     t.status = status
@@ -69,10 +69,10 @@ def _make_budget_entry(cost=0.25, tokens_in=500, tokens_out=100,
     e.cost_usd = cost
     e.input_tokens = tokens_in
     e.output_tokens = tokens_out
-    e.pipeline_task_id = task_id
+    e.run_task_id = task_id
     e.agent_id = agent_id or uuid.uuid4()
     e.recorded_at = datetime.now(timezone.utc)
-    e.pipeline_id = uuid.uuid4()
+    e.run_id = uuid.uuid4()
     return e
 
 
@@ -120,39 +120,39 @@ def test_period_start_all():
     assert start.year == 2020
 
 
-# ─── Pipeline metrics ────────────────────────────────────────
+# ─── Run metrics ────────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_pipeline_metrics_empty_team():
+async def test_run_metrics_empty_team():
     db = AsyncMock()
     db.execute = AsyncMock(return_value=_MockResult([]))
     svc = AnalyticsService(db)
 
-    result = await svc.get_pipeline_metrics(uuid.uuid4(), "week")
+    result = await svc.get_run_metrics(uuid.uuid4(), "week")
 
-    assert result["total_pipelines"] == 0
+    assert result["total_runs"] == 0
     assert result["success_rate"] == 0.0
     assert result["total_cost_usd"] == 0.0
 
 
 @pytest.mark.asyncio
-async def test_pipeline_metrics_counts_by_status():
-    pipelines = [
-        _make_pipeline(status="done", cost=1.0),
-        _make_pipeline(status="done", cost=2.0),
-        _make_pipeline(status="failed", cost=0.5),
-        _make_pipeline(status="cancelled", cost=0.0),
-        _make_pipeline(status="executing", cost=0.3),
+async def test_run_metrics_counts_by_status():
+    runs = [
+        _make_run(status="done", cost=1.0),
+        _make_run(status="done", cost=2.0),
+        _make_run(status="failed", cost=0.5),
+        _make_run(status="cancelled", cost=0.0),
+        _make_run(status="executing", cost=0.3),
     ]
 
     db = AsyncMock()
-    db.execute = AsyncMock(return_value=_MockResult(pipelines))
+    db.execute = AsyncMock(return_value=_MockResult(runs))
     svc = AnalyticsService(db)
 
-    result = await svc.get_pipeline_metrics(uuid.uuid4(), "week")
+    result = await svc.get_run_metrics(uuid.uuid4(), "week")
 
-    assert result["total_pipelines"] == 5
+    assert result["total_runs"] == 5
     assert result["completed"] == 2
     assert result["failed"] == 1
     assert result["cancelled"] == 1
@@ -163,18 +163,18 @@ async def test_pipeline_metrics_counts_by_status():
 
 
 @pytest.mark.asyncio
-async def test_pipeline_metrics_success_rate_excludes_in_progress():
+async def test_run_metrics_success_rate_excludes_in_progress():
     """Only terminal states (done, failed, cancelled) count for success rate."""
-    pipelines = [
-        _make_pipeline(status="done", cost=1.0),
-        _make_pipeline(status="executing", cost=0.5),
+    runs = [
+        _make_run(status="done", cost=1.0),
+        _make_run(status="executing", cost=0.5),
     ]
 
     db = AsyncMock()
-    db.execute = AsyncMock(return_value=_MockResult(pipelines))
+    db.execute = AsyncMock(return_value=_MockResult(runs))
     svc = AnalyticsService(db)
 
-    result = await svc.get_pipeline_metrics(uuid.uuid4(), "week")
+    result = await svc.get_run_metrics(uuid.uuid4(), "week")
 
     # Only 1 terminal (done), so success_rate = 100%
     assert result["success_rate"] == 100.0
@@ -191,8 +191,8 @@ async def test_agent_performance_ranking():
     sessions1 = [_make_session(cost=2.0, tokens_in=1000, cache_read=500, agent_id=agent1.id)]
     sessions2 = [_make_session(cost=0.5, tokens_in=800, cache_read=100, agent_id=agent2.id)]
 
-    tasks1 = [_make_pipeline_task("done", agent1.id)]
-    tasks2 = [_make_pipeline_task("failed", agent2.id)]
+    tasks1 = [_make_run_task("done", agent1.id)]
+    tasks2 = [_make_run_task("failed", agent2.id)]
 
     call_count = 0
     async def mock_execute(query):
@@ -233,7 +233,7 @@ async def test_agent_performance_ranking():
 @pytest.mark.asyncio
 async def test_cache_hit_rate_calculation():
     agent = _make_agent("alice", "engineer")
-    # tokens_in=800, cache_read=200 → cache_hit = 200/(800+200) = 20%
+    # tokens_in=800, cache_read=200 -> cache_hit = 200/(800+200) = 20%
     sessions = [_make_session(tokens_in=800, cache_read=200, agent_id=agent.id)]
 
     call_count = 0
@@ -295,26 +295,26 @@ async def test_cost_timeseries_respects_days_filter():
     assert result == []
 
 
-# ─── Pipeline cost detail ────────────────────────────────────
+# ─── Run cost detail ────────────────────────────────────
 
 
 @pytest.mark.asyncio
-async def test_pipeline_cost_detail():
-    pipeline_id = uuid.uuid4()
+async def test_run_cost_detail():
+    run_id = uuid.uuid4()
     agent_id = uuid.uuid4()
 
-    pipeline = _make_pipeline(status="done", cost=1.5)
-    pipeline.id = pipeline_id
-    pipeline.title = "Test Pipeline"
-    pipeline.actual_cost_usd = 1.5
+    run = _make_run(status="done", cost=1.5)
+    run.id = run_id
+    run.title = "Test Run"
+    run.actual_cost_usd = 1.5
 
-    task = _make_pipeline_task("done", agent_id)
+    task = _make_run_task("done", agent_id)
     task.id = 1
     task.title = "Implement feature"
-    task.pipeline_id = pipeline_id
+    task.run_id = run_id
 
     entry = _make_budget_entry(cost=1.5, task_id=1, agent_id=agent_id)
-    entry.pipeline_id = pipeline_id
+    entry.run_id = run_id
 
     agent_mock = MagicMock()
     agent_mock.id = agent_id
@@ -324,11 +324,11 @@ async def test_pipeline_cost_detail():
     async def mock_execute(query):
         nonlocal call_count
         call_count += 1
-        if call_count == 1:  # Pipeline
-            return _MockResult([pipeline])
+        if call_count == 1:  # Run
+            return _MockResult([run])
         elif call_count == 2:  # Budget entries
             return _MockResult([entry])
-        elif call_count == 3:  # Pipeline tasks
+        elif call_count == 3:  # Run tasks
             return _MockResult([task])
         elif call_count == 4:  # Agents
             return _MockResult([agent_mock])
@@ -338,10 +338,10 @@ async def test_pipeline_cost_detail():
     db.execute = mock_execute
     svc = AnalyticsService(db)
 
-    result = await svc.get_pipeline_cost_detail(pipeline_id)
+    result = await svc.get_run_cost_detail(run_id)
 
-    assert result["pipeline_id"] == pipeline_id
-    assert result["title"] == "Test Pipeline"
+    assert result["run_id"] == run_id
+    assert result["title"] == "Test Run"
     assert result["total_cost_usd"] == 1.5
     assert len(result["tasks"]) == 1
     assert result["tasks"][0]["cost_usd"] == 1.5

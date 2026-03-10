@@ -1,31 +1,31 @@
 /**
- * Pipelines page — list, create, and manage pipeline orchestration.
+ * Runs page — list, create, and manage run orchestration.
  *
- * Shows pipeline cards with status, cost/budget bar, and task progress.
+ * Shows run cards with status, cost/budget bar, and task progress.
  * Supports approve/reject for plans and pause/resume for execution.
  */
 
 import { useState } from "react";
 import {
   useApprovePlan,
-  useCreatePipeline,
+  useCreateRun,
   useGenerateContracts,
-  usePipelineContracts,
-  usePipelines,
-  usePipelineTasks,
+  useRunContracts,
+  useRuns,
+  useRunTasks,
   useRejectPlan,
   useSandboxRuns,
-  useStartPipeline,
+  useStartRun,
   useTriggerSandboxRun,
 } from "../hooks/useApi";
 import { useTeamSocket } from "../hooks/useTeamSocket";
 import { useToast } from "../components/Toast";
 import {
-  PIPELINE_STATUS_COLORS,
-  PIPELINE_STATUS_LABELS,
-  type Pipeline,
-  type PipelineStatus,
-  type PipelineTask,
+  RUN_STATUS_COLORS,
+  RUN_STATUS_LABELS,
+  type Run,
+  type RunStatus,
+  type RunTask,
   type SandboxRun,
 } from "../api/types";
 
@@ -37,10 +37,10 @@ const STATUS_TOOLTIPS: Record<string, string> = {
   executing: "Agents are working on tasks",
   reviewing: "Code review in progress",
   merging: "Merging code changes",
-  done: "Pipeline complete",
-  paused: "Pipeline is paused",
+  done: "Run complete",
+  paused: "Run is paused",
   failed: "One or more tasks failed",
-  cancelled: "Pipeline was cancelled",
+  cancelled: "Run was cancelled",
 };
 
 const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
@@ -51,11 +51,11 @@ const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
   migration: "Upgrade dependencies or infra",
 };
 
-interface PipelinesProps {
+interface RunsProps {
   teamId: string;
 }
 
-const STATUS_FILTERS: (PipelineStatus | "all")[] = [
+const STATUS_FILTERS: (RunStatus | "all")[] = [
   "all",
   "executing",
   "awaiting_plan_approval",
@@ -76,7 +76,7 @@ function CostBar({ actual, limit }: { actual: number; limit: number }) {
   );
 }
 
-function TaskProgress({ tasks }: { tasks: PipelineTask[] }) {
+function TaskProgress({ tasks }: { tasks: RunTask[] }) {
   if (!tasks.length) return null;
   const done = tasks.filter((t) => t.status === "done").length;
   const failed = tasks.filter((t) => t.status === "failed").length;
@@ -127,16 +127,16 @@ function SandboxPill({ runs }: { runs: SandboxRun[] | undefined }) {
 }
 
 function TaskSandboxDetail({
-  pipelineId,
+  runId,
   task,
   teamId,
 }: {
-  pipelineId: string;
-  task: PipelineTask;
+  runId: string;
+  task: RunTask;
   teamId: string;
 }) {
   const [showOutput, setShowOutput] = useState(false);
-  const { data: runs } = useSandboxRuns(pipelineId, task.id);
+  const { data: runs } = useSandboxRuns(runId, task.id);
   const triggerRun = useTriggerSandboxRun(teamId);
 
   const latest = runs?.[0];
@@ -154,10 +154,10 @@ function TaskSandboxDetail({
           </button>
         )}
         <button
-          className="pipeline-btn sandbox-trigger-btn"
+          className="run-btn sandbox-trigger-btn"
           onClick={() =>
             triggerRun.mutate({
-              pipelineId,
+              runId,
               taskId: task.id,
               testCmd: "pytest tests/",
             })
@@ -190,55 +190,55 @@ function TaskSandboxDetail({
   );
 }
 
-function PipelineCard({
-  pipeline,
+function RunCard({
+  run,
   teamId,
 }: {
-  pipeline: Pipeline;
+  run: Run;
   teamId: string;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [expandedTaskSandbox, setExpandedTaskSandbox] = useState<number | null>(null);
-  const { data: tasks } = usePipelineTasks(expanded ? pipeline.id : undefined);
-  const { data: contracts } = usePipelineContracts(expanded ? pipeline.id : undefined);
+  const { data: tasks } = useRunTasks(expanded ? run.id : undefined);
+  const { data: contracts } = useRunContracts(expanded ? run.id : undefined);
   const approvePlan = useApprovePlan(teamId);
   const rejectPlan = useRejectPlan(teamId);
-  const startPipeline = useStartPipeline(teamId);
+  const startRun = useStartRun(teamId);
   const generateContracts = useGenerateContracts(teamId);
   const { showToast } = useToast();
 
-  const status = pipeline.status as PipelineStatus;
-  const statusColor = PIPELINE_STATUS_COLORS[status] || "#6b7280";
-  const statusLabel = PIPELINE_STATUS_LABELS[status] || status;
+  const status = run.status as RunStatus;
+  const statusColor = RUN_STATUS_COLORS[status] || "#6b7280";
+  const statusLabel = RUN_STATUS_LABELS[status] || status;
 
   return (
-    <div className="pipeline-card" onClick={() => setExpanded(!expanded)}>
-      <div className="pipeline-card-header">
-        <div className="pipeline-card-title">
-          <h3>{pipeline.title}</h3>
+    <div className="run-card" onClick={() => setExpanded(!expanded)}>
+      <div className="run-card-header">
+        <div className="run-card-title">
+          <h3>{run.title}</h3>
           <span
-            className="pipeline-status-badge"
+            className="run-status-badge"
             style={{ backgroundColor: statusColor }}
             title={STATUS_TOOLTIPS[status] || ""}
           >
             {statusLabel}
           </span>
         </div>
-        <p className="pipeline-intent">{pipeline.intent}</p>
+        <p className="run-intent">{run.intent}</p>
       </div>
 
-      <div className="pipeline-card-meta">
-        <CostBar actual={pipeline.actual_cost_usd} limit={pipeline.budget_limit_usd} />
+      <div className="run-card-meta">
+        <CostBar actual={run.actual_cost_usd} limit={run.budget_limit_usd} />
         {tasks && <TaskProgress tasks={tasks} />}
       </div>
 
       {/* Action buttons */}
-      <div className="pipeline-actions" onClick={(e) => e.stopPropagation()}>
+      <div className="run-actions" onClick={(e) => e.stopPropagation()}>
         {status === "draft" && (
           <button
-            className="pipeline-btn pipeline-btn-primary"
-            onClick={() => startPipeline.mutate(pipeline.id)}
-            disabled={startPipeline.isPending}
+            className="run-btn run-btn-primary"
+            onClick={() => startRun.mutate(run.id)}
+            disabled={startRun.isPending}
           >
             Start Planning
           </button>
@@ -246,8 +246,8 @@ function PipelineCard({
         {status === "awaiting_plan_approval" && (
           <>
             <button
-              className="pipeline-btn pipeline-btn-success"
-              onClick={() => approvePlan.mutate(pipeline.id, {
+              className="run-btn run-btn-success"
+              onClick={() => approvePlan.mutate(run.id, {
                 onSuccess: () => showToast("Plan approved! Execution starting...", "success"),
               })}
               disabled={approvePlan.isPending}
@@ -255,9 +255,9 @@ function PipelineCard({
               Approve Plan
             </button>
             <button
-              className="pipeline-btn pipeline-btn-danger"
+              className="run-btn run-btn-danger"
               onClick={() =>
-                rejectPlan.mutate({ pipelineId: pipeline.id })
+                rejectPlan.mutate({ runId: run.id })
               }
               disabled={rejectPlan.isPending}
             >
@@ -269,7 +269,7 @@ function PipelineCard({
 
       {/* Expanded: show task graph + contracts */}
       {expanded && tasks && (
-        <div className="pipeline-tasks-list">
+        <div className="run-tasks-list">
           {(() => {
             const runningTasks = tasks.filter((t) => t.status === "in_progress");
             const isParallel = runningTasks.length > 1;
@@ -290,29 +290,29 @@ function PipelineCard({
             const isParallel = isRunning && runningTasks.length > 1;
             const sandboxOpen = expandedTaskSandbox === task.id;
             return (
-              <div key={task.id} className="pipeline-task-wrapper">
+              <div key={task.id} className="run-task-wrapper">
                 <div
-                  className={`pipeline-task-row${isParallel ? " parallel-running" : ""}`}
+                  className={`run-task-row${isParallel ? " parallel-running" : ""}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     setExpandedTaskSandbox(sandboxOpen ? null : task.id);
                   }}
                 >
-                  <span className="pipeline-task-idx">{i}</span>
+                  <span className="run-task-idx">{i}</span>
                   <span
-                    className="pipeline-task-complexity"
+                    className="run-task-complexity"
                     data-complexity={task.complexity}
                   >
                     {task.complexity}
                   </span>
-                  <span className="pipeline-task-title">{task.title}</span>
+                  <span className="run-task-title">{task.title}</span>
                   {isRunning && task.agent_id && (
-                    <span className="pipeline-task-agent" title={task.agent_id}>
+                    <span className="run-task-agent" title={task.agent_id}>
                       {task.agent_id.slice(0, 8)}
                     </span>
                   )}
                   <span
-                    className="pipeline-task-status"
+                    className="run-task-status"
                     style={{
                       color:
                         task.status === "done"
@@ -328,19 +328,19 @@ function PipelineCard({
                     {isParallel && " ⚡"}
                   </span>
                   {task.retry_count > 0 && (
-                    <span className="pipeline-task-retry" title={`Retried ${task.retry_count} time(s)`}>
+                    <span className="run-task-retry" title={`Retried ${task.retry_count} time(s)`}>
                       {task.retry_count}
                     </span>
                   )}
                   {task.dependencies.length > 0 && (
-                    <span className="pipeline-task-deps">
+                    <span className="run-task-deps">
                       deps: [{task.dependencies.join(", ")}]
                     </span>
                   )}
                 </div>
                 {sandboxOpen && (
                   <TaskSandboxDetail
-                    pipelineId={pipeline.id}
+                    runId={run.id}
                     task={task}
                     teamId={teamId}
                   />
@@ -351,10 +351,10 @@ function PipelineCard({
 
           {/* Contracts section */}
           {contracts && contracts.length > 0 && (
-            <div className="pipeline-contracts">
+            <div className="run-contracts">
               <h4>Contracts ({contracts.length})</h4>
               {contracts.map((c) => (
-                <div key={c.id} className="pipeline-contract-row">
+                <div key={c.id} className="run-contract-row">
                   <span
                     className="contract-type-badge"
                     data-type={c.contract_type}
@@ -373,17 +373,17 @@ function PipelineCard({
             </div>
           )}
 
-          {/* Generate contracts button for eligible pipelines */}
+          {/* Generate contracts button for eligible runs */}
           {status === "awaiting_plan_approval" &&
             (!contracts || contracts.length === 0) &&
             tasks.length >= 2 && (
               <div
-                className="pipeline-actions"
+                className="run-actions"
                 onClick={(e) => e.stopPropagation()}
               >
                 <button
-                  className="pipeline-btn pipeline-btn-secondary"
-                  onClick={() => generateContracts.mutate(pipeline.id)}
+                  className="run-btn run-btn-secondary"
+                  onClick={() => generateContracts.mutate(run.id)}
                   disabled={generateContracts.isPending}
                 >
                   Generate Contracts
@@ -396,9 +396,9 @@ function PipelineCard({
   );
 }
 
-// ─── Create Pipeline Form ──────────────────────────────
+// ─── Create Run Form ──────────────────────────────
 
-function CreatePipelineForm({
+function CreateRunForm({
   teamId,
   onClose,
 }: {
@@ -409,12 +409,12 @@ function CreatePipelineForm({
   const [intent, setIntent] = useState("");
   const [budget, setBudget] = useState(10);
   const [template, setTemplate] = useState("");
-  const createPipeline = useCreatePipeline(teamId);
+  const createRun = useCreateRun(teamId);
   const { showToast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createPipeline.mutate(
+    createRun.mutate(
       {
         title,
         intent,
@@ -423,7 +423,7 @@ function CreatePipelineForm({
       },
       {
         onSuccess: () => {
-          showToast("Pipeline created! Planning will start shortly.", "success");
+          showToast("Run created! Planning will start shortly.", "success");
           onClose();
         },
       }
@@ -431,10 +431,10 @@ function CreatePipelineForm({
   };
 
   return (
-    <form className="create-pipeline-form" onSubmit={handleSubmit}>
-      <h3>New Pipeline</h3>
+    <form className="create-run-form" onSubmit={handleSubmit}>
+      <h3>New Run</h3>
       <p className="form-help">
-        A pipeline takes your description and turns it into working code.
+        A run takes your description and turns it into working code.
       </p>
       <div className="template-picker">
         {["", "feature", "bugfix", "refactor", "migration"].map((t) => (
@@ -483,10 +483,10 @@ function CreatePipelineForm({
         </p>
       </div>
       <div className="form-actions">
-        <button type="submit" className="pipeline-btn pipeline-btn-primary" disabled={createPipeline.isPending}>
+        <button type="submit" className="run-btn run-btn-primary" disabled={createRun.isPending}>
           Create
         </button>
-        <button type="button" className="pipeline-btn" onClick={onClose}>
+        <button type="button" className="run-btn" onClick={onClose}>
           Cancel
         </button>
       </div>
@@ -496,40 +496,40 @@ function CreatePipelineForm({
 
 // ─── Main Page ─────────────────────────────────────────
 
-export function Pipelines({ teamId }: PipelinesProps) {
+export function Runs({ teamId }: RunsProps) {
   useTeamSocket(teamId);
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
 
-  const { data: pipelines, isLoading } = usePipelines(
+  const { data: runs, isLoading } = useRuns(
     teamId,
     statusFilter === "all" ? undefined : statusFilter
   );
 
-  if (isLoading) return <div className="loading">Loading pipelines...</div>;
+  if (isLoading) return <div className="loading">Loading runs...</div>;
 
   return (
-    <div className="pipelines-page">
-      <div className="pipelines-header">
-        <h1>Pipelines</h1>
+    <div className="runs-page">
+      <div className="runs-header">
+        <h1>Runs</h1>
         <button
-          className="pipeline-btn pipeline-btn-primary"
+          className="run-btn run-btn-primary"
           onClick={() => setShowCreate(true)}
         >
-          + New Pipeline
+          + New Run
         </button>
       </div>
 
       {showCreate && (
-        <CreatePipelineForm
+        <CreateRunForm
           teamId={teamId}
           onClose={() => setShowCreate(false)}
         />
       )}
 
       {/* Status filters */}
-      <div className="pipeline-filters">
+      <div className="run-filters">
         {STATUS_FILTERS.map((s) => (
           <button
             key={s}
@@ -538,30 +538,30 @@ export function Pipelines({ teamId }: PipelinesProps) {
           >
             {s === "all"
               ? "All"
-              : PIPELINE_STATUS_LABELS[s as PipelineStatus] || s}
+              : RUN_STATUS_LABELS[s as RunStatus] || s}
           </button>
         ))}
       </div>
 
-      {/* Pipeline list */}
-      <div className="pipeline-list">
-        {pipelines?.length === 0 && (
+      {/* Run list */}
+      <div className="run-list">
+        {runs?.length === 0 && (
           <div className="empty-state">
-            <p className="empty-state-title">No pipelines yet</p>
+            <p className="empty-state-title">No runs yet</p>
             <p className="empty-state-desc">
-              A pipeline takes your description and turns it into working code.
+              A run takes your description and turns it into working code.
               Agents plan the work, write code, run tests, and open a PR.
             </p>
             <button
-              className="pipeline-btn pipeline-btn-primary empty-state-cta"
+              className="run-btn run-btn-primary empty-state-cta"
               onClick={() => setShowCreate(true)}
             >
-              + Create Your First Pipeline
+              + Create Your First Run
             </button>
           </div>
         )}
-        {pipelines?.map((p) => (
-          <PipelineCard key={p.id} pipeline={p} teamId={teamId} />
+        {runs?.map((r) => (
+          <RunCard key={r.id} run={r} teamId={teamId} />
         ))}
       </div>
     </div>

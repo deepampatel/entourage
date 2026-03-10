@@ -1533,27 +1533,27 @@ server.tool(
 );
 
 // ═══════════════════════════════════════════════════════════
-// Phase 12: Pipelines
+// Phase 12: Runs
 // ═══════════════════════════════════════════════════════════
 
 server.tool(
-  "create_pipeline",
-  "Create a new pipeline — a top-level orchestration unit that decomposes a human intent into a task graph, gets approval, and executes tasks automatically via AI agents.",
+  "create_run",
+  "Create a new run — a top-level orchestration unit that decomposes a human intent into a task graph, gets approval, and executes tasks automatically via AI agents.",
   {
     team_id: z.string().describe("Team UUID"),
-    title: z.string().describe("Short title for the pipeline"),
+    title: z.string().describe("Short title for the run"),
     intent: z.string().describe("Human intent — what should be built. Be specific and detailed."),
     budget_limit_usd: z.number().describe("Maximum budget in USD (default: 10.0)").default(10.0),
     repository_id: z.string().describe("Repository UUID (optional)").optional(),
   },
   async (params) => {
     try {
-      const pipeline = await client.createPipeline(params.team_id, params.title, params.intent, {
+      const run = await client.createRun(params.team_id, params.title, params.intent, {
         budget_limit_usd: params.budget_limit_usd,
         repository_id: params.repository_id,
       });
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(run, null, 2) }],
       };
     } catch (error) {
       return {
@@ -1565,19 +1565,19 @@ server.tool(
 );
 
 server.tool(
-  "list_pipelines",
-  "List pipelines for a team, optionally filtered by status.",
+  "list_runs",
+  "List runs for a team, optionally filtered by status.",
   {
     team_id: z.string().describe("Team UUID"),
     status: z.string().describe("Filter by status (draft, planning, executing, done, failed, etc.)").optional(),
   },
   async (params) => {
     try {
-      const pipelines = await client.listPipelines(params.team_id, {
+      const runs = await client.listRuns(params.team_id, {
         status: params.status,
       });
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(pipelines, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(runs, null, 2) }],
       };
     } catch (error) {
       return {
@@ -1589,16 +1589,16 @@ server.tool(
 );
 
 server.tool(
-  "get_pipeline",
-  "Get detailed information about a pipeline including its status, task graph, and budget.",
+  "get_run",
+  "Get detailed information about a run including its status, task graph, and budget.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const pipeline = await client.getPipeline(params.pipeline_id);
+      const run = await client.getRun(params.run_id);
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(run, null, 2) }],
       };
     } catch (error) {
       return {
@@ -1610,16 +1610,16 @@ server.tool(
 );
 
 server.tool(
-  "start_pipeline",
-  "Start planning for a pipeline — kicks off the LLM planner to decompose the intent into a task graph. Pipeline must be in 'draft' status.",
+  "start_run",
+  "Start planning for a run — kicks off the LLM planner to decompose the intent into a task graph. Run must be in 'draft' status.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const pipeline = await client.startPipeline(params.pipeline_id);
+      const run = await client.startRun(params.run_id);
       return {
-        content: [{ type: "text" as const, text: `Pipeline planning started. Status will transition to 'awaiting_plan_approval' when the plan is ready.\n\n${JSON.stringify(pipeline, null, 2)}` }],
+        content: [{ type: "text" as const, text: `Run planning started. Status will transition to 'awaiting_plan_approval' when the plan is ready.\n\n${JSON.stringify(run, null, 2)}` }],
       };
     } catch (error) {
       return {
@@ -1631,14 +1631,14 @@ server.tool(
 );
 
 server.tool(
-  "get_pipeline_tasks",
-  "List all tasks in a pipeline's task graph with their status, dependencies, and assigned agents.",
+  "get_run_tasks",
+  "List all tasks in a run's task graph with their status, dependencies, and assigned agents.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const tasks = await client.getPipelineTasks(params.pipeline_id);
+      const tasks = await client.getRunTasks(params.run_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(tasks, null, 2) }],
       };
@@ -1652,16 +1652,16 @@ server.tool(
 );
 
 server.tool(
-  "approve_pipeline_plan",
-  "Approve a pipeline's generated plan — starts automated execution of all tasks in the task graph. Pipeline must be in 'awaiting_plan_approval' status.",
+  "approve_run_plan",
+  "Approve a run's generated plan — starts automated execution of all tasks in the task graph. Run must be in 'awaiting_plan_approval' status.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const pipeline = await client.approvePipelinePlan(params.pipeline_id);
+      const run = await client.approveRunPlan(params.run_id);
       return {
-        content: [{ type: "text" as const, text: `Plan approved! Execution started.\n\n${JSON.stringify(pipeline, null, 2)}` }],
+        content: [{ type: "text" as const, text: `Plan approved! Execution started.\n\n${JSON.stringify(run, null, 2)}` }],
       };
     } catch (error) {
       return {
@@ -1673,19 +1673,19 @@ server.tool(
 );
 
 server.tool(
-  "reject_pipeline_plan",
-  "Reject a pipeline's generated plan with optional feedback. The pipeline returns to draft status so it can be re-planned.",
+  "reject_run_plan",
+  "Reject a run's generated plan with optional feedback. The run returns to draft status so it can be re-planned.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
     feedback: z.string().describe("Feedback explaining why the plan was rejected and what to change").optional(),
   },
   async (params) => {
     try {
-      const pipeline = await client.rejectPipelinePlan(params.pipeline_id, {
+      const run = await client.rejectRunPlan(params.run_id, {
         feedback: params.feedback,
       });
       return {
-        content: [{ type: "text" as const, text: `Plan rejected. Pipeline returned to draft.\n\n${JSON.stringify(pipeline, null, 2)}` }],
+        content: [{ type: "text" as const, text: `Plan rejected. Run returned to draft.\n\n${JSON.stringify(run, null, 2)}` }],
       };
     } catch (error) {
       return {
@@ -1697,16 +1697,16 @@ server.tool(
 );
 
 server.tool(
-  "pause_pipeline",
-  "Pause an executing pipeline. Running tasks will complete but no new tasks will start.",
+  "pause_run",
+  "Pause an executing run. Running tasks will complete but no new tasks will start.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const pipeline = await client.pausePipeline(params.pipeline_id);
+      const run = await client.pauseRun(params.run_id);
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(run, null, 2) }],
       };
     } catch (error) {
       return {
@@ -1718,16 +1718,16 @@ server.tool(
 );
 
 server.tool(
-  "resume_pipeline",
-  "Resume a paused pipeline — continues executing tasks from where it left off.",
+  "resume_run",
+  "Resume a paused run — continues executing tasks from where it left off.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const pipeline = await client.resumePipeline(params.pipeline_id);
+      const run = await client.resumeRun(params.run_id);
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(run, null, 2) }],
       };
     } catch (error) {
       return {
@@ -1739,14 +1739,14 @@ server.tool(
 );
 
 server.tool(
-  "get_pipeline_budget",
-  "Get the budget ledger for a pipeline — shows spent vs. limit and budget status.",
+  "get_run_budget",
+  "Get the budget ledger for a run — shows spent vs. limit and budget status.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const budget = await client.getPipelineBudget(params.pipeline_id);
+      const budget = await client.getRunBudget(params.run_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(budget, null, 2) }],
       };
@@ -1762,14 +1762,14 @@ server.tool(
 // ─── Phase 2A: Contracts ────────────────────────────────────
 
 server.tool(
-  "list_pipeline_contracts",
-  "List all interface contracts for a pipeline — shows contract types, specs, and lock status.",
+  "list_run_contracts",
+  "List all interface contracts for a run — shows contract types, specs, and lock status.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const contracts = await client.listContracts(params.pipeline_id);
+      const contracts = await client.listContracts(params.run_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(contracts, null, 2) }],
       };
@@ -1783,15 +1783,15 @@ server.tool(
 );
 
 server.tool(
-  "get_pipeline_contract",
+  "get_run_contract",
   "Get a specific contract by ID with full specification details.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
     contract_id: z.number().describe("Contract ID (integer)"),
   },
   async (params) => {
     try {
-      const contract = await client.getContract(params.pipeline_id, params.contract_id);
+      const contract = await client.getContract(params.run_id, params.contract_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(contract, null, 2) }],
       };
@@ -1805,16 +1805,16 @@ server.tool(
 );
 
 server.tool(
-  "lock_pipeline_contract",
+  "lock_run_contract",
   "Agent acknowledges a contract before starting work — locks the contract to the agent.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
     contract_id: z.number().describe("Contract ID (integer)"),
     agent_id: z.string().describe("Agent UUID that is acknowledging the contract"),
   },
   async (params) => {
     try {
-      const contract = await client.lockContract(params.pipeline_id, params.contract_id, params.agent_id);
+      const contract = await client.lockContract(params.run_id, params.contract_id, params.agent_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(contract, null, 2) }],
       };
@@ -1828,16 +1828,16 @@ server.tool(
 );
 
 server.tool(
-  "generate_pipeline_contracts",
+  "generate_run_contracts",
   "Trigger contract generation from the task graph — analyzes inter-task boundaries and generates typed interface contracts.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
+    run_id: z.string().describe("Run UUID"),
   },
   async (params) => {
     try {
-      const pipeline = await client.generateContracts(params.pipeline_id);
+      const run = await client.generateContracts(params.run_id);
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(pipeline, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(run, null, 2) }],
       };
     } catch (error) {
       return {
@@ -1854,14 +1854,14 @@ server.tool(
 
 server.tool(
   "list_sandbox_runs",
-  "List sandbox test runs for a pipeline task — shows pass/fail status, stdout/stderr, and duration.",
+  "List sandbox test runs for a run task — shows pass/fail status, stdout/stderr, and duration.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
-    task_id: z.number().describe("Pipeline task ID"),
+    run_id: z.string().describe("Run UUID"),
+    task_id: z.number().describe("Run task ID"),
   },
   async (params) => {
     try {
-      const runs = await client.listSandboxRuns(params.pipeline_id, params.task_id);
+      const runs = await client.listSandboxRuns(params.run_id, params.task_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(runs, null, 2) }],
       };
@@ -1876,10 +1876,10 @@ server.tool(
 
 server.tool(
   "trigger_sandbox_run",
-  "Trigger a Docker-based sandbox test run for a pipeline task. Returns 202 — the test runs asynchronously.",
+  "Trigger a Docker-based sandbox test run for a run task. Returns 202 — the test runs asynchronously.",
   {
-    pipeline_id: z.string().describe("Pipeline UUID"),
-    task_id: z.number().describe("Pipeline task ID"),
+    run_id: z.string().describe("Run UUID"),
+    task_id: z.number().describe("Run task ID"),
     test_cmd: z.string().describe("Shell command to run tests (e.g., 'pytest tests/')"),
     image: z.string().optional().describe("Docker image (default: python:3.12-slim)"),
     setup_cmd: z.string().optional().describe("Optional setup command to run before tests"),
@@ -1888,7 +1888,7 @@ server.tool(
   async (params) => {
     try {
       const run = await client.triggerSandboxRun(
-        params.pipeline_id,
+        params.run_id,
         params.task_id,
         params.test_cmd,
         {

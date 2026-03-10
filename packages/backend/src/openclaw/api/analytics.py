@@ -1,7 +1,7 @@
-"""Analytics API routes — pipeline metrics, agent performance, and cost breakdowns.
+"""Analytics API routes — run metrics, agent performance, and cost breakdowns.
 
 Read-only aggregation endpoints for dashboards and reporting.
-All queries operate over existing sessions, pipelines, and budget entries.
+All queries operate over existing sessions, runs, and budget entries.
 """
 
 import uuid
@@ -14,8 +14,8 @@ from openclaw.schemas.analytics import (
     AgentPerformance,
     CostTimeseriesPoint,
     MonthlyRollup,
-    PipelineCostDetail,
-    PipelineMetrics,
+    RunCostDetail,
+    RunMetrics,
 )
 from openclaw.services.analytics_service import AnalyticsService
 
@@ -26,17 +26,17 @@ def _svc(db: AsyncSession = Depends(get_db)) -> AnalyticsService:
     return AnalyticsService(db)
 
 
-# ─── Pipeline metrics ────────────────────────────────────────
+# ─── Run metrics ────────────────────────────────────────
 
 
-@router.get("/{team_id}/pipelines", response_model=PipelineMetrics)
-async def get_pipeline_metrics(
+@router.get("/{team_id}/runs", response_model=RunMetrics)
+async def get_run_metrics(
     team_id: uuid.UUID,
     period: str = Query("week", pattern="^(day|week|month|all)$"),
     svc: AnalyticsService = Depends(_svc),
 ):
-    """Aggregate pipeline metrics for a team within a time period."""
-    return await svc.get_pipeline_metrics(team_id=team_id, period=period)
+    """Aggregate run metrics for a team within a time period."""
+    return await svc.get_run_metrics(team_id=team_id, period=period)
 
 
 # ─── Agent performance ───────────────────────────────────────
@@ -81,16 +81,16 @@ async def get_monthly_rollup(
     return await svc.get_monthly_rollup(team_id=team_id, months=months)
 
 
-# ─── Pipeline cost detail ────────────────────────────────────
+# ─── Run cost detail ────────────────────────────────────
 
 
-@router.get("/pipelines/{pipeline_id}/costs", response_model=PipelineCostDetail)
-async def get_pipeline_cost_detail(
-    pipeline_id: uuid.UUID,
+@router.get("/runs/{run_id}/costs", response_model=RunCostDetail)
+async def get_run_cost_detail(
+    run_id: uuid.UUID,
     svc: AnalyticsService = Depends(_svc),
 ):
-    """Per-task cost breakdown for a specific pipeline."""
-    result = await svc.get_pipeline_cost_detail(pipeline_id=pipeline_id)
+    """Per-task cost breakdown for a specific run."""
+    result = await svc.get_run_cost_detail(run_id=run_id)
     if not result.get("title"):
-        raise HTTPException(status_code=404, detail="Pipeline not found")
+        raise HTTPException(status_code=404, detail="Run not found")
     return result

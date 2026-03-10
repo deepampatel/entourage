@@ -18,7 +18,7 @@ def _make_task(
     dependencies: list[int] | None = None,
     assigned_role: str = "engineer",
 ) -> MagicMock:
-    """Create a mock PipelineTask."""
+    """Create a mock RunTask."""
     task = MagicMock()
     task.id = id
     task.status = status
@@ -198,7 +198,7 @@ class TestFindReadyTaskBackwardCompat:
 
 
 class TestSerialMode:
-    """Test that max_concurrent_pipeline_tasks=1 preserves serial behavior."""
+    """Test that max_concurrent_run_tasks=1 preserves serial behavior."""
 
     def test_serial_mode_finds_one_task(self):
         """When max_count=1, only one task is returned even if many are ready."""

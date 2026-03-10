@@ -1,7 +1,7 @@
 """Sandbox API routes — trigger and query Docker-based test runs.
 
 Learn: These routes let agents (via MCP) and humans (via dashboard)
-trigger sandboxed test runs for pipeline tasks and query results.
+trigger sandboxed test runs for run tasks and query results.
 """
 
 import uuid
@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from openclaw.config import settings
 from openclaw.db.engine import get_db
-from openclaw.db.models import Pipeline, PipelineTask, Repository, SandboxRun
+from openclaw.db.models import Run, RunTask, Repository, SandboxRun
 from openclaw.schemas.sandbox import SandboxRunCreate, SandboxRunRead
 from openclaw.services.sandbox_manager import SandboxManager
 
@@ -67,21 +67,21 @@ async def _run_sandbox_background(
 
 
 @router.get(
-    "/pipelines/{pipeline_id}/tasks/{task_id}/sandbox-runs",
+    "/runs/{run_id}/tasks/{task_id}/sandbox-runs",
     response_model=list[SandboxRunRead],
 )
 async def list_sandbox_runs(
-    pipeline_id: uuid.UUID,
+    run_id: uuid.UUID,
     task_id: int,
     limit: int = Query(50, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
 ):
-    """List sandbox runs for a pipeline task."""
+    """List sandbox runs for a run task."""
     result = await db.execute(
         select(SandboxRun)
         .where(
-            SandboxRun.pipeline_id == pipeline_id,
-            SandboxRun.pipeline_task_id == task_id,
+            SandboxRun.run_id == run_id,
+            SandboxRun.run_task_id == task_id,
         )
         .order_by(SandboxRun.started_at.desc())
         .limit(limit)
@@ -90,32 +90,32 @@ async def list_sandbox_runs(
 
 
 @router.post(
-    "/pipelines/{pipeline_id}/tasks/{task_id}/sandbox-runs",
+    "/runs/{run_id}/tasks/{task_id}/sandbox-runs",
     response_model=SandboxRunRead,
     status_code=202,
 )
 async def trigger_sandbox_run(
-    pipeline_id: uuid.UUID,
+    run_id: uuid.UUID,
     task_id: int,
     body: SandboxRunCreate,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
 ):
-    """Trigger a sandbox test run for a pipeline task (async, returns 202)."""
-    # Validate pipeline and task exist
-    pipeline = await db.get(Pipeline, pipeline_id)
-    if not pipeline:
-        raise HTTPException(status_code=404, detail="Pipeline not found")
+    """Trigger a sandbox test run for a run task (async, returns 202)."""
+    # Validate run and task exist
+    run = await db.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
 
     ptask_result = await db.execute(
-        select(PipelineTask).where(
-            PipelineTask.id == task_id,
-            PipelineTask.pipeline_id == pipeline_id,
+        select(RunTask).where(
+            RunTask.id == task_id,
+            RunTask.run_id == run_id,
         )
     )
     ptask = ptask_result.scalars().first()
     if not ptask:
-        raise HTTPException(status_code=404, detail="Pipeline task not found")
+        raise HTTPException(status_code=404, detail="Run task not found")
 
     # Check sandbox availability
     if not settings.sandbox_enabled:
@@ -129,8 +129,8 @@ async def trigger_sandbox_run(
 
     # Determine worktree path from repository
     worktree_path = "/workspace"
-    if pipeline.repository_id:
-        repo = await db.get(Repository, pipeline.repository_id)
+    if run.repository_id:
+        repo = await db.get(Repository, run.repository_id)
         if repo:
             worktree_path = repo.local_path
 
@@ -140,9 +140,9 @@ async def trigger_sandbox_run(
     sandbox_id = _uuid.uuid4().hex[:12]
     run = SandboxRun(
         sandbox_id=sandbox_id,
-        pipeline_id=pipeline_id,
-        pipeline_task_id=task_id,
-        team_id=pipeline.team_id,
+        run_id=run_id,
+        run_task_id=task_id,
+        team_id=run.team_id,
         test_cmd=body.test_cmd,
         image=body.image,
         started_at=datetime.now(timezone.utc),

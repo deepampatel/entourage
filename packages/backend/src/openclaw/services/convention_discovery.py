@@ -1,6 +1,6 @@
 """Convention discovery — scan a repo for patterns and conventions.
 
-Before planning a pipeline, we scan the target repository to discover
+Before planning a run, we scan the target repository to discover
 existing conventions: test frameworks, code style tools, build systems,
 and architectural patterns. These are injected into the planning prompt
 so the LLM generates tasks that follow the repo's existing patterns.

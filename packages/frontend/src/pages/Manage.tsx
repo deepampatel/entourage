@@ -291,7 +291,7 @@ export function Manage({
           ) : (
             <div className="manage-empty-state">
               <p className="manage-empty">No teams yet</p>
-              <p className="form-help">Create a team to start adding agents that will execute your pipelines.</p>
+              <p className="form-help">Create a team to start adding agents that will execute your runs.</p>
             </div>
           )}
 

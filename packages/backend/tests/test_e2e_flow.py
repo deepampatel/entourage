@@ -68,7 +68,7 @@ async def test_full_lifecycle_via_api(client, org, team, agents):
     2. Agent assignment
     3. Human-in-the-loop (ask_human → respond)
     4. Code review (request → approve)
-    5. Status transitions through the full pipeline
+    5. Status transitions through the full lifecycle
     6. Event sourcing (verify audit trail)
     """
     manager, engineer = agents

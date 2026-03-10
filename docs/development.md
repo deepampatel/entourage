@@ -99,10 +99,10 @@ tests/
   test_dispatch_api.py             Phase 6: dispatch status, PG triggers (8 tests)
   test_auth_api.py                 Phase 9: register, login, JWT, API keys (16 tests)
   test_webhooks_settings_api.py    Phase 10: webhooks, settings (19 tests)
-  test_pipelines_api.py            Pipelines: CRUD, lifecycle, task graph (35 tests)
+  test_run_service.py              Runs: CRUD, lifecycle, task graph (35 tests)
   test_planner_service.py          Planner: AI + template fallback (18 tests)
   test_execution_loop.py           Execution loop: dispatch, retry, budget (42 tests)
-  test_pipeline_resume.py          Pipeline resume + recovery (12 tests)
+  test_run_resume.py            Run resume + recovery (12 tests)
   test_sandbox_integration.py      Sandbox: isolation, resource limits (15 tests)
   test_task_retry.py               Task retry: backoff, max attempts (11 tests)
   test_e2e_lifecycle.py            Full lifecycle integration test (1 test)
@@ -256,9 +256,9 @@ openclaw/
 │   │   │   │   ├── human_loop.py       Human request lifecycle
 │   │   │   │   ├── review_service.py   Reviews + merge jobs
 │   │   │   │   ├── webhook_service.py  Webhook CRUD + event processing
-│   │   │   │   ├── pipeline_service.py Pipeline CRUD + lifecycle
+│   │   │   │   ├── run_service.py Run CRUD + lifecycle
 │   │   │   │   ├── planner_service.py  AI + template task planning
-│   │   │   │   └── execution_loop.py   Pipeline execution + dispatch
+│   │   │   │   └── execution_loop.py   Run execution + dispatch
 │   │   │   ├── events/
 │   │   │   │   ├── store.py            Append-only EventStore
 │   │   │   │   └── types.py            Event type constants (30+ types)
@@ -266,7 +266,7 @@ openclaw/
 │   │   │   │   ├── runner.py            AgentRunner (DI-ready)
 │   │   │   │   └── adapters/            Claude Code, Codex, Aider
 │   │   │   ├── cli/
-│   │   │   │   └── main.py              CLI entry point (8 commands + pipeline group)
+│   │   │   │   └── main.py              CLI entry point (8 commands + run group)
 │   │   │   └── schemas/
 │   │   │       ├── team.py             Pydantic models (request/response)
 │   │   │       ├── task.py

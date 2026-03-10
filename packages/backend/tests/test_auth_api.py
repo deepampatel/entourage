@@ -178,7 +178,7 @@ async def test_refresh_with_access_token_fails(client):
 async def test_me_with_token(unauthenticated_client):
     """Access /me with valid JWT token.
 
-    Learn: Uses unauthenticated_client so the real JWT auth pipeline runs
+    Learn: Uses unauthenticated_client so the real JWT auth flow runs
     (no get_current_user mock override). This tests the full flow:
     register → login → use JWT → /me returns user info.
     """
@@ -294,7 +294,7 @@ async def test_revoke_api_key(client):
 async def test_api_key_auth(unauthenticated_client):
     """Authenticate with API key via x-api-key header.
 
-    Learn: Uses unauthenticated_client so the real auth pipeline runs.
+    Learn: Uses unauthenticated_client so the real auth flow runs.
     First registers+logs in a user to get a JWT (needed for protected
     org creation). Then creates an API key and verifies /me works with it.
     """

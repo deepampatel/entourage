@@ -136,9 +136,9 @@ def client(self):
     return self._client
 ```
 
-### Pipeline Execution Loop
+### Run Execution Loop
 
-The `ExecutionLoop` manages the full pipeline lifecycle: DRAFT → PLANNING → AWAITING_PLAN_APPROVAL → EXECUTING → REVIEWING → DONE. It handles task dispatch, agent supervision, retry logic with backoff, and progress tracking — all with budget enforcement and graceful shutdown.
+The `ExecutionLoop` manages the full run lifecycle: DRAFT → PLANNING → AWAITING_PLAN_APPROVAL → EXECUTING → REVIEWING → DONE. It handles task dispatch, agent supervision, retry logic with backoff, and progress tracking — all with budget enforcement and graceful shutdown.
 
 ## Tech Stack
 

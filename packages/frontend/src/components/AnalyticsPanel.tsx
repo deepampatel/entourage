@@ -191,14 +191,14 @@ export function AgentEfficiencyTable({ agents }: AgentEfficiencyTableProps) {
   );
 }
 
-// ─── Pipeline Success Gauge ──────────────────────────────────
+// ─── Run Success Gauge ──────────────────────────────────
 
-interface PipelineSuccessGaugeProps {
+interface RunSuccessGaugeProps {
   rate: number;
   label: string;
 }
 
-export function PipelineSuccessGauge({ rate, label }: PipelineSuccessGaugeProps) {
+export function RunSuccessGauge({ rate, label }: RunSuccessGaugeProps) {
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (rate / 100) * circumference;

@@ -1,24 +1,24 @@
-/* ─── Pipelines Page ───────────────────────────────────── */
+/* ─── Runs Page ───────────────────────────────────── */
 
-.pipelines-page {
+.runs-page {
   padding: 0;
 }
 
-.pipelines-header {
+.runs-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 1.5rem;
 }
 
-.pipelines-header h1 {
+.runs-header h1 {
   margin: 0;
   font-size: 1.5rem;
 }
 
 /* ─── Filters ──────────────────────────────────────────── */
 
-.pipeline-filters {
+.run-filters {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1.5rem;
@@ -46,17 +46,17 @@
   color: #fff;
 }
 
-/* ─── Pipeline List ────────────────────────────────────── */
+/* ─── Run List ────────────────────────────────────── */
 
-.pipeline-list {
+.run-list {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-/* ─── Pipeline Card ────────────────────────────────────── */
+/* ─── Run Card ────────────────────────────────────── */
 
-.pipeline-card {
+.run-card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -65,28 +65,28 @@
   transition: border-color 0.15s;
 }
 
-.pipeline-card:hover {
+.run-card:hover {
   border-color: var(--accent);
 }
 
-.pipeline-card-header {
+.run-card-header {
   margin-bottom: 0.75rem;
 }
 
-.pipeline-card-title {
+.run-card-title {
   display: flex;
   align-items: center;
   gap: 0.75rem;
   margin-bottom: 0.25rem;
 }
 
-.pipeline-card-title h3 {
+.run-card-title h3 {
   margin: 0;
   font-size: 1rem;
   font-weight: 600;
 }
 
-.pipeline-status-badge {
+.run-status-badge {
   display: inline-block;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
@@ -98,7 +98,7 @@
   white-space: nowrap;
 }
 
-.pipeline-intent {
+.run-intent {
   margin: 0.25rem 0 0;
   font-size: 0.85rem;
   color: var(--text-secondary);
@@ -107,7 +107,7 @@
 
 /* ─── Cost Bar ─────────────────────────────────────────── */
 
-.pipeline-card-meta {
+.run-card-meta {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -166,13 +166,13 @@
 
 /* ─── Action Buttons ───────────────────────────────────── */
 
-.pipeline-actions {
+.run-actions {
   display: flex;
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
 
-.pipeline-btn {
+.run-btn {
   padding: 0.4rem 0.8rem;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -183,70 +183,70 @@
   transition: all 0.15s;
 }
 
-.pipeline-btn:hover {
+.run-btn:hover {
   background: var(--border);
 }
 
-.pipeline-btn:disabled {
+.run-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.pipeline-btn-primary {
+.run-btn-primary {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
 }
 
-.pipeline-btn-primary:hover {
+.run-btn-primary:hover {
   opacity: 0.9;
 }
 
-.pipeline-btn-success {
+.run-btn-success {
   background: #10b981;
   border-color: #10b981;
   color: #fff;
 }
 
-.pipeline-btn-success:hover {
+.run-btn-success:hover {
   background: #059669;
 }
 
-.pipeline-btn-danger {
+.run-btn-danger {
   background: #ef4444;
   border-color: #ef4444;
   color: #fff;
 }
 
-.pipeline-btn-danger:hover {
+.run-btn-danger:hover {
   background: #dc2626;
 }
 
-.pipeline-btn-secondary {
+.run-btn-secondary {
   background: #374151;
   border-color: #4b5563;
   color: #d1d5db;
 }
 
-.pipeline-btn-secondary:hover {
+.run-btn-secondary:hover {
   background: #4b5563;
 }
 
 /* ─── Task Graph (expanded) ────────────────────────────── */
 
-.pipeline-tasks-list {
+.run-tasks-list {
   margin-top: 1rem;
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
 
-.pipeline-tasks-list h4 {
+.run-tasks-list h4 {
   margin: 0 0 0.75rem;
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
 
-.pipeline-task-row {
+.run-task-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -255,11 +255,11 @@
   border-bottom: 1px solid var(--border);
 }
 
-.pipeline-task-row:last-child {
+.run-task-row:last-child {
   border-bottom: none;
 }
 
-.pipeline-task-idx {
+.run-task-idx {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -273,7 +273,7 @@
   flex-shrink: 0;
 }
 
-.pipeline-task-complexity {
+.run-task-complexity {
   padding: 0.1rem 0.4rem;
   border-radius: 3px;
   font-size: 0.7rem;
@@ -282,12 +282,12 @@
   flex-shrink: 0;
 }
 
-.pipeline-task-complexity[data-complexity="S"] { color: #10b981; }
-.pipeline-task-complexity[data-complexity="M"] { color: #3b82f6; }
-.pipeline-task-complexity[data-complexity="L"] { color: #f59e0b; }
-.pipeline-task-complexity[data-complexity="XL"] { color: #ef4444; }
+.run-task-complexity[data-complexity="S"] { color: #10b981; }
+.run-task-complexity[data-complexity="M"] { color: #3b82f6; }
+.run-task-complexity[data-complexity="L"] { color: #f59e0b; }
+.run-task-complexity[data-complexity="XL"] { color: #ef4444; }
 
-.pipeline-task-title {
+.run-task-title {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -295,21 +295,21 @@
   white-space: nowrap;
 }
 
-.pipeline-task-status {
+.run-task-status {
   font-size: 0.75rem;
   font-weight: 500;
   flex-shrink: 0;
 }
 
-.pipeline-task-deps {
+.run-task-deps {
   font-size: 0.7rem;
   color: var(--text-secondary);
   flex-shrink: 0;
 }
 
-/* ─── Create Pipeline Form ─────────────────────────────── */
+/* ─── Create Run Form ─────────────────────────────── */
 
-.create-pipeline-form {
+.create-run-form {
   background: var(--card-bg);
   border: 1px solid var(--accent);
   border-radius: 8px;
@@ -317,13 +317,13 @@
   margin-bottom: 1.5rem;
 }
 
-.create-pipeline-form h3 {
+.create-run-form h3 {
   margin: 0 0 1rem;
   font-size: 1rem;
 }
 
-.create-pipeline-form input[type="text"],
-.create-pipeline-form textarea {
+.create-run-form input[type="text"],
+.create-run-form textarea {
   width: 100%;
   padding: 0.5rem 0.75rem;
   border: 1px solid var(--border);
@@ -336,13 +336,13 @@
   box-sizing: border-box;
 }
 
-.create-pipeline-form input[type="text"]:focus,
-.create-pipeline-form textarea:focus {
+.create-run-form input[type="text"]:focus,
+.create-run-form textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
 
-.create-pipeline-form label {
+.create-run-form label {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -351,7 +351,7 @@
   margin-bottom: 0.75rem;
 }
 
-.create-pipeline-form label input[type="number"] {
+.create-run-form label input[type="number"] {
   width: 100px;
   padding: 0.35rem 0.5rem;
   border: 1px solid var(--border);
@@ -374,19 +374,19 @@
 
 /* ─── Contracts Section ───────────────────────────────── */
 
-.pipeline-contracts {
+.run-contracts {
   margin-top: 1rem;
   border-top: 1px solid var(--border);
   padding-top: 0.75rem;
 }
 
-.pipeline-contracts h4 {
+.run-contracts h4 {
   margin: 0 0 0.5rem;
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
 
-.pipeline-contract-row {
+.run-contract-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -463,13 +463,13 @@
   background: rgba(139, 92, 246, 0.12);
 }
 
-.pipeline-task-row.parallel-running {
+.run-task-row.parallel-running {
   border-left: 2px solid #8b5cf6;
   padding-left: 0.5rem;
   background: rgba(139, 92, 246, 0.04);
 }
 
-.pipeline-task-retry {
+.run-task-retry {
   font-size: 0.7rem;
   color: #f59e0b;
   font-weight: 600;
@@ -479,7 +479,7 @@
   border-radius: 3px;
 }
 
-.pipeline-task-agent {
+.run-task-agent {
   font-size: 0.7rem;
   color: var(--text-secondary);
   flex-shrink: 0;
@@ -491,15 +491,15 @@
 
 /* ─── Sandbox ──────────────────────────────────────────── */
 
-.pipeline-task-wrapper {
+.run-task-wrapper {
   border-bottom: 1px solid var(--border);
 }
 
-.pipeline-task-wrapper:last-child {
+.run-task-wrapper:last-child {
   border-bottom: none;
 }
 
-.pipeline-task-wrapper .pipeline-task-row {
+.run-task-wrapper .run-task-row {
   border-bottom: none;
 }
 

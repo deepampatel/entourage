@@ -17,8 +17,8 @@ class SandboxRunCreate(BaseModel):
 class SandboxRunRead(BaseModel):
     id: int
     sandbox_id: str
-    pipeline_id: Optional[uuid.UUID] = None
-    pipeline_task_id: Optional[int] = None
+    run_id: Optional[uuid.UUID] = None
+    run_task_id: Optional[int] = None
     team_id: uuid.UUID
     test_cmd: str
     exit_code: Optional[int] = None

@@ -16,13 +16,13 @@ def _make_mock_session_factory(mock_db):
     return factory
 
 
-def _make_ptask(
+def _make_rtask(
     id: int = 1,
     status: str = "in_progress",
     retry_count: int = 0,
     title: str = "Test Task",
 ):
-    """Create a mock PipelineTask for retry testing."""
+    """Create a mock RunTask for retry testing."""
     task = MagicMock()
     task.id = id
     task.status = status
@@ -39,7 +39,7 @@ class TestHandleTaskCompletion:
     @pytest.mark.asyncio
     async def test_success_marks_done(self):
         """Successful task is marked as done."""
-        mock_task = _make_ptask()
+        mock_task = _make_rtask()
 
         mock_db = AsyncMock()
         mock_db.get = AsyncMock(return_value=mock_task)
@@ -58,7 +58,7 @@ class TestHandleTaskCompletion:
                     new_callable=AsyncMock, return_value=None,
                 ):
                     await loop._handle_task_completion(
-                        "pipeline-1", 1, True, "team-1"
+                        "run-1", 1, True, "team-1"
                     )
 
         assert mock_task.status == "done"
@@ -67,7 +67,7 @@ class TestHandleTaskCompletion:
     @pytest.mark.asyncio
     async def test_retry_resets_to_todo(self):
         """Failed task with retries remaining is reset to todo."""
-        mock_task = _make_ptask(retry_count=0)
+        mock_task = _make_rtask(retry_count=0)
 
         mock_db = AsyncMock()
         mock_db.get = AsyncMock(return_value=mock_task)
@@ -83,7 +83,7 @@ class TestHandleTaskCompletion:
                 mock_settings.max_task_retries = 2
                 with patch.object(loop, "_publish_event", new_callable=AsyncMock):
                     await loop._handle_task_completion(
-                        "pipeline-1", 1, False, "team-1"
+                        "run-1", 1, False, "team-1"
                     )
 
         assert mock_task.status == "todo"
@@ -94,7 +94,7 @@ class TestHandleTaskCompletion:
     @pytest.mark.asyncio
     async def test_retry_increments_count(self):
         """Each retry increments the retry count."""
-        mock_task = _make_ptask(retry_count=1)
+        mock_task = _make_rtask(retry_count=1)
 
         mock_db = AsyncMock()
         mock_db.get = AsyncMock(return_value=mock_task)
@@ -110,7 +110,7 @@ class TestHandleTaskCompletion:
                 mock_settings.max_task_retries = 3
                 with patch.object(loop, "_publish_event", new_callable=AsyncMock):
                     await loop._handle_task_completion(
-                        "pipeline-1", 1, False, "team-1"
+                        "run-1", 1, False, "team-1"
                     )
 
         assert mock_task.retry_count == 2
@@ -119,7 +119,7 @@ class TestHandleTaskCompletion:
     @pytest.mark.asyncio
     async def test_max_retries_fails_task(self):
         """When max retries exceeded, task is marked failed."""
-        mock_task = _make_ptask(retry_count=2)
+        mock_task = _make_rtask(retry_count=2)
 
         mock_db = AsyncMock()
         mock_db.get = AsyncMock(return_value=mock_task)
@@ -135,7 +135,7 @@ class TestHandleTaskCompletion:
                 mock_settings.max_task_retries = 2
                 with patch.object(loop, "_publish_event", new_callable=AsyncMock):
                     await loop._handle_task_completion(
-                        "pipeline-1", 1, False, "team-1"
+                        "run-1", 1, False, "team-1"
                     )
 
         assert mock_task.status == "failed"

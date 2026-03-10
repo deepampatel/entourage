@@ -108,7 +108,7 @@ async def unauthenticated_client(db_session):
 
     Learn: The regular `client` fixture overrides get_current_user so that
     all protected routes pass. But auth tests (e.g. test_me_with_token)
-    need the real auth pipeline to validate real tokens. This fixture
+    need the real auth run to validate real tokens. This fixture
     only overrides get_db (for DB isolation) and leaves auth untouched.
     """
     async def override_get_db():

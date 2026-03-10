@@ -13,19 +13,19 @@ import anthropic
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from openclaw.config import settings
-from openclaw.db.models import Pipeline
+from openclaw.db.models import Run
 from openclaw.events.store import EventStore
-from openclaw.events.types import PIPELINE_PLAN_GENERATED, PIPELINE_STATUS_CHANGED
-from openclaw.services.pipeline_service import PipelineService
+from openclaw.events.types import RUN_PLAN_GENERATED, RUN_STATUS_CHANGED
+from openclaw.services.run_service import RunService
 
 logger = logging.getLogger("openclaw.services.planner")
 
 
 # ═══════════════════════════════════════════════════════════
-# Pipeline Templates
+# Run Templates
 # ═══════════════════════════════════════════════════════════
 
-PIPELINE_TEMPLATES: dict[str, dict[str, object]] = {
+RUN_TEMPLATES: dict[str, dict[str, object]] = {
     "feature": {
         "hints": (
             "Include DB migration if schema changes are needed, service layer, "
@@ -166,7 +166,7 @@ class PlannerService:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.events = EventStore(db)
-        self.pipeline_svc = PipelineService(db)
+        self.run_svc = RunService(db)
         self._client = None  # Lazy init — only when Claude is actually needed
 
     @property
@@ -183,45 +183,45 @@ class PlannerService:
             )
         return self._client
 
-    async def plan(self, pipeline_id: uuid.UUID) -> dict:
-        """Generate a TaskGraph for a pipeline's intent.
+    async def plan(self, run_id: uuid.UUID) -> dict:
+        """Generate a TaskGraph for a run's intent.
 
-        1. Load pipeline (get intent)
-        2. Transition pipeline → planning
+        1. Load run (get intent)
+        2. Transition run → planning
         3. Call Claude (or fallback to template) for TaskGraph
         4. Validate output
         5. Estimate cost per task
-        6. Store task_graph in pipeline, create PipelineTask rows
-        7. Transition pipeline → awaiting_plan_approval
+        6. Store task_graph in run, create RunTask rows
+        7. Transition run → awaiting_plan_approval
         """
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        if not pipeline:
-            raise ValueError(f"Pipeline {pipeline_id} not found")
+        run = await self.db.get(Run, run_id)
+        if not run:
+            raise ValueError(f"Run {run_id} not found")
 
         # Transition to planning (if still in draft)
-        if pipeline.status == "draft":
-            await self.pipeline_svc.change_status(pipeline_id, "planning")
+        if run.status == "draft":
+            await self.run_svc.change_status(run_id, "planning")
 
         # Extract template from metadata (if set during creation)
-        meta = pipeline.pipeline_metadata or {}
+        meta = run.run_metadata or {}
         template = meta.get("template")
 
         # Fallback to template-based planning when no API key
         if not settings.anthropic_api_key:
             logger.info(
                 "No ANTHROPIC_API_KEY set, using template-based planning "
-                "for pipeline %s", pipeline_id
+                "for run %s", run_id
             )
             return await self._plan_from_template(
-                pipeline_id, pipeline.intent, template
+                run_id, run.intent, template
             )
 
         # Build prompt and call Claude
         prompt = self._build_planning_prompt(
-            pipeline.intent, template=template
+            run.intent, template=template
         )
 
-        logger.info("Calling Claude to plan pipeline %s", pipeline_id)
+        logger.info("Calling Claude to plan run %s", run_id)
         response = await self.client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=4096,
@@ -237,28 +237,28 @@ class PlannerService:
         estimated_cost = self._estimate_cost(task_graph)
         task_graph["estimated_cost_usd"] = estimated_cost
 
-        # Store task graph + create PipelineTask rows
-        await self.pipeline_svc.set_task_graph(pipeline_id, task_graph)
+        # Store task graph + create RunTask rows
+        await self.run_svc.set_task_graph(run_id, task_graph)
 
-        # Update estimated cost on pipeline
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        pipeline.estimated_cost_usd = estimated_cost
+        # Update estimated cost on run
+        run = await self.db.get(Run, run_id)
+        run.estimated_cost_usd = estimated_cost
         await self.db.flush()
 
         # Record event
         await self.events.append(
-            stream_id=f"pipeline:{pipeline_id}",
-            event_type=PIPELINE_PLAN_GENERATED,
+            stream_id=f"run:{run_id}",
+            event_type=RUN_PLAN_GENERATED,
             data={
-                "pipeline_id": str(pipeline_id),
+                "run_id": str(run_id),
                 "task_count": len(task_graph.get("tasks", [])),
                 "estimated_cost_usd": estimated_cost,
             },
         )
 
         # Transition to awaiting approval
-        await self.pipeline_svc.change_status(
-            pipeline_id, "awaiting_plan_approval"
+        await self.run_svc.change_status(
+            run_id, "awaiting_plan_approval"
         )
 
         return task_graph
@@ -286,10 +286,10 @@ class PlannerService:
         ]
 
         # Inject template hints if a template is specified
-        if template and template in PIPELINE_TEMPLATES:
-            tmpl = PIPELINE_TEMPLATES[template]
+        if template and template in RUN_TEMPLATES:
+            tmpl = RUN_TEMPLATES[template]
             parts.append(
-                f"Pipeline template: {template}\n"
+                f"Run template: {template}\n"
                 f"Template guidelines: {tmpl['hints']}\n\n"
             )
 
@@ -435,14 +435,14 @@ class PlannerService:
 
     async def _plan_from_template(
         self,
-        pipeline_id: uuid.UUID,
+        run_id: uuid.UUID,
         intent: str,
         template: Optional[str] = None,
     ) -> dict:
         """Generate a task graph from templates without calling Claude.
 
         This enables the platform to work without an ANTHROPIC_API_KEY.
-        The generated tasks use the pipeline intent as their description.
+        The generated tasks use the run intent as their description.
         """
         import copy
 
@@ -459,20 +459,20 @@ class PlannerService:
         estimated_cost = self._estimate_cost(task_graph)
         task_graph["estimated_cost_usd"] = estimated_cost
 
-        # Store task graph + create PipelineTask rows
-        await self.pipeline_svc.set_task_graph(pipeline_id, task_graph)
+        # Store task graph + create RunTask rows
+        await self.run_svc.set_task_graph(run_id, task_graph)
 
-        # Update estimated cost on pipeline
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        pipeline.estimated_cost_usd = estimated_cost
+        # Update estimated cost on run
+        run = await self.db.get(Run, run_id)
+        run.estimated_cost_usd = estimated_cost
         await self.db.flush()
 
         # Record event
         await self.events.append(
-            stream_id=f"pipeline:{pipeline_id}",
-            event_type=PIPELINE_PLAN_GENERATED,
+            stream_id=f"run:{run_id}",
+            event_type=RUN_PLAN_GENERATED,
             data={
-                "pipeline_id": str(pipeline_id),
+                "run_id": str(run_id),
                 "task_count": len(tasks),
                 "estimated_cost_usd": estimated_cost,
                 "source": "template",
@@ -481,8 +481,8 @@ class PlannerService:
         )
 
         # Transition to awaiting approval
-        await self.pipeline_svc.change_status(
-            pipeline_id, "awaiting_plan_approval"
+        await self.run_svc.change_status(
+            run_id, "awaiting_plan_approval"
         )
 
         return task_graph

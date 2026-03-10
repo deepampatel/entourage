@@ -38,10 +38,10 @@ async def team(client, org):
 
 
 @pytest.fixture
-async def draft_pipeline(client, team):
-    """A pipeline in draft status ready for planning."""
+async def draft_run(client, team):
+    """A run in draft status ready for planning."""
     resp = await client.post(
-        f"/api/v1/teams/{team['id']}/pipelines",
+        f"/api/v1/teams/{team['id']}/runs",
         json={
             "title": "Add search feature",
             "intent": "Add full-text search with Elasticsearch integration",
@@ -139,9 +139,9 @@ async def test_build_planning_prompt():
 
 
 @pytest.mark.asyncio
-async def test_plan_generates_task_graph(client, draft_pipeline, db_session):
-    """PlannerService.plan() generates a task graph and transitions pipeline."""
-    pipeline_id = uuid.UUID(draft_pipeline["id"])
+async def test_plan_generates_task_graph(client, draft_run, db_session):
+    """PlannerService.plan() generates a task graph and transitions run."""
+    run_id = uuid.UUID(draft_run["id"])
 
     mock_tasks = [
         {
@@ -177,7 +177,7 @@ async def test_plan_generates_task_graph(client, draft_pipeline, db_session):
             MockAnthropic.return_value = mock_client
 
             planner = PlannerService(db_session)
-            result = await planner.plan(pipeline_id)
+            result = await planner.plan(run_id)
 
     assert "tasks" in result
     assert len(result["tasks"]) == 2
@@ -186,13 +186,13 @@ async def test_plan_generates_task_graph(client, draft_pipeline, db_session):
         COMPLEXITY_COST_ESTIMATE["S"] + COMPLEXITY_COST_ESTIMATE["M"], 2
     )
 
-    # Verify pipeline transitioned to awaiting_plan_approval
-    resp = await client.get(f"/api/v1/pipelines/{draft_pipeline['id']}")
+    # Verify run transitioned to awaiting_plan_approval
+    resp = await client.get(f"/api/v1/runs/{draft_run['id']}")
     assert resp.json()["status"] == "awaiting_plan_approval"
 
-    # Verify pipeline tasks were created
+    # Verify run tasks were created
     tasks_resp = await client.get(
-        f"/api/v1/pipelines/{draft_pipeline['id']}/tasks"
+        f"/api/v1/runs/{draft_run['id']}/tasks"
     )
     tasks = tasks_resp.json()
     assert len(tasks) == 2

@@ -13,7 +13,7 @@ You → Chat with Claude → Hope it does the right thing → Manually check eve
 With Entourage:
 
 ```
-You → Create tasks → Agents work in governed pipelines → You review and approve
+You → Create tasks → Agents work in governed runs → You review and approve
 ```
 
 The difference: **structure**. Tasks have states. Code has reviews. Budgets have limits. Every action has an audit trail.
@@ -29,8 +29,8 @@ entourage status
 # What tasks are in progress?
 entourage tasks --status in_progress
 
-# Check pipeline progress
-entourage pipeline list
+# Check run progress
+entourage run list
 ```
 
 Or query the API directly:
@@ -58,30 +58,30 @@ The agent gets unblocked and continues working.
 
 ## Mid-morning: Create new work
 
-A bug report comes in. If you've set up [webhook automation](webhook-automation.md), the GitHub issue automatically becomes a task with the right priority (mapped from labels). Otherwise, use the pipeline CLI:
+A bug report comes in. If you've set up [webhook automation](webhook-automation.md), the GitHub issue automatically becomes a task with the right priority (mapped from labels). Otherwise, use the run CLI:
 
-### The fast way — `pipeline go`
+### The fast way — `run`
 
 ```bash
-entourage pipeline go "Fix: login endpoint returns 500 for special characters in email"
+entourage run "Fix: login endpoint returns 500 for special characters in email"
 ```
 
-One command: creates a pipeline → plans tasks → approves → starts execution. The template planner will auto-detect this as a bugfix and generate appropriate tasks (diagnose → fix → test).
+One command: creates a run → plans tasks → approves → starts execution. The template planner will auto-detect this as a bugfix and generate appropriate tasks (diagnose → fix → test).
 
 ### The controlled way — step by step
 
 ```bash
-# Create the pipeline with a bugfix template
-entourage pipeline create "Fix login 500 for special chars in email" --template bugfix
+# Create the run with a bugfix template
+entourage run create "Fix login 500 for special chars in email" --template bugfix
 
 # Plan the tasks
-entourage pipeline plan {pipeline_id}
+entourage run plan {run_id}
 
 # Review the task graph before approving
-entourage pipeline tasks {pipeline_id}
+entourage run tasks {run_id}
 
 # Approve and start execution
-entourage pipeline approve {pipeline_id}
+entourage run approve {run_id}
 ```
 
 ### Or create a single task manually
@@ -115,9 +115,9 @@ The agent picks it up through the MCP dispatcher. It will:
 All of this is tracked. You can check progress anytime:
 
 ```bash
-# Pipeline-level progress (all tasks at a glance)
-entourage pipeline status {pipeline_id}
-entourage pipeline tasks {pipeline_id}
+# Run-level progress (all tasks at a glance)
+entourage run status {run_id}
+entourage run tasks {run_id}
 
 # Individual task status + event history
 curl http://localhost:8000/api/v1/tasks/{task_id}/events

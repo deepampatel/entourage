@@ -19,13 +19,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from openclaw.config import settings
-from openclaw.db.models import Contract, Pipeline, PipelineTask
+from openclaw.db.models import Contract, Run, RunTask
 from openclaw.events.store import EventStore
 from openclaw.events.types import (
-    PIPELINE_CONTRACTS_GENERATED,
-    PIPELINE_CONTRACT_LOCKED,
+    RUN_CONTRACTS_GENERATED,
+    RUN_CONTRACT_LOCKED,
 )
-from openclaw.services.pipeline_service import PipelineService
+from openclaw.services.run_service import RunService
 
 logger = logging.getLogger("openclaw.services.contract_builder")
 
@@ -137,50 +137,50 @@ class ContractBuilder:
     def __init__(self, db: AsyncSession):
         self.db = db
         self.events = EventStore(db)
-        self.pipeline_svc = PipelineService(db)
+        self.run_svc = RunService(db)
         self.client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
     # ─── Public API ───────────────────────────────────────
 
     async def generate_contracts(
-        self, pipeline_id: uuid.UUID
+        self, run_id: uuid.UUID
     ) -> list[Contract]:
-        """Generate contracts from the pipeline's task_graph.
+        """Generate contracts from the run's task_graph.
 
-        1. Load pipeline and its task_graph
+        1. Load run and its task_graph
         2. Check if contracts are needed (tasks share boundaries)
-        3. Transition pipeline → contracting
+        3. Transition run → contracting
         4. Call Claude with CONTRACT_TOOL schema
         5. Create Contract rows in DB
-        6. Store raw contract set in Pipeline.contract_set JSONB
-        7. Transition pipeline → awaiting_plan_approval
+        6. Store raw contract set in Run.contract_set JSONB
+        7. Transition run → awaiting_plan_approval
         """
-        pipeline = await self.db.get(Pipeline, pipeline_id)
-        if not pipeline:
-            raise ValueError(f"Pipeline {pipeline_id} not found")
+        run = await self.db.get(Run, run_id)
+        if not run:
+            raise ValueError(f"Run {run_id} not found")
 
-        task_graph = pipeline.task_graph
+        task_graph = run.task_graph
         if not task_graph or not task_graph.get("tasks"):
-            raise ValueError(f"Pipeline {pipeline_id} has no task_graph")
+            raise ValueError(f"Run {run_id} has no task_graph")
 
         tasks_data = task_graph["tasks"]
 
         # Check if contracts are actually needed
         if not self._should_generate_contracts(tasks_data):
             logger.info(
-                "Pipeline %s: no inter-task boundaries, skipping contracts",
-                pipeline_id,
+                "Run %s: no inter-task boundaries, skipping contracts",
+                run_id,
             )
             return []
 
         # Transition to contracting
-        await self.pipeline_svc.change_status(pipeline_id, "contracting")
+        await self.run_svc.change_status(run_id, "contracting")
 
-        # Load pipeline tasks for context
+        # Load run tasks for context
         result = await self.db.execute(
-            select(PipelineTask)
-            .where(PipelineTask.pipeline_id == pipeline_id)
-            .order_by(PipelineTask.id)
+            select(RunTask)
+            .where(RunTask.run_id == run_id)
+            .order_by(RunTask.id)
         )
         ptasks = list(result.scalars().all())
 
@@ -188,7 +188,7 @@ class ContractBuilder:
         prompt = self._build_contract_prompt(tasks_data)
 
         # Call Claude
-        logger.info("Generating contracts for pipeline %s", pipeline_id)
+        logger.info("Generating contracts for run %s", run_id)
         response = await self.client.messages.create(
             model=settings.default_agent_model,
             max_tokens=4096,
@@ -204,13 +204,13 @@ class ContractBuilder:
         # Create Contract rows
         contract_rows: list[Contract] = []
         for c in raw_contracts:
-            # Map producer_task_index to pipeline_task_id
+            # Map producer_task_index to run_task_id
             producer_idx = c.get("producer_task_index", 0)
             ptask_id = ptasks[producer_idx].id if producer_idx < len(ptasks) else None
 
             row = Contract(
-                pipeline_id=pipeline_id,
-                pipeline_task_id=ptask_id,
+                run_id=run_id,
+                run_task_id=ptask_id,
                 contract_type=c["contract_type"],
                 name=c["name"],
                 specification=c["specification"],
@@ -218,16 +218,16 @@ class ContractBuilder:
             self.db.add(row)
             contract_rows.append(row)
 
-        # Store raw contract set on pipeline
-        pipeline.contract_set = {"contracts": raw_contracts}
-        flag_modified(pipeline, "contract_set")
+        # Store raw contract set on run
+        run.contract_set = {"contracts": raw_contracts}
+        flag_modified(run, "contract_set")
 
         # Record event
         await self.events.append(
-            stream_id=f"pipeline:{pipeline_id}",
-            event_type=PIPELINE_CONTRACTS_GENERATED,
+            stream_id=f"run:{run_id}",
+            event_type=RUN_CONTRACTS_GENERATED,
             data={
-                "pipeline_id": str(pipeline_id),
+                "run_id": str(run_id),
                 "contract_count": len(contract_rows),
             },
         )
@@ -235,14 +235,14 @@ class ContractBuilder:
         await self.db.commit()
 
         # Transition to awaiting_plan_approval
-        await self.pipeline_svc.change_status(
-            pipeline_id, "awaiting_plan_approval"
+        await self.run_svc.change_status(
+            run_id, "awaiting_plan_approval"
         )
 
         logger.info(
-            "Generated %d contracts for pipeline %s",
+            "Generated %d contracts for run %s",
             len(contract_rows),
-            pipeline_id,
+            run_id,
         )
         return contract_rows
 
@@ -263,10 +263,10 @@ class ContractBuilder:
         contract.locked_at = datetime.now(timezone.utc)
 
         await self.events.append(
-            stream_id=f"pipeline:{contract.pipeline_id}",
-            event_type=PIPELINE_CONTRACT_LOCKED,
+            stream_id=f"run:{contract.run_id}",
+            event_type=RUN_CONTRACT_LOCKED,
             data={
-                "pipeline_id": str(contract.pipeline_id),
+                "run_id": str(contract.run_id),
                 "contract_id": contract.id,
                 "contract_name": contract.name,
                 "agent_id": str(agent_id),
@@ -276,12 +276,12 @@ class ContractBuilder:
         return contract
 
     async def get_contracts(
-        self, pipeline_id: uuid.UUID
+        self, run_id: uuid.UUID
     ) -> list[Contract]:
-        """List all contracts for a pipeline."""
+        """List all contracts for a run."""
         result = await self.db.execute(
             select(Contract)
-            .where(Contract.pipeline_id == pipeline_id)
+            .where(Contract.run_id == run_id)
             .order_by(Contract.id)
         )
         return list(result.scalars().all())

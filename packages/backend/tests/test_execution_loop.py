@@ -1,4 +1,4 @@
-"""Tests for ExecutionLoop — serial pipeline task dispatch.
+"""Tests for ExecutionLoop — serial run task dispatch.
 
 Tests the execution loop's task ordering, dependency resolution,
 failure handling, and budget enforcement.
@@ -59,28 +59,28 @@ async def engineer_agent(client, team):
 
 
 @pytest.fixture
-async def executing_pipeline(client, team):
-    """Pipeline in 'executing' state with a task graph."""
-    # Create pipeline
+async def executing_run(client, team):
+    """Run in 'executing' state with a task graph."""
+    # Create run
     resp = await client.post(
-        f"/api/v1/teams/{team['id']}/pipelines",
+        f"/api/v1/teams/{team['id']}/runs",
         json={
             "title": "Build feature X",
             "intent": "Implement feature X end to end",
             "budget_limit_usd": 20.0,
         },
     )
-    pipeline = resp.json()
-    pid = pipeline["id"]
+    run = resp.json()
+    rid = run["id"]
 
     # Transition to planning
     await client.post(
-        f"/api/v1/pipelines/{pid}/status", json={"status": "planning"}
+        f"/api/v1/runs/{rid}/status", json={"status": "planning"}
     )
 
     # Set task graph with 2 tasks (task 1 depends on task 0)
     await client.post(
-        f"/api/v1/pipelines/{pid}/task-graph",
+        f"/api/v1/runs/{rid}/task-graph",
         json={
             "task_graph": {
                 "tasks": [
@@ -103,15 +103,15 @@ async def executing_pipeline(client, team):
         },
     )
 
-    # Transition to awaiting_plan_approval → executing
+    # Transition to awaiting_plan_approval -> executing
     await client.post(
-        f"/api/v1/pipelines/{pid}/status",
+        f"/api/v1/runs/{rid}/status",
         json={"status": "awaiting_plan_approval"},
     )
-    await client.post(f"/api/v1/pipelines/{pid}/approve-plan", json={})
+    await client.post(f"/api/v1/runs/{rid}/approve-plan", json={})
 
     # Re-fetch
-    resp = await client.get(f"/api/v1/pipelines/{pid}")
+    resp = await client.get(f"/api/v1/runs/{rid}")
     return resp.json()
 
 
@@ -202,10 +202,10 @@ def test_find_ready_task_all_done():
 
 @pytest.mark.asyncio
 async def test_execution_loop_completes(
-    client, executing_pipeline, engineer_agent, db_session
+    client, executing_run, engineer_agent, db_session
 ):
     """Execution loop runs all tasks and transitions to reviewing."""
-    pid = uuid.UUID(executing_pipeline["id"])
+    rid = uuid.UUID(executing_run["id"])
 
     with patch.object(
         ExecutionLoop, "_run_task", new_callable=AsyncMock, return_value=True
@@ -218,23 +218,23 @@ async def test_execution_loop_completes(
         "openclaw.services.execution_loop.settings"
     ) as mock_settings:
         mock_settings.task_polling_interval_seconds = 0
-        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_concurrent_run_tasks = 1
         mock_settings.max_task_retries = 0
         mock_settings.sandbox_enabled = False
 
         loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
-        result = await loop.run(pid)
+        result = await loop.run(rid)
 
     assert result["status"] == "reviewing"
     assert result["reason"] == "All tasks completed"
 
-    # Verify pipeline status
-    resp = await client.get(f"/api/v1/pipelines/{executing_pipeline['id']}")
+    # Verify run status
+    resp = await client.get(f"/api/v1/runs/{executing_run['id']}")
     assert resp.json()["status"] == "reviewing"
 
     # Verify tasks are all done
     tasks_resp = await client.get(
-        f"/api/v1/pipelines/{executing_pipeline['id']}/tasks"
+        f"/api/v1/runs/{executing_run['id']}/tasks"
     )
     tasks = tasks_resp.json()
     assert all(t["status"] == "done" for t in tasks)
@@ -242,10 +242,10 @@ async def test_execution_loop_completes(
 
 @pytest.mark.asyncio
 async def test_execution_loop_task_failure(
-    client, executing_pipeline, engineer_agent, db_session
+    client, executing_run, engineer_agent, db_session
 ):
-    """If a task fails, the pipeline is marked failed."""
-    pid = uuid.UUID(executing_pipeline["id"])
+    """If a task fails, the run is marked failed."""
+    rid = uuid.UUID(executing_run["id"])
 
     # First task succeeds, second fails
     call_count = 0
@@ -266,26 +266,26 @@ async def test_execution_loop_task_failure(
         "openclaw.services.execution_loop.settings"
     ) as mock_settings:
         mock_settings.task_polling_interval_seconds = 0
-        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_concurrent_run_tasks = 1
         mock_settings.max_task_retries = 0
         mock_settings.sandbox_enabled = False
 
         loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
-        result = await loop.run(pid)
+        result = await loop.run(rid)
 
     assert result["status"] == "failed"
 
-    # Verify pipeline status
-    resp = await client.get(f"/api/v1/pipelines/{executing_pipeline['id']}")
+    # Verify run status
+    resp = await client.get(f"/api/v1/runs/{executing_run['id']}")
     assert resp.json()["status"] == "failed"
 
 
 @pytest.mark.asyncio
 async def test_execution_loop_no_idle_agent(
-    client, executing_pipeline, db_session
+    client, executing_run, db_session
 ):
-    """Loop stops if pipeline is no longer executing (e.g. cancelled while waiting)."""
-    pid = uuid.UUID(executing_pipeline["id"])
+    """Loop stops if run is no longer executing (e.g. cancelled while waiting)."""
+    rid = uuid.UUID(executing_run["id"])
 
     call_count = 0
 
@@ -293,9 +293,9 @@ async def test_execution_loop_no_idle_agent(
         nonlocal call_count
         call_count += 1
         if call_count >= 2:
-            # Cancel the pipeline to exit the loop
+            # Cancel the run to exit the loop
             await client.post(
-                f"/api/v1/pipelines/{executing_pipeline['id']}/status",
+                f"/api/v1/runs/{executing_run['id']}/status",
                 json={"status": "cancelled"},
             )
         return []  # No idle agents
@@ -310,12 +310,12 @@ async def test_execution_loop_no_idle_agent(
         "openclaw.services.execution_loop.settings"
     ) as mock_settings:
         mock_settings.task_polling_interval_seconds = 0
-        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_concurrent_run_tasks = 1
         mock_settings.max_task_retries = 0
         mock_settings.sandbox_enabled = False
 
         loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
-        result = await loop.run(pid)
+        result = await loop.run(rid)
 
-    # Pipeline should have been cancelled
+    # Run should have been cancelled
     assert result["status"] in ("cancelled", "failed")

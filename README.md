@@ -24,11 +24,11 @@
 ## The 30-second pitch
 
 ```bash
-entourage pipeline go "Add rate limiting middleware to all API routes"
+entourage run "Add rate limiting middleware to all API routes"
 ```
 
 That single command:
-1. **Creates** a pipeline from your intent
+1. **Creates** a run from your intent
 2. **Plans** a task graph (AI-generated or template-based — works without an API key)
 3. **Dispatches** agents to work in parallel, in isolated git worktrees
 4. **Pauses** when agents hit ambiguity — they ask you, not guess
@@ -43,7 +43,7 @@ You should. Entourage doesn't replace your coding agent — it gives it an engin
 
 | | Solo agent | With Entourage |
 |:--|:-----------|:---------------|
-| **Work intake** | Copy-paste into chat | `pipeline go "intent"` → task graph → execution |
+| **Work intake** | Copy-paste into chat | `run "intent"` → task graph → execution |
 | **Coordination** | One agent, one thread | Multiple agents working in parallel across tasks |
 | **Memory** | Context window only | Persistent tasks, events, sessions — survives restarts |
 | **Safety** | Hope for the best | Budget caps, state machine, human checkpoints |
@@ -63,19 +63,19 @@ You should. Entourage doesn't replace your coding agent — it gives it an engin
 <img src="docs/assets/screenshot-dashboard.png" alt="Dashboard" width="100%" />
 </td>
 <td width="50%">
-<strong>Pipelines</strong> — Create, plan, approve, and monitor execution
+<strong>Runs</strong> — Create, plan, approve, and monitor execution
 <br /><br />
-<img src="docs/assets/screenshot-pipelines.png" alt="Pipelines" width="100%" />
+<img src="docs/assets/screenshot-pipelines.png" alt="Runs" width="100%" />
 </td>
 </tr>
 <tr>
 <td width="50%">
 <strong>Task Graph</strong> — Dependency DAG with complexity ratings and live status
 <br /><br />
-<img src="docs/assets/screenshot-pipeline-detail.png" alt="Pipeline Detail" width="100%" />
+<img src="docs/assets/screenshot-pipeline-detail.png" alt="Run Detail" width="100%" />
 </td>
 <td width="50%">
-<strong>Analytics</strong> — Pipeline health, cost trends, agent efficiency
+<strong>Analytics</strong> — Run health, cost trends, agent efficiency
 <br /><br />
 <img src="docs/assets/screenshot-analytics.png" alt="Analytics" width="100%" />
 </td>
@@ -96,8 +96,8 @@ You say "Add rate limiting"
          │
          ▼
 ┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
-│  Pipeline CLI   │────▶│  Task Planner    │────▶│  Execution     │
-│  pipeline go    │     │  AI or template  │     │  Loop          │
+│  Run CLI        │────▶│  Task Planner    │────▶│  Execution     │
+│  entourage run  │     │  AI or template  │     │  Loop          │
 └─────────────────┘     └──────────────────┘     └───────┬────────┘
                                                          │
                               ┌───────────────────────────┼────────────────┐
@@ -141,7 +141,7 @@ npm install && npm run dev        # http://localhost:5173
 # 5. Ship something
 cd packages/backend
 uv run entourage login
-uv run entourage pipeline go "Add a healthcheck endpoint at /health"
+uv run entourage run "Add a healthcheck endpoint at /health"
 ```
 
 > **Prerequisites:** Docker Desktop, Python 3.12+ with [uv](https://docs.astral.sh/uv/), Node.js 18+
@@ -154,11 +154,11 @@ uv run entourage pipeline go "Add a healthcheck endpoint at /health"
 <tr>
 <td width="50%">
 
-**Pipeline-driven execution**
+**Run-driven execution**
 - Intent → task graph → parallel execution → review → merge
 - AI planner decomposes work into dependency DAGs
 - Template fallback when no AI provider is configured
-- `pipeline go` one-liner or step-by-step control
+- `entourage run` one-liner or step-by-step control
 
 **Governed task workflow**
 - 7-state machine with enforced transitions
@@ -197,20 +197,22 @@ uv run entourage pipeline go "Add a healthcheck endpoint at /health"
 ## CLI
 
 ```bash
-# Pipeline lifecycle (the main workflow)
-entourage pipeline go INTENT         # One-liner: create → plan → approve → execute
-entourage pipeline list              # List all pipelines for the current team
-entourage pipeline create INTENT     # Create a new pipeline (--template, --budget)
-entourage pipeline status ID         # Show pipeline status, tasks, and progress
-entourage pipeline plan ID           # Start AI/template planning for a pipeline
-entourage pipeline approve ID        # Approve the plan and start execution
-entourage pipeline tasks ID          # Show task graph with dependencies
+# Run lifecycle (the main workflow)
+entourage run INTENT                 # One-liner: create → plan → approve → execute
+entourage run list                   # List all runs for the current team
+entourage run create INTENT          # Create a new run (--template, --budget)
+entourage run status ID              # Show run status, tasks, and progress
+entourage run plan ID                # Start AI/template planning for a run
+entourage run approve ID             # Approve the plan and start execution
+entourage run tasks ID               # Show task graph with dependencies
+
+# Quick dispatch (single agent, no planning)
+entourage dispatch PROMPT            # Create task → assign → run agent directly
 
 # Team & agent management
 entourage status                     # Team overview (agents, tasks, requests)
 entourage agents                     # List agents and their current state
 entourage tasks [--status STATUS]    # List tasks with optional filter
-entourage run AGENT_ID [--task N]    # Dispatch an agent to work on a task
 entourage adapters                   # Show available adapters + readiness
 entourage respond REQUEST_ID MSG     # Respond to a human-in-the-loop request
 entourage login [--api-key KEY]      # Authenticate (JWT or API key)
@@ -237,7 +239,7 @@ entourage logout                     # Remove stored credentials
 | **Webhooks** | `create_webhook` `list_webhooks` `update_webhook` | 3 |
 | **Settings** | `get_team_settings` `update_team_settings` `get_team_conventions` `add_team_convention` | 4 |
 | **Orchestration** | `create_tasks_batch` `wait_for_task_completion` `list_team_agents` | 3 |
-| **Pipelines** | `create_pipeline` `get_pipeline` `list_pipelines` `plan_pipeline` `approve_pipeline` `get_pipeline_tasks` `cancel_pipeline` `retry_pipeline` | 8 |
+| **Runs** | `create_run` `get_run` `list_runs` `plan_run` `approve_run` `get_run_tasks` `cancel_run` `retry_run` | 8 |
 
 ## Agent adapters
 
@@ -260,7 +262,7 @@ packages/
   frontend/       React 19 + Vite 6 + TanStack Query
 ```
 
-15 database models, 8 Alembic migrations, 11 API routers, event sourcing throughout.
+15 database models, 9 Alembic migrations, 11 API routers, event sourcing throughout.
 
 **Key patterns:**
 - **Constructor injection** — `ExecutionLoop` and `AgentRunner` accept `session_factory` for full testability without monkeypatching
@@ -316,7 +318,7 @@ python examples/batch_orchestration.py  # DAG decomposition + 4 specialist agent
 | 5-8 | Core: real-time dashboard, dispatch, human-in-the-loop, code review | ✅ |
 | 9-12 | Production: auth, webhooks, CLI, agent adapters (Claude Code, Codex, Aider) | ✅ |
 | 13-17 | Polish: merge worker, multi-agent orchestration, E2E tests, full docs | ✅ |
-| 18-19 | Architecture: UX overhaul, DI refactor, pipeline CLI, template planner | ✅ |
+| 18-19 | Architecture: UX overhaul, DI refactor, run CLI, template planner | ✅ |
 | 20 | Project config (`ENTOURAGE.md` in-repo workflow policy) | 🔜 |
 | 21 | Issue tracker integration (Linear, GitHub Issues) | 🔜 |
 | 22 | Proof-of-work validation (CI status, test results before review) | 🔜 |

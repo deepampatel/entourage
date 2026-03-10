@@ -1,6 +1,6 @@
 """Agent memory manager — persistent reflections and feedback across tasks.
 
-Each agent accumulates learning over its pipeline lifetime via two files
+Each agent accumulates learning over its run lifetime via two files
 stored in the worktree (or a fallback directory):
   - .openclaw/reflections.md  — self-written after each task completion
   - .openclaw/feedback.md     — reviewer/human feedback on the agent's work
@@ -10,7 +10,7 @@ giving it a running "memory" of what worked, what failed, and what to watch for.
 
 Learn: File-based memory is simple, portable, and git-friendly. It persists
 across sessions and can be inspected by humans. The memory files live inside
-the worktree so they're scoped to the pipeline's branch.
+the worktree so they're scoped to the run's branch.
 """
 
 import logging
@@ -32,7 +32,7 @@ class AgentMemoryManager:
     async def write_reflection(
         self,
         agent_id: str,
-        pipeline_task_id: int,
+        run_task_id: int,
         reflection: str,
         worktree_path: str,
     ) -> str:
@@ -47,7 +47,7 @@ class AgentMemoryManager:
         timestamp = datetime.now(timezone.utc).isoformat()
 
         entry = (
-            f"\n## Task #{pipeline_task_id} — {timestamp}\n"
+            f"\n## Task #{run_task_id} — {timestamp}\n"
             f"Agent: {agent_id}\n\n"
             f"{reflection}\n\n---\n"
         )
@@ -58,14 +58,14 @@ class AgentMemoryManager:
         logger.info(
             "Wrote reflection for agent %s, task %d",
             agent_id,
-            pipeline_task_id,
+            run_task_id,
         )
         return str(filepath)
 
     async def write_feedback(
         self,
         agent_id: str,
-        pipeline_task_id: int,
+        run_task_id: int,
         feedback: str,
         worktree_path: str,
     ) -> str:
@@ -80,7 +80,7 @@ class AgentMemoryManager:
         timestamp = datetime.now(timezone.utc).isoformat()
 
         entry = (
-            f"\n## Feedback for Task #{pipeline_task_id} — {timestamp}\n"
+            f"\n## Feedback for Task #{run_task_id} — {timestamp}\n"
             f"Agent: {agent_id}\n\n"
             f"{feedback}\n\n---\n"
         )
@@ -91,7 +91,7 @@ class AgentMemoryManager:
         logger.info(
             "Wrote feedback for agent %s, task %d",
             agent_id,
-            pipeline_task_id,
+            run_task_id,
         )
         return str(filepath)
 

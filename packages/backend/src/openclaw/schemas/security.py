@@ -13,7 +13,7 @@ class SecurityViolationRead(BaseModel):
     kind: str
     agent_id: str
     team_id: str
-    pipeline_task_id: Optional[int] = None
+    run_task_id: Optional[int] = None
     detail: str
     rule: str
     action: str

@@ -183,9 +183,9 @@ export interface MergeStatus {
   can_merge: boolean;
 }
 
-// ─── Pipelines ──────────────────────────────────────────
+// ─── Runs ───────────────────────────────────────────────
 
-export interface Pipeline {
+export interface Run {
   id: string;
   org_id: string;
   team_id: string;
@@ -205,9 +205,9 @@ export interface Pipeline {
   completed_at: string | null;
 }
 
-export interface PipelineTask {
+export interface RunTask {
   id: number;
-  pipeline_id: string;
+  run_id: string;
   agent_id: string | null;
   title: string;
   description: string;
@@ -228,8 +228,8 @@ export interface PipelineTask {
 
 export interface Contract {
   id: number;
-  pipeline_id: string;
-  pipeline_task_id: number | null;
+  run_id: string;
+  run_task_id: number | null;
   contract_type: string;
   name: string;
   specification: Record<string, unknown>;
@@ -240,7 +240,7 @@ export interface Contract {
   updated_at: string;
 }
 
-export type PipelineStatus =
+export type RunStatus =
   | "draft"
   | "planning"
   | "contracting"
@@ -253,7 +253,7 @@ export type PipelineStatus =
   | "failed"
   | "cancelled";
 
-export const PIPELINE_STATUS_LABELS: Record<PipelineStatus, string> = {
+export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
   draft: "Draft",
   planning: "Planning",
   contracting: "Generating Contracts",
@@ -267,7 +267,7 @@ export const PIPELINE_STATUS_LABELS: Record<PipelineStatus, string> = {
   cancelled: "Cancelled",
 };
 
-export const PIPELINE_STATUS_COLORS: Record<PipelineStatus, string> = {
+export const RUN_STATUS_COLORS: Record<RunStatus, string> = {
   draft: "#6b7280",
   planning: "#8b5cf6",
   contracting: "#a855f7",
@@ -283,8 +283,8 @@ export const PIPELINE_STATUS_COLORS: Record<PipelineStatus, string> = {
 
 // ─── Analytics ──────────────────────────────────────────
 
-export interface PipelineMetrics {
-  total_pipelines: number;
+export interface RunMetrics {
+  total_runs: number;
   completed: number;
   failed: number;
   cancelled: number;
@@ -293,7 +293,7 @@ export interface PipelineMetrics {
   avg_cost_usd: number;
   total_cost_usd: number;
   success_rate: number;
-  pipelines_by_status: Record<string, number>;
+  runs_by_status: Record<string, number>;
   period_start: string;
 }
 
@@ -332,8 +332,8 @@ export interface MonthlyRollup {
 export interface SandboxRun {
   id: number;
   sandbox_id: string;
-  pipeline_id: string | null;
-  pipeline_task_id: number | null;
+  run_id: string | null;
+  run_task_id: number | null;
   team_id: string;
   test_cmd: string;
   exit_code: number | null;

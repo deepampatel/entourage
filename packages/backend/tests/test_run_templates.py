@@ -1,25 +1,25 @@
-"""Tests for pipeline templates in PlannerService."""
+"""Tests for run templates in PlannerService."""
 
 import pytest
 
-from openclaw.services.planner_service import PIPELINE_TEMPLATES, PlannerService
+from openclaw.services.planner_service import RUN_TEMPLATES, PlannerService
 
 
-class TestPipelineTemplates:
+class TestRunTemplates:
     def test_feature_template_exists(self):
-        assert "feature" in PIPELINE_TEMPLATES
-        assert "hints" in PIPELINE_TEMPLATES["feature"]
-        assert "budget" in PIPELINE_TEMPLATES["feature"]
+        assert "feature" in RUN_TEMPLATES
+        assert "hints" in RUN_TEMPLATES["feature"]
+        assert "budget" in RUN_TEMPLATES["feature"]
 
     def test_bugfix_template_exists(self):
-        assert "bugfix" in PIPELINE_TEMPLATES
-        assert PIPELINE_TEMPLATES["bugfix"]["budget"] == 5.0
+        assert "bugfix" in RUN_TEMPLATES
+        assert RUN_TEMPLATES["bugfix"]["budget"] == 5.0
 
     def test_refactor_template_exists(self):
-        assert "refactor" in PIPELINE_TEMPLATES
+        assert "refactor" in RUN_TEMPLATES
 
     def test_migration_template_exists(self):
-        assert "migration" in PIPELINE_TEMPLATES
+        assert "migration" in RUN_TEMPLATES
 
 
 class TestBuildPlanningPromptWithTemplate:
@@ -34,13 +34,13 @@ class TestBuildPlanningPromptWithTemplate:
 
     def test_feature_hints_in_prompt(self):
         prompt = self._build("Add user auth", template="feature")
-        assert "Pipeline template: feature" in prompt
+        assert "Run template: feature" in prompt
         assert "DB migration" in prompt
         assert "Add user auth" in prompt
 
     def test_bugfix_hints_in_prompt(self):
         prompt = self._build("Fix login bug", template="bugfix")
-        assert "Pipeline template: bugfix" in prompt
+        assert "Run template: bugfix" in prompt
         assert "failing test" in prompt
 
     def test_refactor_hints_in_prompt(self):
@@ -49,12 +49,12 @@ class TestBuildPlanningPromptWithTemplate:
 
     def test_no_template_works(self):
         prompt = self._build("Do something")
-        assert "Pipeline template:" not in prompt
+        assert "Run template:" not in prompt
         assert "Do something" in prompt
 
     def test_unknown_template_ignored(self):
         prompt = self._build("Build spaceship", template="nonexistent")
-        assert "Pipeline template:" not in prompt
+        assert "Run template:" not in prompt
         assert "Build spaceship" in prompt
 
     def test_template_with_conventions(self):
@@ -62,6 +62,6 @@ class TestBuildPlanningPromptWithTemplate:
         prompt = self._build(
             "Add feature", template="feature", conventions=conventions
         )
-        assert "Pipeline template: feature" in prompt
+        assert "Run template: feature" in prompt
         assert "pytest" in prompt
         assert "Use pytest fixtures" in prompt

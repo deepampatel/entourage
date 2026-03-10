@@ -148,7 +148,7 @@ async def test_no_budget_alert_without_cap():
 
 @pytest.mark.asyncio
 async def test_failure_spike_detection():
-    """Alert after 3+ consecutive pipeline failures."""
+    """Alert after 3+ consecutive run failures."""
     db = AsyncMock()
 
     team = MagicMock()
@@ -171,7 +171,7 @@ async def test_failure_spike_detection():
 
 @pytest.mark.asyncio
 async def test_no_failure_spike_with_success():
-    """No alert when recent pipeline succeeded."""
+    """No alert when recent run succeeded."""
     db = AsyncMock()
 
     team = MagicMock()

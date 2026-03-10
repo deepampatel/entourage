@@ -1,6 +1,6 @@
-"""SandboxManager — Docker-based isolated test execution for pipeline tasks.
+"""SandboxManager — Docker-based isolated test execution for run tasks.
 
-Learn: After a pipeline task completes, the SandboxManager can run tests
+Learn: After a run task completes, the SandboxManager can run tests
 in a Docker container to verify correctness. The container mounts the
 worktree read-only with network disabled for isolation.
 
@@ -35,7 +35,7 @@ class SandboxResult:
 
 
 class SandboxManager:
-    """Manages Docker-based sandbox execution for pipeline test runs.
+    """Manages Docker-based sandbox execution for run test runs.
 
     Usage:
         mgr = SandboxManager()

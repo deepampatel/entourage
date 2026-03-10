@@ -1,4 +1,4 @@
-"""Pydantic schemas for Pipeline API requests and responses."""
+"""Pydantic schemas for Run API requests and responses."""
 
 import uuid
 from datetime import datetime
@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 # ─── Request schemas ──────────────────────────────────────
 
 
-class PipelineCreate(BaseModel):
+class RunCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     intent: str = Field(..., min_length=1)
     budget_limit_usd: float = Field(default=10.0, ge=0.01, le=1000.0)
@@ -18,7 +18,7 @@ class PipelineCreate(BaseModel):
     template: Optional[str] = None  # feature, bugfix, refactor, migration
 
 
-class PipelineUpdate(BaseModel):
+class RunUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=500)
     budget_limit_usd: Optional[float] = Field(None, ge=0.01, le=1000.0)
 
@@ -42,7 +42,7 @@ class ContractLock(BaseModel):
 # ─── Response schemas ─────────────────────────────────────
 
 
-class PipelineRead(BaseModel):
+class RunRead(BaseModel):
     id: uuid.UUID
     org_id: uuid.UUID
     team_id: uuid.UUID
@@ -65,9 +65,9 @@ class PipelineRead(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class PipelineTaskRead(BaseModel):
+class RunTaskRead(BaseModel):
     id: int
-    pipeline_id: uuid.UUID
+    run_id: uuid.UUID
     agent_id: Optional[uuid.UUID] = None
     title: str
     description: str
@@ -90,7 +90,7 @@ class PipelineTaskRead(BaseModel):
 
 class BudgetLedgerRead(BaseModel):
     id: uuid.UUID
-    pipeline_id: uuid.UUID
+    run_id: uuid.UUID
     budget_limit_usd: float
     estimated_cost_usd: float
     actual_cost_usd: float
@@ -103,7 +103,7 @@ class BudgetLedgerRead(BaseModel):
 
 class BudgetEntryRead(BaseModel):
     id: int
-    pipeline_task_id: Optional[int] = None
+    run_task_id: Optional[int] = None
     agent_id: Optional[uuid.UUID] = None
     model: str
     input_tokens: int
@@ -116,8 +116,8 @@ class BudgetEntryRead(BaseModel):
 
 class ContractRead(BaseModel):
     id: int
-    pipeline_id: uuid.UUID
-    pipeline_task_id: Optional[int] = None
+    run_id: uuid.UUID
+    run_task_id: Optional[int] = None
     contract_type: str
     name: str
     specification: dict

@@ -1,6 +1,6 @@
-"""Analytics service — read-only aggregation queries over pipelines, sessions, and costs.
+"""Analytics service — read-only aggregation queries over runs, sessions, and costs.
 
-Provides pipeline metrics, agent performance rankings, cost time-series,
+Provides run metrics, agent performance rankings, cost time-series,
 and monthly rollups. All queries are read-only — no state mutations.
 """
 
@@ -15,8 +15,8 @@ from openclaw.db.models import (
     Agent,
     BudgetEntry,
     BudgetLedger,
-    Pipeline,
-    PipelineTask,
+    Run,
+    RunTask,
     Session,
 )
 
@@ -40,27 +40,27 @@ class AnalyticsService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def get_pipeline_metrics(
+    async def get_run_metrics(
         self, team_id: uuid.UUID, period: str = "week"
     ) -> dict:
-        """Aggregate pipeline metrics for a team within a time period.
+        """Aggregate run metrics for a team within a time period.
 
         Returns total/completed/failed/cancelled counts, average duration,
-        average cost, total cost, success rate, and pipeline-by-status breakdown.
+        average cost, total cost, success rate, and run-by-status breakdown.
         """
         start = _period_start(period)
 
-        # Base query: pipelines for this team within the period
-        base = select(Pipeline).where(
-            Pipeline.team_id == team_id,
-            Pipeline.created_at >= start,
+        # Base query: runs for this team within the period
+        base = select(Run).where(
+            Run.team_id == team_id,
+            Run.created_at >= start,
         )
         result = await self.db.execute(base)
-        pipelines = list(result.scalars().all())
+        runs = list(result.scalars().all())
 
-        if not pipelines:
+        if not runs:
             return {
-                "total_pipelines": 0,
+                "total_runs": 0,
                 "completed": 0,
                 "failed": 0,
                 "cancelled": 0,
@@ -69,7 +69,7 @@ class AnalyticsService:
                 "avg_cost_usd": 0.0,
                 "total_cost_usd": 0.0,
                 "success_rate": 0.0,
-                "pipelines_by_status": {},
+                "runs_by_status": {},
                 "period_start": start.isoformat(),
             }
 
@@ -82,7 +82,7 @@ class AnalyticsService:
         durations: list[float] = []
         costs: list[float] = []
 
-        for p in pipelines:
+        for p in runs:
             status_counts[p.status] = status_counts.get(p.status, 0) + 1
 
             if p.status == "done":
@@ -99,7 +99,7 @@ class AnalyticsService:
 
             costs.append(float(p.actual_cost_usd or 0))
 
-        total = len(pipelines)
+        total = len(runs)
         terminal = completed + failed + cancelled
         success_rate = (completed / terminal * 100) if terminal > 0 else 0.0
         avg_duration = sum(durations) / len(durations) if durations else 0.0
@@ -107,7 +107,7 @@ class AnalyticsService:
         avg_cost = total_cost / total if total > 0 else 0.0
 
         return {
-            "total_pipelines": total,
+            "total_runs": total,
             "completed": completed,
             "failed": failed,
             "cancelled": cancelled,
@@ -116,7 +116,7 @@ class AnalyticsService:
             "avg_cost_usd": round(avg_cost, 6),
             "total_cost_usd": round(total_cost, 6),
             "success_rate": round(success_rate, 1),
-            "pipelines_by_status": status_counts,
+            "runs_by_status": status_counts,
             "period_start": start.isoformat(),
         }
 
@@ -148,11 +148,11 @@ class AnalyticsService:
             )
             sessions = list(sess_result.scalars().all())
 
-            # Get pipeline tasks assigned to this agent within the period
+            # Get run tasks assigned to this agent within the period
             task_result = await self.db.execute(
-                select(PipelineTask).where(
-                    PipelineTask.agent_id == agent.id,
-                    PipelineTask.created_at >= start,
+                select(RunTask).where(
+                    RunTask.agent_id == agent.id,
+                    RunTask.created_at >= start,
                 )
             )
             tasks = list(task_result.scalars().all())
@@ -272,21 +272,21 @@ class AnalyticsService:
 
         return points
 
-    async def get_pipeline_cost_detail(
-        self, pipeline_id: uuid.UUID
+    async def get_run_cost_detail(
+        self, run_id: uuid.UUID
     ) -> dict:
-        """Per-task cost breakdown for a pipeline.
+        """Per-task cost breakdown for a run.
 
-        Returns pipeline info plus per-task cost entries from BudgetEntry.
+        Returns run info plus per-task cost entries from BudgetEntry.
         """
-        # Get pipeline
+        # Get run
         result = await self.db.execute(
-            select(Pipeline).where(Pipeline.id == pipeline_id)
+            select(Run).where(Run.id == run_id)
         )
-        pipeline = result.scalars().first()
-        if not pipeline:
+        run = result.scalars().first()
+        if not run:
             return {
-                "pipeline_id": pipeline_id,
+                "run_id": run_id,
                 "title": "",
                 "total_cost_usd": 0.0,
                 "tasks": [],
@@ -295,14 +295,14 @@ class AnalyticsService:
         # Get budget entries grouped by task
         entry_result = await self.db.execute(
             select(BudgetEntry)
-            .where(BudgetEntry.pipeline_id == pipeline_id)
+            .where(BudgetEntry.run_id == run_id)
             .order_by(BudgetEntry.recorded_at)
         )
         entries = list(entry_result.scalars().all())
 
-        # Get pipeline tasks for names
+        # Get run tasks for names
         task_result = await self.db.execute(
-            select(PipelineTask).where(PipelineTask.pipeline_id == pipeline_id)
+            select(RunTask).where(RunTask.run_id == run_id)
         )
         tasks = {t.id: t for t in task_result.scalars().all()}
 
@@ -318,12 +318,12 @@ class AnalyticsService:
         # Group entries by task
         task_costs: dict[Optional[int], dict] = {}
         for entry in entries:
-            tid = entry.pipeline_task_id
+            tid = entry.run_task_id
             if tid not in task_costs:
                 task_obj = tasks.get(tid) if tid else None
                 task_costs[tid] = {
                     "task_id": tid,
-                    "title": task_obj.title if task_obj else "Pipeline overhead",
+                    "title": task_obj.title if task_obj else "Run overhead",
                     "cost_usd": 0.0,
                     "tokens_in": 0,
                     "tokens_out": 0,
@@ -341,9 +341,9 @@ class AnalyticsService:
             tc["cost_usd"] = round(tc["cost_usd"], 6)
 
         return {
-            "pipeline_id": pipeline_id,
-            "title": pipeline.title,
-            "total_cost_usd": round(float(pipeline.actual_cost_usd or 0), 6),
+            "run_id": run_id,
+            "title": run.title,
+            "total_cost_usd": round(float(run.actual_cost_usd or 0), 6),
             "tasks": list(task_costs.values()),
         }
 

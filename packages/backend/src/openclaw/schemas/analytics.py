@@ -7,10 +7,10 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
-class PipelineMetrics(BaseModel):
-    """Aggregate pipeline metrics for a time period."""
+class RunMetrics(BaseModel):
+    """Aggregate run metrics for a time period."""
 
-    total_pipelines: int = 0
+    total_runs: int = 0
     completed: int = 0
     failed: int = 0
     cancelled: int = 0
@@ -19,7 +19,7 @@ class PipelineMetrics(BaseModel):
     avg_cost_usd: float = 0.0
     total_cost_usd: float = 0.0
     success_rate: float = 0.0
-    pipelines_by_status: dict[str, int] = Field(default_factory=dict)
+    runs_by_status: dict[str, int] = Field(default_factory=dict)
     period_start: Optional[datetime] = None
 
 
@@ -59,10 +59,10 @@ class MonthlyRollup(BaseModel):
     total_tasks: int = 0
 
 
-class PipelineCostDetail(BaseModel):
-    """Per-task cost breakdown for a pipeline."""
+class RunCostDetail(BaseModel):
+    """Per-task cost breakdown for a run."""
 
-    pipeline_id: uuid.UUID
+    run_id: uuid.UUID
     title: str
     total_cost_usd: float = 0.0
     tasks: list[dict] = Field(default_factory=list)

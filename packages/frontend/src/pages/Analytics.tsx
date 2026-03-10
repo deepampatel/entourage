@@ -1,5 +1,5 @@
 /**
- * Analytics page — pipeline metrics, cost trends, agent efficiency, and monthly rollup.
+ * Analytics page — run metrics, cost trends, agent efficiency, and monthly rollup.
  *
  * Learn: All chart components are pure SVG (no external chart library).
  * Data is fetched via TanStack Query hooks with auto-refresh.
@@ -10,12 +10,12 @@ import { StatCard } from "../components/StatCard";
 import {
   CostTrendChart,
   AgentEfficiencyTable,
-  PipelineSuccessGauge,
+  RunSuccessGauge,
   MonthlyRollupTable,
   PeriodSelector,
 } from "../components/AnalyticsPanel";
 import {
-  usePipelineMetrics,
+  useRunMetrics,
   useAgentPerformance,
   useCostTimeseries,
   useMonthlyRollup,
@@ -33,7 +33,7 @@ export function Analytics({ teamId }: AnalyticsProps) {
   useTeamSocket(teamId);
 
   // Data hooks
-  const { data: metrics, isLoading: metricsLoading } = usePipelineMetrics(
+  const { data: metrics, isLoading: metricsLoading } = useRunMetrics(
     teamId,
     period
   );
@@ -60,8 +60,8 @@ export function Analytics({ teamId }: AnalyticsProps) {
       {/* Metric Cards Row */}
       <div className="stats-row">
         <StatCard
-          label="Total Pipelines"
-          value={metrics?.total_pipelines ?? 0}
+          label="Total Runs"
+          value={metrics?.total_runs ?? 0}
         />
         <StatCard
           label="Success Rate"
@@ -79,7 +79,7 @@ export function Analytics({ teamId }: AnalyticsProps) {
           value={`$${(metrics?.total_cost_usd ?? 0).toFixed(2)}`}
         />
         <StatCard
-          label="Avg Cost / Pipeline"
+          label="Avg Cost / Run"
           value={`$${(metrics?.avg_cost_usd ?? 0).toFixed(4)}`}
         />
       </div>
@@ -87,9 +87,9 @@ export function Analytics({ teamId }: AnalyticsProps) {
       {/* Success Gauges */}
       {metrics && !isLoading && (
         <section className="analytics-section">
-          <h2>Pipeline Health</h2>
+          <h2>Run Health</h2>
           <div className="analytics-gauge-row">
-            <PipelineSuccessGauge
+            <RunSuccessGauge
               rate={metrics.success_rate}
               label="Success"
             />

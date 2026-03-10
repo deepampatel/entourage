@@ -1,6 +1,6 @@
-"""Pipeline budget service — per-pipeline cost tracking and enforcement.
+"""Run budget service — per-run cost tracking and enforcement.
 
-Each pipeline gets a BudgetLedger. As agents work, cost entries are
+Each run gets a BudgetLedger. As agents work, cost entries are
 recorded and the running total is updated. Warnings at 80%,
 hard stop at 100%.
 """
@@ -13,17 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from openclaw.db.models import BudgetEntry, BudgetLedger
 from openclaw.events.store import EventStore
-from openclaw.events.types import PIPELINE_BUDGET_EXCEEDED, PIPELINE_BUDGET_WARNING
+from openclaw.events.types import RUN_BUDGET_EXCEEDED, RUN_BUDGET_WARNING
 from openclaw.services.session_service import MODEL_PRICING, DEFAULT_PRICING
 
 
-class PipelineBudgetExceededError(Exception):
-    """Raised when a pipeline's budget is exceeded."""
+class RunBudgetExceededError(Exception):
+    """Raised when a run's budget is exceeded."""
     pass
 
 
-class PipelineBudgetService:
-    """Cost tracking and enforcement for pipelines."""
+class RunBudgetService:
+    """Cost tracking and enforcement for runs."""
 
     WARN_THRESHOLD = 0.80  # 80% of budget
 
@@ -31,31 +31,31 @@ class PipelineBudgetService:
         self.db = db
         self.events = EventStore(db)
 
-    async def get_ledger(self, pipeline_id: uuid.UUID) -> Optional[BudgetLedger]:
-        """Get the budget ledger for a pipeline."""
+    async def get_ledger(self, run_id: uuid.UUID) -> Optional[BudgetLedger]:
+        """Get the budget ledger for a run."""
         result = await self.db.execute(
             select(BudgetLedger).where(
-                BudgetLedger.pipeline_id == pipeline_id
+                BudgetLedger.run_id == run_id
             )
         )
         return result.scalars().first()
 
     async def add_cost(
         self,
-        pipeline_id: uuid.UUID,
+        run_id: uuid.UUID,
         model: str,
         input_tokens: int,
         output_tokens: int,
-        pipeline_task_id: Optional[int] = None,
+        run_task_id: Optional[int] = None,
         agent_id: Optional[uuid.UUID] = None,
     ) -> BudgetLedger:
         """Record a cost entry and update the running total.
 
-        Emits warning at 80%, raises PipelineBudgetExceededError at 100%.
+        Emits warning at 80%, raises RunBudgetExceededError at 100%.
         """
-        ledger = await self.get_ledger(pipeline_id)
+        ledger = await self.get_ledger(run_id)
         if not ledger:
-            raise ValueError(f"No budget ledger for pipeline {pipeline_id}")
+            raise ValueError(f"No budget ledger for run {run_id}")
 
         # Compute cost
         pricing = MODEL_PRICING.get(model, DEFAULT_PRICING)
@@ -67,8 +67,8 @@ class PipelineBudgetService:
         # Create entry
         entry = BudgetEntry(
             ledger_id=ledger.id,
-            pipeline_id=pipeline_id,
-            pipeline_task_id=pipeline_task_id,
+            run_id=run_id,
+            run_task_id=run_task_id,
             agent_id=agent_id,
             model=model,
             input_tokens=input_tokens,
@@ -89,27 +89,27 @@ class PipelineBudgetService:
             if usage_ratio >= 1.0:
                 ledger.status = "exceeded"
                 await self.events.append(
-                    stream_id=f"pipeline:{pipeline_id}",
-                    event_type=PIPELINE_BUDGET_EXCEEDED,
+                    stream_id=f"run:{run_id}",
+                    event_type=RUN_BUDGET_EXCEEDED,
                     data={
-                        "pipeline_id": str(pipeline_id),
+                        "run_id": str(run_id),
                         "actual": new_actual,
                         "limit": limit,
                     },
                 )
                 await self.db.commit()
-                raise PipelineBudgetExceededError(
-                    f"Pipeline {pipeline_id} exceeded budget: "
+                raise RunBudgetExceededError(
+                    f"Run {run_id} exceeded budget: "
                     f"${new_actual:.4f} / ${limit:.4f}"
                 )
 
             if usage_ratio >= self.WARN_THRESHOLD and ledger.status == "ok":
                 ledger.status = "warn"
                 await self.events.append(
-                    stream_id=f"pipeline:{pipeline_id}",
-                    event_type=PIPELINE_BUDGET_WARNING,
+                    stream_id=f"run:{run_id}",
+                    event_type=RUN_BUDGET_WARNING,
                     data={
-                        "pipeline_id": str(pipeline_id),
+                        "run_id": str(run_id),
                         "actual": new_actual,
                         "limit": limit,
                         "usage_ratio": usage_ratio,
@@ -119,9 +119,9 @@ class PipelineBudgetService:
         await self.db.commit()
         return ledger
 
-    async def check_budget(self, pipeline_id: uuid.UUID) -> dict:
+    async def check_budget(self, run_id: uuid.UUID) -> dict:
         """Check budget status without recording cost."""
-        ledger = await self.get_ledger(pipeline_id)
+        ledger = await self.get_ledger(run_id)
         if not ledger:
             return {"within_budget": True, "actual": 0, "limit": 0, "percent_used": 0}
 
@@ -138,10 +138,10 @@ class PipelineBudgetService:
         }
 
     async def list_entries(
-        self, pipeline_id: uuid.UUID, limit: int = 100
+        self, run_id: uuid.UUID, limit: int = 100
     ) -> list[BudgetEntry]:
-        """List cost entries for a pipeline."""
-        ledger = await self.get_ledger(pipeline_id)
+        """List cost entries for a run."""
+        ledger = await self.get_ledger(run_id)
         if not ledger:
             return []
 
@@ -154,12 +154,12 @@ class PipelineBudgetService:
         return list(result.scalars().all())
 
     async def set_estimate(
-        self, pipeline_id: uuid.UUID, estimated_cost: float
+        self, run_id: uuid.UUID, estimated_cost: float
     ) -> BudgetLedger:
-        """Set the estimated cost for the pipeline."""
-        ledger = await self.get_ledger(pipeline_id)
+        """Set the estimated cost for the run."""
+        ledger = await self.get_ledger(run_id)
         if not ledger:
-            raise ValueError(f"No budget ledger for pipeline {pipeline_id}")
+            raise ValueError(f"No budget ledger for run {run_id}")
 
         ledger.estimated_cost_usd = estimated_cost
         await self.db.commit()

@@ -21,7 +21,7 @@ from openclaw.db.models import (
     Alert,
     BudgetEntry,
     Organization,
-    Pipeline,
+    Run,
     Session,
     Team,
 )
@@ -149,11 +149,11 @@ class AlertService:
     async def _check_failure_rate(
         self, team: Team, org: Organization
     ) -> list[AlertData]:
-        """Alert if 3+ consecutive pipeline failures."""
+        """Alert if 3+ consecutive run failures."""
         q = (
-            select(Pipeline.status)
-            .where(Pipeline.team_id == team.id)
-            .order_by(Pipeline.updated_at.desc())
+            select(Run.status)
+            .where(Run.team_id == team.id)
+            .order_by(Run.updated_at.desc())
             .limit(5)
         )
         result = await self._db.execute(q)
@@ -177,7 +177,7 @@ class AlertService:
                     team_id=str(team.id),
                     org_id=str(org.id),
                     severity="warning",
-                    message=f"{consecutive_failures} consecutive pipeline failures detected",
+                    message=f"{consecutive_failures} consecutive run failures detected",
                     data={"consecutive_failures": consecutive_failures},
                 )
             ]

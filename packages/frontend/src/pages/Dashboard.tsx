@@ -146,7 +146,7 @@ export function Dashboard({ teamId }: DashboardProps) {
               <div className="empty-state">
                 <p className="empty-state-title">No agents yet</p>
                 <p className="empty-state-desc">Agents are AI workers that execute your tasks.</p>
-                <NavLink to="/manage" className="pipeline-btn pipeline-btn-primary empty-state-cta" style={{ textDecoration: "none" }}>
+                <NavLink to="/manage" className="run-btn run-btn-primary empty-state-cta" style={{ textDecoration: "none" }}>
                   Add agents in Manage
                 </NavLink>
               </div>
@@ -168,9 +168,9 @@ export function Dashboard({ teamId }: DashboardProps) {
             {activeTasks?.length === 0 && (
               <div className="empty-state">
                 <p className="empty-state-title">No active tasks</p>
-                <p className="empty-state-desc">Tasks are created when you run a pipeline.</p>
-                <NavLink to="/pipelines" className="pipeline-btn pipeline-btn-primary empty-state-cta" style={{ textDecoration: "none" }}>
-                  Create a pipeline
+                <p className="empty-state-desc">Tasks are created when you run a run.</p>
+                <NavLink to="/runs" className="run-btn run-btn-primary empty-state-cta" style={{ textDecoration: "none" }}>
+                  Create a run
                 </NavLink>
               </div>
             )}

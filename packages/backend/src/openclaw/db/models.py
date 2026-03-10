@@ -756,14 +756,14 @@ class WebhookDelivery(Base):
 
 
 # ══════════════════════════════════════════════════════════════
-# Phase 12: Pipelines
+# Phase 12: Runs
 # ══════════════════════════════════════════════════════════════
 
 
-class Pipeline(Base):
-    """A pipeline — the top-level orchestration unit.
+class Run(Base):
+    """A run — the top-level orchestration unit.
 
-    A pipeline takes a human intent ("Add OAuth2 login"), uses an LLM
+    A run takes a human intent ("Add OAuth2 login"), uses an LLM
     planner to decompose it into a TaskGraph, gets human approval, then
     executes tasks serially (or in parallel in future phases).
 
@@ -773,10 +773,10 @@ class Pipeline(Base):
     With: paused, failed, cancelled as escape states.
     """
 
-    __tablename__ = "pipelines"
+    __tablename__ = "runs"
     __table_args__ = (
-        Index("idx_pipelines_team_status", "team_id", "status"),
-        Index("idx_pipelines_created_at", "created_at"),
+        Index("idx_runs_team_status", "team_id", "status"),
+        Index("idx_runs_created_at", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -814,7 +814,7 @@ class Pipeline(Base):
         String(200), nullable=False, default=""
     )
     pr_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    pipeline_metadata: Mapped[dict] = mapped_column(
+    run_metadata: Mapped[dict] = mapped_column(
         "metadata", JSONB, nullable=False, server_default="{}"
     )
     contract_set: Mapped[Optional[dict]] = mapped_column(
@@ -832,33 +832,33 @@ class Pipeline(Base):
 
     # Relationships
     team: Mapped["Team"] = relationship()
-    pipeline_tasks: Mapped[list["PipelineTask"]] = relationship(
-        back_populates="pipeline", cascade="all, delete-orphan"
+    run_tasks: Mapped[list["RunTask"]] = relationship(
+        back_populates="run", cascade="all, delete-orphan"
     )
     contracts: Mapped[list["Contract"]] = relationship(
-        back_populates="pipeline", cascade="all, delete-orphan"
+        back_populates="run", cascade="all, delete-orphan"
     )
     budget_ledger: Mapped[Optional["BudgetLedger"]] = relationship(
-        back_populates="pipeline", uselist=False, cascade="all, delete-orphan"
+        back_populates="run", uselist=False, cascade="all, delete-orphan"
     )
 
 
-class PipelineTask(Base):
-    """A task within a pipeline's TaskGraph.
+class RunTask(Base):
+    """A task within a run's TaskGraph.
 
-    Separate from the standalone Task model — PipelineTasks are
-    scoped to a pipeline and managed by the ExecutionLoop.
+    Separate from the standalone Task model — RunTasks are
+    scoped to a run and managed by the ExecutionLoop.
     """
 
-    __tablename__ = "pipeline_tasks"
+    __tablename__ = "run_tasks"
     __table_args__ = (
-        Index("idx_ptasks_pipeline", "pipeline_id"),
-        Index("idx_ptasks_status", "status"),
+        Index("idx_rtasks_run", "run_id"),
+        Index("idx_rtasks_status", "status"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    pipeline_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("pipelines.id", ondelete="CASCADE"),
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"),
         nullable=False,
     )
     agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
@@ -904,11 +904,11 @@ class PipelineTask(Base):
     )
 
     # Relationships
-    pipeline: Mapped["Pipeline"] = relationship(back_populates="pipeline_tasks")
+    run: Mapped["Run"] = relationship(back_populates="run_tasks")
 
 
 class Contract(Base):
-    """A typed interface contract between pipeline tasks.
+    """A typed interface contract between run tasks.
 
     Phase 2: When tasks run in parallel, contracts prevent interface
     collisions. The ContractBuilder LLM generates these from the TaskGraph,
@@ -923,17 +923,17 @@ class Contract(Base):
 
     __tablename__ = "contracts"
     __table_args__ = (
-        Index("idx_contracts_pipeline", "pipeline_id"),
+        Index("idx_contracts_run", "run_id"),
         Index("idx_contracts_type", "contract_type"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    pipeline_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("pipelines.id", ondelete="CASCADE"),
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"),
         nullable=False,
     )
-    pipeline_task_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("pipeline_tasks.id"), nullable=True
+    run_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("run_tasks.id"), nullable=True
     )
     contract_type: Mapped[str] = mapped_column(
         String(30), nullable=False
@@ -955,13 +955,13 @@ class Contract(Base):
     )
 
     # Relationships
-    pipeline: Mapped["Pipeline"] = relationship(back_populates="contracts")
+    run: Mapped["Run"] = relationship(back_populates="contracts")
 
 
 class BudgetLedger(Base):
-    """Per-pipeline budget tracking.
+    """Per-run budget tracking.
 
-    Each pipeline gets one ledger. As agents work, cost entries are
+    Each run gets one ledger. As agents work, cost entries are
     recorded and the running total is updated. Warnings at 80%,
     hard stop at 100%.
     """
@@ -974,8 +974,8 @@ class BudgetLedger(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), primary_key=True, default=new_uuid
     )
-    pipeline_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("pipelines.id", ondelete="CASCADE"),
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("runs.id", ondelete="CASCADE"),
         unique=True, nullable=False,
     )
     org_id: Mapped[uuid.UUID] = mapped_column(
@@ -1004,18 +1004,18 @@ class BudgetLedger(Base):
     )
 
     # Relationships
-    pipeline: Mapped["Pipeline"] = relationship(back_populates="budget_ledger")
+    run: Mapped["Run"] = relationship(back_populates="budget_ledger")
     entries: Mapped[list["BudgetEntry"]] = relationship(
         back_populates="ledger", cascade="all, delete-orphan"
     )
 
 
 class BudgetEntry(Base):
-    """Individual cost entry within a pipeline's budget ledger."""
+    """Individual cost entry within a run's budget ledger."""
 
     __tablename__ = "budget_entries"
     __table_args__ = (
-        Index("idx_budget_entries_pipeline", "pipeline_id"),
+        Index("idx_budget_entries_run", "run_id"),
         Index("idx_budget_entries_recorded", "recorded_at"),
     )
 
@@ -1024,11 +1024,11 @@ class BudgetEntry(Base):
         PG_UUID(as_uuid=True), ForeignKey("budget_ledgers.id", ondelete="CASCADE"),
         nullable=False,
     )
-    pipeline_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("pipelines.id"), nullable=False
+    run_id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("runs.id"), nullable=False
     )
-    pipeline_task_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("pipeline_tasks.id"), nullable=True
+    run_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("run_tasks.id"), nullable=True
     )
     agent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("agents.id"), nullable=True
@@ -1093,9 +1093,9 @@ class Alert(Base):
 
 
 class SandboxRun(Base):
-    """A sandboxed test execution for a pipeline task.
+    """A sandboxed test execution for a run task.
 
-    Learn: After a pipeline task completes, the SandboxManager can run
+    Learn: After a run task completes, the SandboxManager can run
     tests in a Docker container. The result (pass/fail, stdout/stderr)
     is stored here for auditability. If tests fail, the task may be
     retried automatically.
@@ -1103,7 +1103,7 @@ class SandboxRun(Base):
 
     __tablename__ = "sandbox_runs"
     __table_args__ = (
-        Index("idx_sandbox_runs_pipeline_task", "pipeline_task_id"),
+        Index("idx_sandbox_runs_run_task", "run_task_id"),
         Index("idx_sandbox_runs_team", "team_id"),
     )
 
@@ -1111,11 +1111,11 @@ class SandboxRun(Base):
     sandbox_id: Mapped[str] = mapped_column(
         String(50), unique=True, nullable=False
     )
-    pipeline_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PG_UUID(as_uuid=True), ForeignKey("pipelines.id"), nullable=True
+    run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), ForeignKey("runs.id"), nullable=True
     )
-    pipeline_task_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("pipeline_tasks.id"), nullable=True
+    run_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("run_tasks.id"), nullable=True
     )
     team_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("teams.id"), nullable=False
@@ -1166,8 +1166,8 @@ class SecurityAudit(Base):
     team_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("teams.id"), nullable=False
     )
-    pipeline_task_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("pipeline_tasks.id"), nullable=True
+    run_task_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("run_tasks.id"), nullable=True
     )
     detail: Mapped[str] = mapped_column(Text, nullable=False)
     rule: Mapped[str] = mapped_column(String(200), nullable=False)

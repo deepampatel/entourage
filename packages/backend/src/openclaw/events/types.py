@@ -68,30 +68,30 @@ AGENT_RUN_COMPLETED = "agent.run_completed"
 AGENT_RUN_FAILED = "agent.run_failed"
 AGENT_RUN_TIMEOUT = "agent.run_timeout"
 
-# ─── Phase 12: Pipeline lifecycle ─────────────────────────
+# ─── Phase 12: Run lifecycle ─────────────────────────────
 
-PIPELINE_CREATED = "pipeline.created"
-PIPELINE_STATUS_CHANGED = "pipeline.status_changed"
-PIPELINE_PLAN_GENERATED = "pipeline.plan_generated"
-PIPELINE_PLAN_APPROVED = "pipeline.plan_approved"
-PIPELINE_PLAN_REJECTED = "pipeline.plan_rejected"
-PIPELINE_TASK_STARTED = "pipeline.task_started"
-PIPELINE_TASK_COMPLETED = "pipeline.task_completed"
-PIPELINE_TASK_FAILED = "pipeline.task_failed"
-PIPELINE_BUDGET_WARNING = "pipeline.budget_warning"
-PIPELINE_BUDGET_EXCEEDED = "pipeline.budget_exceeded"
-PIPELINE_COMPLETED = "pipeline.completed"
-PIPELINE_FAILED = "pipeline.failed"
+RUN_CREATED = "run.created"
+RUN_STATUS_CHANGED = "run.status_changed"
+RUN_PLAN_GENERATED = "run.plan_generated"
+RUN_PLAN_APPROVED = "run.plan_approved"
+RUN_PLAN_REJECTED = "run.plan_rejected"
+RUN_TASK_STARTED = "run.task_started"
+RUN_TASK_COMPLETED = "run.task_completed"
+RUN_TASK_FAILED = "run.task_failed"
+RUN_BUDGET_WARNING = "run.budget_warning"
+RUN_BUDGET_EXCEEDED = "run.budget_exceeded"
+RUN_COMPLETED = "run.completed"
+RUN_FAILED = "run.failed"
 
 # ─── Phase 2A: Contract lifecycle ──────────────────────────
 
-PIPELINE_CONTRACTS_GENERATED = "pipeline.contracts_generated"
-PIPELINE_CONTRACT_LOCKED = "pipeline.contract_locked"
+RUN_CONTRACTS_GENERATED = "run.contracts_generated"
+RUN_CONTRACT_LOCKED = "run.contract_locked"
 
 # ─── Phase 2D: Resume / Retry ─────────────────────────────
 
-PIPELINE_TASK_RETRIED = "pipeline.task_retried"
-PIPELINE_RESUMED = "pipeline.resumed"
+RUN_TASK_RETRIED = "run.task_retried"
+RUN_RESUMED = "run.resumed"
 
 # ─── Phase 3B: Sandbox ───────────────────────────────────
 

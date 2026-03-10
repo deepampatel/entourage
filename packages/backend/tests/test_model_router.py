@@ -46,15 +46,15 @@ class TestSelectModel:
     async def test_budget_pressure_downgrade(self):
         """When budget pressure exceeds threshold, auto-downgrade."""
         mock_db = AsyncMock()
-        mock_pipeline = MagicMock()
-        mock_pipeline.budget_limit_usd = 10.0
-        mock_pipeline.actual_cost_usd = 9.5  # 95% used
-        mock_db.get = AsyncMock(return_value=mock_pipeline)
+        mock_run = MagicMock()
+        mock_run.budget_limit_usd = 10.0
+        mock_run.actual_cost_usd = 9.5  # 95% used
+        mock_db.get = AsyncMock(return_value=mock_run)
 
         router = ModelRouter(db=mock_db)
         model = await router.select_model(
             "engineer",
-            pipeline_id="test-id",
+            run_id="test-id",
         )
         assert model == MODEL_PROFILES["engineer"]["fallback"]
 
@@ -62,15 +62,15 @@ class TestSelectModel:
     async def test_no_downgrade_below_threshold(self):
         """When budget pressure is below threshold, use default."""
         mock_db = AsyncMock()
-        mock_pipeline = MagicMock()
-        mock_pipeline.budget_limit_usd = 10.0
-        mock_pipeline.actual_cost_usd = 5.0  # 50% used
-        mock_db.get = AsyncMock(return_value=mock_pipeline)
+        mock_run = MagicMock()
+        mock_run.budget_limit_usd = 10.0
+        mock_run.actual_cost_usd = 5.0  # 50% used
+        mock_db.get = AsyncMock(return_value=mock_run)
 
         router = ModelRouter(db=mock_db)
         model = await router.select_model(
             "engineer",
-            pipeline_id="test-id",
+            run_id="test-id",
         )
         assert model == MODEL_PROFILES["engineer"]["default"]
 
@@ -92,7 +92,7 @@ class TestSelectModel:
     async def test_no_db_skips_budget_check(self):
         """Without DB, budget check is skipped."""
         router = ModelRouter(db=None)
-        model = await router.select_model("engineer", pipeline_id="test-id")
+        model = await router.select_model("engineer", run_id="test-id")
         assert model == MODEL_PROFILES["engineer"]["default"]
 
 
@@ -101,18 +101,18 @@ class TestGetBudgetPressure:
     async def test_zero_limit(self):
         """Zero budget limit returns 0.0 pressure."""
         mock_db = AsyncMock()
-        mock_pipeline = MagicMock()
-        mock_pipeline.budget_limit_usd = 0
-        mock_pipeline.actual_cost_usd = 5.0
-        mock_db.get = AsyncMock(return_value=mock_pipeline)
+        mock_run = MagicMock()
+        mock_run.budget_limit_usd = 0
+        mock_run.actual_cost_usd = 5.0
+        mock_db.get = AsyncMock(return_value=mock_run)
 
         router = ModelRouter(db=mock_db)
         pressure = await router._get_budget_pressure("test-id")
         assert pressure == 0.0
 
     @pytest.mark.asyncio
-    async def test_pipeline_not_found(self):
-        """Missing pipeline returns 0.0 pressure."""
+    async def test_run_not_found(self):
+        """Missing run returns 0.0 pressure."""
         mock_db = AsyncMock()
         mock_db.get = AsyncMock(return_value=None)
 
@@ -124,10 +124,10 @@ class TestGetBudgetPressure:
     async def test_caps_at_one(self):
         """Pressure is capped at 1.0 even if over budget."""
         mock_db = AsyncMock()
-        mock_pipeline = MagicMock()
-        mock_pipeline.budget_limit_usd = 10.0
-        mock_pipeline.actual_cost_usd = 15.0  # Over budget
-        mock_db.get = AsyncMock(return_value=mock_pipeline)
+        mock_run = MagicMock()
+        mock_run.budget_limit_usd = 10.0
+        mock_run.actual_cost_usd = 15.0  # Over budget
+        mock_db.get = AsyncMock(return_value=mock_run)
 
         router = ModelRouter(db=mock_db)
         pressure = await router._get_budget_pressure("test-id")

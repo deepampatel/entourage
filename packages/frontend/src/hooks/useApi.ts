@@ -18,9 +18,9 @@ import type {
   HumanRequest,
   MonthlyRollup,
   Org,
-  Pipeline,
-  PipelineMetrics,
-  PipelineTask,
+  Run,
+  RunMetrics,
+  RunTask,
   Review,
   SandboxRun,
   Task,
@@ -280,19 +280,19 @@ export function useRunAgent(teamId: string) {
   });
 }
 
-// ─── Pipelines ────────────────────────────────────────
+// ─── Runs ─────────────────────────────────────────────
 
-export function usePipelines(
+export function useRuns(
   teamId: string | undefined,
   status?: string
 ) {
   return useQuery({
-    queryKey: ["pipelines", teamId, status],
+    queryKey: ["runs", teamId, status],
     queryFn: () => {
       const params: Record<string, string> = {};
       if (status) params.status = status;
-      return apiClient.get<Pipeline[]>(
-        `/api/v1/teams/${teamId}/pipelines`,
+      return apiClient.get<Run[]>(
+        `/api/v1/teams/${teamId}/runs`,
         params
       );
     },
@@ -301,29 +301,29 @@ export function usePipelines(
   });
 }
 
-export function usePipeline(pipelineId: string | undefined) {
+export function useRun(runId: string | undefined) {
   return useQuery({
-    queryKey: ["pipeline", pipelineId],
+    queryKey: ["run", runId],
     queryFn: () =>
-      apiClient.get<Pipeline>(`/api/v1/pipelines/${pipelineId}`),
-    enabled: !!pipelineId,
+      apiClient.get<Run>(`/api/v1/runs/${runId}`),
+    enabled: !!runId,
     refetchInterval: 5_000,
   });
 }
 
-export function usePipelineTasks(pipelineId: string | undefined) {
+export function useRunTasks(runId: string | undefined) {
   return useQuery({
-    queryKey: ["pipeline-tasks", pipelineId],
+    queryKey: ["run-tasks", runId],
     queryFn: () =>
-      apiClient.get<PipelineTask[]>(
-        `/api/v1/pipelines/${pipelineId}/tasks`
+      apiClient.get<RunTask[]>(
+        `/api/v1/runs/${runId}/tasks`
       ),
-    enabled: !!pipelineId,
+    enabled: !!runId,
     refetchInterval: 10_000,
   });
 }
 
-export function useCreatePipeline(teamId: string) {
+export function useCreateRun(teamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: {
@@ -331,26 +331,26 @@ export function useCreatePipeline(teamId: string) {
       intent: string;
       budget_limit_usd?: number;
     }) =>
-      apiClient.post<Pipeline>(
-        `/api/v1/teams/${teamId}/pipelines`,
+      apiClient.post<Run>(
+        `/api/v1/teams/${teamId}/runs`,
         body
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
     },
   });
 }
 
-export function useStartPipeline(teamId: string) {
+export function useStartRun(teamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (pipelineId: string) =>
-      apiClient.post<Pipeline>(
-        `/api/v1/pipelines/${pipelineId}/start`,
+    mutationFn: (runId: string) =>
+      apiClient.post<Run>(
+        `/api/v1/runs/${runId}/start`,
         {}
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
     },
   });
 }
@@ -358,13 +358,13 @@ export function useStartPipeline(teamId: string) {
 export function useApprovePlan(teamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (pipelineId: string) =>
-      apiClient.post<Pipeline>(
-        `/api/v1/pipelines/${pipelineId}/approve-plan`,
+    mutationFn: (runId: string) =>
+      apiClient.post<Run>(
+        `/api/v1/runs/${runId}/approve-plan`,
         {}
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
     },
   });
 }
@@ -373,32 +373,32 @@ export function useRejectPlan(teamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      pipelineId,
+      runId,
       feedback,
     }: {
-      pipelineId: string;
+      runId: string;
       feedback?: string;
     }) =>
-      apiClient.post<Pipeline>(
-        `/api/v1/pipelines/${pipelineId}/reject-plan`,
+      apiClient.post<Run>(
+        `/api/v1/runs/${runId}/reject-plan`,
         { feedback }
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
     },
   });
 }
 
 // ─── Contract hooks ──────────────────────────────────────
 
-export function usePipelineContracts(pipelineId: string | undefined) {
+export function useRunContracts(runId: string | undefined) {
   return useQuery({
-    queryKey: ["pipeline-contracts", pipelineId],
+    queryKey: ["run-contracts", runId],
     queryFn: () =>
       apiClient.get<Contract[]>(
-        `/api/v1/pipelines/${pipelineId}/contracts`
+        `/api/v1/runs/${runId}/contracts`
       ),
-    enabled: !!pipelineId,
+    enabled: !!runId,
     refetchInterval: 10_000,
   });
 }
@@ -406,28 +406,28 @@ export function usePipelineContracts(pipelineId: string | undefined) {
 export function useGenerateContracts(teamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (pipelineId: string) =>
-      apiClient.post<Pipeline>(
-        `/api/v1/pipelines/${pipelineId}/generate-contracts`,
+    mutationFn: (runId: string) =>
+      apiClient.post<Run>(
+        `/api/v1/runs/${runId}/generate-contracts`,
         {}
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["pipelines", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
     },
   });
 }
 
 // ─── Analytics ────────────────────────────────────────
 
-export function usePipelineMetrics(
+export function useRunMetrics(
   teamId: string | undefined,
   period: string = "week"
 ) {
   return useQuery({
-    queryKey: ["analytics-pipeline-metrics", teamId, period],
+    queryKey: ["analytics-run-metrics", teamId, period],
     queryFn: () =>
-      apiClient.get<PipelineMetrics>(
-        `/api/v1/analytics/${teamId}/pipelines`,
+      apiClient.get<RunMetrics>(
+        `/api/v1/analytics/${teamId}/runs`,
         { period }
       ),
     enabled: !!teamId,
@@ -487,16 +487,16 @@ export function useMonthlyRollup(
 // ─── Sandbox ──────────────────────────────────────────
 
 export function useSandboxRuns(
-  pipelineId: string | undefined,
+  runId: string | undefined,
   taskId: number | undefined
 ) {
   return useQuery({
-    queryKey: ["sandbox-runs", pipelineId, taskId],
+    queryKey: ["sandbox-runs", runId, taskId],
     queryFn: () =>
       apiClient.get<SandboxRun[]>(
-        `/api/v1/pipelines/${pipelineId}/tasks/${taskId}/sandbox-runs`
+        `/api/v1/runs/${runId}/tasks/${taskId}/sandbox-runs`
       ),
-    enabled: !!pipelineId && !!taskId,
+    enabled: !!runId && !!taskId,
     refetchInterval: 10_000,
   });
 }
@@ -505,20 +505,20 @@ export function useTriggerSandboxRun(_teamId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
-      pipelineId,
+      runId,
       taskId,
       testCmd,
       image,
       setupCmd,
     }: {
-      pipelineId: string;
+      runId: string;
       taskId: number;
       testCmd: string;
       image?: string;
       setupCmd?: string;
     }) =>
       apiClient.post<SandboxRun>(
-        `/api/v1/pipelines/${pipelineId}/tasks/${taskId}/sandbox-runs`,
+        `/api/v1/runs/${runId}/tasks/${taskId}/sandbox-runs`,
         {
           test_cmd: testCmd,
           image: image || "python:3.12-slim",
@@ -527,7 +527,7 @@ export function useTriggerSandboxRun(_teamId: string) {
       ),
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({
-        queryKey: ["sandbox-runs", vars.pipelineId, vars.taskId],
+        queryKey: ["sandbox-runs", vars.runId, vars.taskId],
       });
     },
   });

@@ -1,6 +1,6 @@
-"""Phase 12 tests — Pipeline CRUD, state machine, budget tracking.
+"""Phase 12 tests — Run CRUD, state machine, budget tracking.
 
-Tests the Pipeline service layer: creation, status transitions,
+Tests the Run service layer: creation, status transitions,
 plan approval/rejection, task graph storage, and budget enforcement.
 """
 
@@ -15,7 +15,7 @@ import pytest
 @pytest.fixture
 async def org(client):
     resp = await client.post(
-        "/api/v1/orgs", json={"name": "Pipeline Org", "slug": "pipeline-org"}
+        "/api/v1/orgs", json={"name": "Run Org", "slug": "run-org"}
     )
     return resp.json()
 
@@ -24,16 +24,16 @@ async def org(client):
 async def team(client, org):
     resp = await client.post(
         f"/api/v1/orgs/{org['id']}/teams",
-        json={"name": "Pipeline Team", "slug": "pipeline-team"},
+        json={"name": "Run Team", "slug": "run-team"},
     )
     return resp.json()
 
 
 @pytest.fixture
-async def pipeline(client, team):
-    """Create a pipeline and return its data."""
+async def run(client, team):
+    """Create a run and return its data."""
     resp = await client.post(
-        f"/api/v1/teams/{team['id']}/pipelines",
+        f"/api/v1/teams/{team['id']}/runs",
         json={
             "title": "Add OAuth2 login",
             "intent": "Add Google OAuth2 login with session management",
@@ -45,15 +45,15 @@ async def pipeline(client, team):
 
 
 # ═══════════════════════════════════════════════════════════
-# Pipeline CRUD
+# Run CRUD
 # ═══════════════════════════════════════════════════════════
 
 
 @pytest.mark.asyncio
-async def test_create_pipeline(client, team):
-    """POST /teams/:id/pipelines creates a pipeline in draft status."""
+async def test_create_run(client, team):
+    """POST /teams/:id/runs creates a run in draft status."""
     resp = await client.post(
-        f"/api/v1/teams/{team['id']}/pipelines",
+        f"/api/v1/teams/{team['id']}/runs",
         json={
             "title": "Add user profiles",
             "intent": "Add user profile pages with avatar upload",
@@ -72,30 +72,30 @@ async def test_create_pipeline(client, team):
 
 
 @pytest.mark.asyncio
-async def test_list_pipelines(client, team, pipeline):
-    """GET /teams/:id/pipelines lists pipelines for a team."""
-    resp = await client.get(f"/api/v1/teams/{team['id']}/pipelines")
+async def test_list_runs(client, team, run):
+    """GET /teams/:id/runs lists runs for a team."""
+    resp = await client.get(f"/api/v1/teams/{team['id']}/runs")
     assert resp.status_code == 200
-    pipelines = resp.json()
-    assert len(pipelines) >= 1
-    assert any(p["id"] == pipeline["id"] for p in pipelines)
+    runs = resp.json()
+    assert len(runs) >= 1
+    assert any(p["id"] == run["id"] for p in runs)
 
 
 @pytest.mark.asyncio
-async def test_get_pipeline(client, pipeline):
-    """GET /pipelines/:id returns pipeline detail."""
-    resp = await client.get(f"/api/v1/pipelines/{pipeline['id']}")
+async def test_get_run(client, run):
+    """GET /runs/:id returns run detail."""
+    resp = await client.get(f"/api/v1/runs/{run['id']}")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["id"] == pipeline["id"]
+    assert data["id"] == run["id"]
     assert data["title"] == "Add OAuth2 login"
 
 
 @pytest.mark.asyncio
-async def test_get_pipeline_not_found(client):
-    """GET /pipelines/:id returns 404 for unknown ID."""
+async def test_get_run_not_found(client):
+    """GET /runs/:id returns 404 for unknown ID."""
     resp = await client.get(
-        "/api/v1/pipelines/00000000-0000-0000-0000-000000000099"
+        "/api/v1/runs/00000000-0000-0000-0000-000000000099"
     )
     assert resp.status_code == 404
 
@@ -106,10 +106,10 @@ async def test_get_pipeline_not_found(client):
 
 
 @pytest.mark.asyncio
-async def test_valid_transition_draft_to_planning(client, pipeline):
-    """Pipeline can transition from draft to planning."""
+async def test_valid_transition_draft_to_planning(client, run):
+    """Run can transition from draft to planning."""
     resp = await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/status",
+        f"/api/v1/runs/{run['id']}/status",
         json={"status": "planning"},
     )
     assert resp.status_code == 200
@@ -117,20 +117,20 @@ async def test_valid_transition_draft_to_planning(client, pipeline):
 
 
 @pytest.mark.asyncio
-async def test_invalid_transition_draft_to_executing(client, pipeline):
-    """Pipeline cannot skip from draft to executing."""
+async def test_invalid_transition_draft_to_executing(client, run):
+    """Run cannot skip from draft to executing."""
     resp = await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/status",
+        f"/api/v1/runs/{run['id']}/status",
         json={"status": "executing"},
     )
     assert resp.status_code == 409
 
 
 @pytest.mark.asyncio
-async def test_transition_to_cancelled(client, pipeline):
-    """Pipeline can be cancelled from draft."""
+async def test_transition_to_cancelled(client, run):
+    """Run can be cancelled from draft."""
     resp = await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/status",
+        f"/api/v1/runs/{run['id']}/status",
         json={"status": "cancelled"},
     )
     assert resp.status_code == 200
@@ -138,14 +138,14 @@ async def test_transition_to_cancelled(client, pipeline):
 
 
 @pytest.mark.asyncio
-async def test_cancelled_is_terminal(client, pipeline):
-    """Cancelled pipelines cannot transition to any state."""
+async def test_cancelled_is_terminal(client, run):
+    """Cancelled runs cannot transition to any state."""
     await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/status",
+        f"/api/v1/runs/{run['id']}/status",
         json={"status": "cancelled"},
     )
     resp = await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/status",
+        f"/api/v1/runs/{run['id']}/status",
         json={"status": "draft"},
     )
     assert resp.status_code == 409
@@ -157,16 +157,16 @@ async def test_cancelled_is_terminal(client, pipeline):
 
 
 @pytest.fixture
-async def pipeline_awaiting_approval(client, pipeline):
-    """Pipeline in awaiting_plan_approval state with a task graph."""
+async def run_awaiting_approval(client, run):
+    """Run in awaiting_plan_approval state with a task graph."""
     # Transition to planning
     await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/status",
+        f"/api/v1/runs/{run['id']}/status",
         json={"status": "planning"},
     )
     # Set a task graph (simulating planner output)
     await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/task-graph",
+        f"/api/v1/runs/{run['id']}/task-graph",
         json={
             "task_graph": {
                 "tasks": [
@@ -190,29 +190,29 @@ async def pipeline_awaiting_approval(client, pipeline):
     )
     # Transition to awaiting_plan_approval
     await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/status",
+        f"/api/v1/runs/{run['id']}/status",
         json={"status": "awaiting_plan_approval"},
     )
     # Re-fetch
-    resp = await client.get(f"/api/v1/pipelines/{pipeline['id']}")
+    resp = await client.get(f"/api/v1/runs/{run['id']}")
     return resp.json()
 
 
 @pytest.mark.asyncio
-async def test_approve_plan(client, pipeline_awaiting_approval):
+async def test_approve_plan(client, run_awaiting_approval):
     """Approving a plan transitions to executing."""
-    pid = pipeline_awaiting_approval["id"]
-    resp = await client.post(f"/api/v1/pipelines/{pid}/approve-plan", json={})
+    rid = run_awaiting_approval["id"]
+    resp = await client.post(f"/api/v1/runs/{rid}/approve-plan", json={})
     assert resp.status_code == 200
     assert resp.json()["status"] == "executing"
 
 
 @pytest.mark.asyncio
-async def test_reject_plan(client, pipeline_awaiting_approval):
+async def test_reject_plan(client, run_awaiting_approval):
     """Rejecting a plan transitions back to draft with feedback."""
-    pid = pipeline_awaiting_approval["id"]
+    rid = run_awaiting_approval["id"]
     resp = await client.post(
-        f"/api/v1/pipelines/{pid}/reject-plan",
+        f"/api/v1/runs/{rid}/reject-plan",
         json={"feedback": "Split auth into separate tasks"},
     )
     assert resp.status_code == 200
@@ -220,10 +220,10 @@ async def test_reject_plan(client, pipeline_awaiting_approval):
 
 
 @pytest.mark.asyncio
-async def test_approve_wrong_status(client, pipeline):
+async def test_approve_wrong_status(client, run):
     """Cannot approve plan when not in awaiting_plan_approval."""
     resp = await client.post(
-        f"/api/v1/pipelines/{pipeline['id']}/approve-plan", json={}
+        f"/api/v1/runs/{run['id']}/approve-plan", json={}
     )
     assert resp.status_code == 409
 
@@ -234,16 +234,16 @@ async def test_approve_wrong_status(client, pipeline):
 
 
 @pytest.mark.asyncio
-async def test_set_task_graph_creates_pipeline_tasks(client, pipeline):
-    """Setting a task graph creates PipelineTask rows."""
-    pid = pipeline["id"]
+async def test_set_task_graph_creates_run_tasks(client, run):
+    """Setting a task graph creates RunTask rows."""
+    rid = run["id"]
     # Transition to planning
     await client.post(
-        f"/api/v1/pipelines/{pid}/status", json={"status": "planning"}
+        f"/api/v1/runs/{rid}/status", json={"status": "planning"}
     )
     # Set task graph
     resp = await client.post(
-        f"/api/v1/pipelines/{pid}/task-graph",
+        f"/api/v1/runs/{rid}/task-graph",
         json={
             "task_graph": {
                 "tasks": [
@@ -274,7 +274,7 @@ async def test_set_task_graph_creates_pipeline_tasks(client, pipeline):
     assert resp.status_code == 200
 
     # Verify tasks were created
-    tasks_resp = await client.get(f"/api/v1/pipelines/{pid}/tasks")
+    tasks_resp = await client.get(f"/api/v1/runs/{rid}/tasks")
     assert tasks_resp.status_code == 200
     tasks = tasks_resp.json()
     assert len(tasks) == 3
@@ -290,9 +290,9 @@ async def test_set_task_graph_creates_pipeline_tasks(client, pipeline):
 
 
 @pytest.mark.asyncio
-async def test_budget_ledger_created_with_pipeline(client, pipeline):
-    """A budget ledger is created automatically when a pipeline is created."""
-    resp = await client.get(f"/api/v1/pipelines/{pipeline['id']}/budget")
+async def test_budget_ledger_created_with_run(client, run):
+    """A budget ledger is created automatically when a run is created."""
+    resp = await client.get(f"/api/v1/runs/{run['id']}/budget")
     assert resp.status_code == 200
     budget = resp.json()
     assert budget["budget_limit_usd"] == 5.0
@@ -301,11 +301,11 @@ async def test_budget_ledger_created_with_pipeline(client, pipeline):
 
 
 @pytest.mark.asyncio
-async def test_list_pipelines_with_status_filter(client, team, pipeline):
-    """GET /teams/:id/pipelines?status=draft filters by status."""
+async def test_list_runs_with_status_filter(client, team, run):
+    """GET /teams/:id/runs?status=draft filters by status."""
     resp = await client.get(
-        f"/api/v1/teams/{team['id']}/pipelines?status=draft"
+        f"/api/v1/teams/{team['id']}/runs?status=draft"
     )
     assert resp.status_code == 200
-    pipelines = resp.json()
-    assert all(p["status"] == "draft" for p in pipelines)
+    runs = resp.json()
+    assert all(p["status"] == "draft" for p in runs)

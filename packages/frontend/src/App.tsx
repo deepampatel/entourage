@@ -17,7 +17,7 @@ import { Login } from "./pages/Login";
 import { Manage } from "./pages/Manage";
 import { Settings } from "./pages/Settings";
 import { TaskDetail } from "./pages/TaskDetail";
-import { Pipelines } from "./pages/Pipelines";
+import { Runs } from "./pages/Runs";
 import { Tasks } from "./pages/Tasks";
 import "./styles/index.css";
 
@@ -26,7 +26,7 @@ function OnboardingChecklist({ hasOrgs, hasTeams }: { hasOrgs: boolean; hasTeams
     { done: hasOrgs, label: "Create an Organization", desc: "Your top-level workspace" },
     { done: hasTeams, label: "Create a Team", desc: "A project with its own agents" },
     { done: false, label: "Add Agents", desc: "AI engineers that write code" },
-    { done: false, label: "Create a Pipeline", desc: "Describe what you want built" },
+    { done: false, label: "Create a Run", desc: "Describe what you want built" },
   ];
 
   return (
@@ -133,8 +133,8 @@ function AuthenticatedApp() {
           <NavLink to="/dashboard" className="nav-link">
             Dashboard
           </NavLink>
-          <NavLink to="/pipelines" className="nav-link">
-            Pipelines
+          <NavLink to="/runs" className="nav-link">
+            Runs
           </NavLink>
           <NavLink to="/tasks" className="nav-link">
             Tasks
@@ -174,8 +174,8 @@ function AuthenticatedApp() {
                 element={<Dashboard teamId={teamId} />}
               />
               <Route
-                path="/pipelines"
-                element={<Pipelines teamId={teamId} />}
+                path="/runs"
+                element={<Runs teamId={teamId} />}
               />
               <Route path="/tasks" element={<Tasks teamId={teamId} />} />
               <Route

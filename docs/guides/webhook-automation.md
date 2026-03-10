@@ -274,7 +274,7 @@ curl -X POST http://localhost:8000/api/v1/webhooks/{webhook_id}/regenerate-secre
 
 Update the new secret in GitHub settings.
 
-## Example: Full GitHub → Entourage pipeline
+## Example: Full GitHub → Entourage run
 
 ```
 1. Developer opens GitHub issue: "Add dark mode support"

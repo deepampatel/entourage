@@ -15,7 +15,7 @@ logger = logging.getLogger("openclaw.services.resource_monitor")
 
 
 class ResourceMonitor:
-    """Check system resources before dispatching pipeline tasks."""
+    """Check system resources before dispatching run tasks."""
 
     CPU_THRESHOLD: float = 90.0
     MEMORY_THRESHOLD: float = 90.0

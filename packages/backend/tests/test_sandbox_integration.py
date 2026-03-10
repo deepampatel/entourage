@@ -55,25 +55,25 @@ async def engineer_agent(client, team):
 
 
 @pytest.fixture
-async def executing_pipeline(client, team):
-    """Pipeline in 'executing' state with a task graph."""
+async def executing_run(client, team):
+    """Run in 'executing' state with a task graph."""
     resp = await client.post(
-        f"/api/v1/teams/{team['id']}/pipelines",
+        f"/api/v1/teams/{team['id']}/runs",
         json={
-            "title": "Sandbox Test Pipeline",
+            "title": "Sandbox Test Run",
             "intent": "Test sandbox integration",
             "budget_limit_usd": 20.0,
         },
     )
-    pipeline = resp.json()
-    pid = pipeline["id"]
+    run = resp.json()
+    rid = run["id"]
 
     await client.post(
-        f"/api/v1/pipelines/{pid}/status", json={"status": "planning"}
+        f"/api/v1/runs/{rid}/status", json={"status": "planning"}
     )
 
     await client.post(
-        f"/api/v1/pipelines/{pid}/task-graph",
+        f"/api/v1/runs/{rid}/task-graph",
         json={
             "task_graph": {
                 "tasks": [
@@ -97,12 +97,12 @@ async def executing_pipeline(client, team):
     )
 
     await client.post(
-        f"/api/v1/pipelines/{pid}/status",
+        f"/api/v1/runs/{rid}/status",
         json={"status": "awaiting_plan_approval"},
     )
-    await client.post(f"/api/v1/pipelines/{pid}/approve-plan", json={})
+    await client.post(f"/api/v1/runs/{rid}/approve-plan", json={})
 
-    resp = await client.get(f"/api/v1/pipelines/{pid}")
+    resp = await client.get(f"/api/v1/runs/{rid}")
     return resp.json()
 
 
@@ -112,24 +112,24 @@ async def executing_pipeline(client, team):
 
 
 @pytest.mark.asyncio
-async def test_sandbox_api_list_empty(client, executing_pipeline):
+async def test_sandbox_api_list_empty(client, executing_run):
     """GET sandbox runs returns empty list for task with no runs."""
-    pid = executing_pipeline["id"]
-    tasks_resp = await client.get(f"/api/v1/pipelines/{pid}/tasks")
+    rid = executing_run["id"]
+    tasks_resp = await client.get(f"/api/v1/runs/{rid}/tasks")
     task_id = tasks_resp.json()[0]["id"]
 
     resp = await client.get(
-        f"/api/v1/pipelines/{pid}/tasks/{task_id}/sandbox-runs"
+        f"/api/v1/runs/{rid}/tasks/{task_id}/sandbox-runs"
     )
     assert resp.status_code == 200
     assert resp.json() == []
 
 
 @pytest.mark.asyncio
-async def test_sandbox_api_trigger(client, executing_pipeline):
+async def test_sandbox_api_trigger(client, executing_run):
     """POST creates a sandbox run and returns 202."""
-    pid = executing_pipeline["id"]
-    tasks_resp = await client.get(f"/api/v1/pipelines/{pid}/tasks")
+    rid = executing_run["id"]
+    tasks_resp = await client.get(f"/api/v1/runs/{rid}/tasks")
     task_id = tasks_resp.json()[0]["id"]
 
     with patch.object(
@@ -156,29 +156,29 @@ async def test_sandbox_api_trigger(client, executing_pipeline):
         new_callable=AsyncMock,
     ):
         resp = await client.post(
-            f"/api/v1/pipelines/{pid}/tasks/{task_id}/sandbox-runs",
+            f"/api/v1/runs/{rid}/tasks/{task_id}/sandbox-runs",
             json={"test_cmd": "pytest tests/", "image": "python:3.12-slim"},
         )
         assert resp.status_code == 202
 
 
 @pytest.mark.asyncio
-async def test_sandbox_api_get_by_id(client, executing_pipeline, db_session):
+async def test_sandbox_api_get_by_id(client, executing_run, db_session):
     """GET /sandbox-runs/{sandbox_id} returns a specific run."""
     from datetime import datetime, timezone
 
     from openclaw.db.models import SandboxRun
 
-    pid = executing_pipeline["id"]
-    tasks_resp = await client.get(f"/api/v1/pipelines/{pid}/tasks")
+    rid = executing_run["id"]
+    tasks_resp = await client.get(f"/api/v1/runs/{rid}/tasks")
     task_id = tasks_resp.json()[0]["id"]
 
     # Insert a sandbox run directly into DB
-    run = SandboxRun(
+    sandbox_run = SandboxRun(
         sandbox_id="test-run-001",
-        pipeline_id=uuid.UUID(pid),
-        pipeline_task_id=task_id,
-        team_id=uuid.UUID(executing_pipeline["team_id"]),
+        run_id=uuid.UUID(rid),
+        run_task_id=task_id,
+        team_id=uuid.UUID(executing_run["team_id"]),
         test_cmd="pytest tests/",
         exit_code=0,
         stdout="OK",
@@ -189,7 +189,7 @@ async def test_sandbox_api_get_by_id(client, executing_pipeline, db_session):
         started_at=datetime.now(timezone.utc),
         ended_at=datetime.now(timezone.utc),
     )
-    db_session.add(run)
+    db_session.add(sandbox_run)
     await db_session.commit()
 
     resp = await client.get("/api/v1/sandbox-runs/test-run-001")
@@ -207,10 +207,10 @@ async def test_sandbox_api_get_by_id(client, executing_pipeline, db_session):
 
 @pytest.mark.asyncio
 async def test_execution_loop_runs_sandbox_on_success(
-    client, executing_pipeline, engineer_agent, db_session
+    client, executing_run, engineer_agent, db_session
 ):
     """Sandbox tests triggered after task completion when configured."""
-    pid = uuid.UUID(executing_pipeline["id"])
+    rid = uuid.UUID(executing_run["id"])
 
     with patch.object(
         ExecutionLoop, "_run_task", new_callable=AsyncMock, return_value=True
@@ -224,22 +224,22 @@ async def test_execution_loop_runs_sandbox_on_success(
     ) as mock_settings:
         mock_settings.sandbox_enabled = False
         mock_settings.task_polling_interval_seconds = 0
-        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_concurrent_run_tasks = 1
         mock_settings.max_task_retries = 0
 
         loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
-        result = await loop.run(pid)
+        result = await loop.run(rid)
 
-    # Pipeline should reach reviewing — sandbox skipped via mock
+    # Run should reach reviewing — sandbox skipped via mock
     assert result["status"] in ("reviewing", "done")
 
 
 @pytest.mark.asyncio
 async def test_execution_loop_retries_on_sandbox_failure(
-    client, executing_pipeline, engineer_agent, db_session
+    client, executing_run, engineer_agent, db_session
 ):
     """Task reset to todo when sandbox tests fail (if retries available)."""
-    pid = uuid.UUID(executing_pipeline["id"])
+    rid = uuid.UUID(executing_run["id"])
 
     call_count = 0
 
@@ -264,11 +264,11 @@ async def test_execution_loop_retries_on_sandbox_failure(
     ) as mock_settings:
         mock_settings.sandbox_enabled = True
         mock_settings.task_polling_interval_seconds = 0
-        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_concurrent_run_tasks = 1
         mock_settings.max_task_retries = 2
 
         loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
-        result = await loop.run(pid)
+        result = await loop.run(rid)
 
     # The loop should have retried tasks that failed sandbox
     assert call_count >= 2  # At least one retry
@@ -276,10 +276,10 @@ async def test_execution_loop_retries_on_sandbox_failure(
 
 @pytest.mark.asyncio
 async def test_execution_loop_skips_sandbox_no_docker(
-    client, executing_pipeline, engineer_agent, db_session
+    client, executing_run, engineer_agent, db_session
 ):
     """Gracefully skips sandbox when Docker is unavailable."""
-    pid = uuid.UUID(executing_pipeline["id"])
+    rid = uuid.UUID(executing_run["id"])
 
     with patch.object(
         ExecutionLoop, "_run_task", new_callable=AsyncMock, return_value=True
@@ -293,11 +293,11 @@ async def test_execution_loop_skips_sandbox_no_docker(
     ) as mock_settings:
         mock_settings.sandbox_enabled = False
         mock_settings.task_polling_interval_seconds = 0
-        mock_settings.max_concurrent_pipeline_tasks = 1
+        mock_settings.max_concurrent_run_tasks = 1
         mock_settings.max_task_retries = 0
 
         loop = ExecutionLoop(session_factory=_make_session_factory(db_session))
-        result = await loop.run(pid)
+        result = await loop.run(rid)
 
-    # Pipeline should complete normally — sandbox skipped
+    # Run should complete normally — sandbox skipped
     assert result["status"] in ("reviewing", "done")

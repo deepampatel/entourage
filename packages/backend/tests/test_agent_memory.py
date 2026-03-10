@@ -24,7 +24,7 @@ class TestWriteReflection:
     async def test_creates_openclaw_dir(self, memory_mgr, worktree):
         await memory_mgr.write_reflection(
             agent_id="agent-1",
-            pipeline_task_id=1,
+            run_task_id=1,
             reflection="Learned to use pytest fixtures",
             worktree_path=worktree,
         )
@@ -34,7 +34,7 @@ class TestWriteReflection:
     async def test_creates_reflections_file(self, memory_mgr, worktree):
         path = await memory_mgr.write_reflection(
             agent_id="agent-1",
-            pipeline_task_id=1,
+            run_task_id=1,
             reflection="Test reflection",
             worktree_path=worktree,
         )
@@ -65,7 +65,7 @@ class TestWriteFeedback:
     async def test_creates_feedback_file(self, memory_mgr, worktree):
         path = await memory_mgr.write_feedback(
             agent_id="agent-1",
-            pipeline_task_id=1,
+            run_task_id=1,
             feedback="Fix the error handling",
             worktree_path=worktree,
         )
