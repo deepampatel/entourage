@@ -14,21 +14,27 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
 }
 
 .sidebar-brand h1 {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-heading);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: -0.02em;
 }
 
 .sidebar-label {
   display: block;
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
   margin-bottom: 0.5rem;
+  font-weight: 600;
 }
 
 .team-select {
@@ -40,12 +46,17 @@
   padding: 0.5rem;
   font-size: 13px;
   font-family: var(--font-ui);
+  transition: border-color var(--transition-fast);
+}
+
+.team-select:hover {
+  border-color: var(--border-input);
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .nav-link {
@@ -56,7 +67,9 @@
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
-  transition: var(--transition-fast);
+  transition: all var(--transition-fast);
+  border-left: 2px solid transparent;
+  margin-left: -2px;
 }
 
 .nav-link:hover {
@@ -67,6 +80,7 @@
 .nav-link.active {
   color: var(--text-heading);
   background: var(--bg-active);
+  border-left-color: var(--accent);
 }
 
 .sidebar-footer {
@@ -83,12 +97,13 @@
   font-size: 12px;
   font-family: var(--font-ui);
   cursor: pointer;
-  transition: var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .logout-btn:hover {
   color: var(--semantic-red);
-  border-color: var(--semantic-red);
+  border-color: rgba(241, 76, 76, 0.4);
+  background: rgba(241, 76, 76, 0.05);
 }
 
 .sidebar-empty {
@@ -100,17 +115,19 @@
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
-  max-width: 960px;
+  max-width: 1000px;
+  min-width: 0;
 }
 
 /* ─── Dashboard ───────────────────────────────────────── */
 
 .dashboard h1,
 .tasks-page h1 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--text-heading);
   margin-bottom: 1.5rem;
+  letter-spacing: -0.01em;
 }
 
 /* ─── Alerts Banner ─────────────────────────────────────── */
@@ -127,19 +144,19 @@
   align-items: center;
   gap: 0.75rem;
   padding: 10px 16px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
 }
 
 .alert-item.alert-warning {
   background: rgba(204, 167, 0, 0.08);
-  border: 1px solid rgba(204, 167, 0, 0.25);
+  border: 1px solid rgba(204, 167, 0, 0.2);
   color: var(--semantic-orange);
 }
 
 .alert-item.alert-critical {
   background: rgba(241, 76, 76, 0.08);
-  border: 1px solid rgba(241, 76, 76, 0.25);
+  border: 1px solid rgba(241, 76, 76, 0.2);
   color: var(--semantic-red);
 }
 
@@ -161,7 +178,7 @@
   cursor: pointer;
   font-size: 11px;
   font-family: var(--font-ui);
-  opacity: 0.7;
+  opacity: 0.6;
   transition: opacity var(--transition-fast);
   flex-shrink: 0;
 }
@@ -201,7 +218,7 @@
   display: inline-block;
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 1.5rem 2rem;
 }
 
@@ -282,7 +299,7 @@
   max-width: 400px;
   margin-left: auto;
   margin-right: auto;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .empty-state-cta {
@@ -294,5 +311,9 @@
 @media (max-width: 900px) {
   .sidebar {
     display: none;
+  }
+
+  .main-content {
+    padding: 1.25rem;
   }
 }

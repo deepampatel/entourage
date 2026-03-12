@@ -1,10 +1,11 @@
 /* ─── Manage Page ─────────────────────────────────────── */
 
 .manage-page h1 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--text-heading);
   margin-bottom: 1.5rem;
+  letter-spacing: -0.01em;
 }
 
 .manage-tabs {
@@ -247,6 +248,13 @@
 
 .manage-btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(74, 222, 128, 0.2);
+}
+
+.manage-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .manage-btn:disabled {

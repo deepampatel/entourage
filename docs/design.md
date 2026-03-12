@@ -37,7 +37,7 @@ monospace typography for code and identifiers, smooth transitions throughout.
 | `--text-primary`     | `#c4c4c4`   | Main body text                 |
 | `--text-secondary`   | `#858585`   | Secondary / supporting text    |
 | `--text-muted`       | `#6a6a6a`   | Muted / disabled text          |
-| `--text-faint`       | `#3e3e3e`   | Placeholder, very subtle       |
+| `--text-faint`       | `#525252`   | Placeholder text (min 3:1)     |
 | `--text-heading`     | `#e0e0e0`   | Headings, emphasis             |
 
 ### Borders

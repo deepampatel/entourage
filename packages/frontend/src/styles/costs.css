@@ -27,6 +27,10 @@
   color: var(--text-primary);
 }
 
+.cost-table tbody tr {
+  transition: background var(--transition-fast);
+}
+
 .cost-table tbody tr:hover {
   background: var(--bg-hover);
 }

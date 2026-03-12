@@ -110,7 +110,7 @@ export function Login({ onLogin }: { onLogin: () => void }) {
             disabled={loading || !email || !password}
           >
             {loading
-              ? "..."
+              ? mode === "login" ? "Signing in…" : "Creating account…"
               : mode === "login"
                 ? "Sign In"
                 : "Create Account"}

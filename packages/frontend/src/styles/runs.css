@@ -13,9 +13,10 @@
 
 .runs-header h1 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   color: var(--text-heading);
+  letter-spacing: -0.01em;
 }
 
 /* ─── Filters ──────────────────────────────────────────── */
@@ -67,11 +68,13 @@
   border-radius: 8px;
   padding: 1.25rem;
   cursor: pointer;
-  transition: border-color var(--transition-fast);
+  transition: all var(--transition-smooth);
 }
 
 .run-card:hover {
   border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
 .run-card-header {
@@ -230,8 +233,15 @@
   color: var(--bg-primary);
 }
 
-.run-btn-primary:hover {
+.run-btn-primary:hover:not(:disabled) {
   background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(74, 222, 128, 0.2);
+}
+
+.run-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .run-btn-success {
