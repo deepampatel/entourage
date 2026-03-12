@@ -7,10 +7,15 @@
 }
 
 .agent-card {
-  background: #111;
-  border: 1px solid #222;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1rem;
+  transition: border-color var(--transition-fast);
+}
+
+.agent-card:hover {
+  border-color: var(--border-input);
 }
 
 .agent-header {
@@ -21,22 +26,36 @@
 }
 
 .agent-status-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
+.agent-status-dot.running {
+  background: var(--status-active);
+  animation: pulse 2s infinite;
+}
+
+.agent-status-dot.idle {
+  background: var(--status-idle);
+}
+
+.agent-status-dot.error {
+  background: var(--status-attention);
+}
+
 .agent-name {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 13px;
+  color: var(--text-primary);
 }
 
 .agent-meta {
   display: flex;
   gap: 0.5rem;
-  font-size: 0.75rem;
-  color: #666;
+  font-size: 11px;
+  color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -45,41 +64,43 @@
 }
 
 .agent-status-text {
-  font-size: 0.75rem;
-  color: #999;
+  font-size: 11px;
+  color: var(--text-secondary);
   text-transform: capitalize;
 }
 
 /* ─── Agent Card Enhancements ────────────────────────── */
 
 .agent-adapter {
-  color: #555;
+  color: var(--text-muted);
   font-style: italic;
 }
 
 .agent-current-task {
   margin-top: 0.5rem;
-  font-size: 0.75rem;
-  color: #10b981;
+  font-size: 11px;
+  color: var(--accent);
   line-height: 1.3;
 }
 
 .agent-run-btn {
   margin-top: 0.75rem;
   width: 100%;
-  padding: 0.4rem 0.75rem;
-  background: #1f2937;
-  color: #93c5fd;
-  border: 1px solid #374151;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 12px;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-fast);
 }
 
 .agent-run-btn:hover:not(:disabled) {
-  background: #374151;
-  color: #bfdbfe;
+  background: var(--bg-hover);
+  color: var(--text-heading);
+  border-color: var(--border-input);
 }
 
 .agent-run-btn:disabled {

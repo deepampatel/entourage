@@ -7,19 +7,26 @@
 
 .cost-table th,
 .cost-table td {
-  padding: 0.5rem 1rem;
+  padding: 8px 16px;
   text-align: left;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .cost-table th {
-  font-size: 0.75rem;
-  color: #666;
+  font-size: 11px;
+  color: var(--text-secondary);
   text-transform: uppercase;
+  letter-spacing: 0.05em;
   font-weight: 600;
 }
 
 .cost-table td {
-  font-size: 0.85rem;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.cost-table tbody tr:hover {
+  background: var(--bg-hover);
 }

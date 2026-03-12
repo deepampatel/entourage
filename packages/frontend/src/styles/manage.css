@@ -1,38 +1,40 @@
 /* ─── Manage Page ─────────────────────────────────────── */
 
 .manage-page h1 {
-  font-size: 1.75rem;
+  font-size: 16px;
   font-weight: 600;
+  color: var(--text-heading);
   margin-bottom: 1.5rem;
 }
 
 .manage-tabs {
   display: flex;
-  gap: 0.25rem;
+  gap: 4px;
   margin-bottom: 1.5rem;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid var(--border-default);
   padding-bottom: 0;
 }
 
 .manage-tab {
-  padding: 0.5rem 1rem;
+  padding: 8px 16px;
   background: none;
   border: none;
-  color: #666;
-  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--font-ui);
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: all 0.15s;
+  transition: var(--transition-fast);
 }
 
 .manage-tab:hover {
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .manage-tab.active {
-  color: #fff;
-  border-bottom-color: #10b981;
+  color: var(--text-heading);
+  border-bottom-color: var(--accent);
 }
 
 .manage-section {
@@ -45,11 +47,11 @@
 
 .manage-section-header h2,
 .manage-sub-heading {
-  font-size: 1rem;
+  font-size: 11px;
   font-weight: 600;
-  color: #999;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
   margin-bottom: 1rem;
   margin-top: 1.5rem;
 }
@@ -63,8 +65,8 @@
 }
 
 .manage-card {
-  background: #111;
-  border: 1px solid #222;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1rem;
 }
@@ -77,17 +79,17 @@
 }
 
 .manage-card-header h3 {
-  font-size: 1rem;
+  font-size: 14px;
   font-weight: 600;
-  color: #fff;
+  color: var(--text-heading);
 }
 
 .manage-badge {
-  font-size: 0.7rem;
-  background: #1f2937;
-  color: #10b981;
-  padding: 0.2rem 0.5rem;
-  border-radius: 999px;
+  font-size: 10px;
+  background: var(--accent-muted);
+  color: var(--accent);
+  padding: 2px 8px;
+  border-radius: 9999px;
   font-weight: 500;
 }
 
@@ -96,7 +98,7 @@
 .manage-agent-list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 6px;
   margin-bottom: 0.75rem;
 }
 
@@ -104,100 +106,86 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.4rem 0.5rem;
-  background: #0a0a0a;
+  padding: 6px 8px;
+  background: var(--bg-inset);
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 13px;
 }
 
 .manage-agent-name {
   font-weight: 500;
-  color: #e0e0e0;
+  color: var(--text-primary);
   flex: 1;
 }
 
 .manage-role {
-  font-size: 0.7rem;
-  padding: 0.15rem 0.4rem;
+  font-size: 10px;
+  padding: 2px 6px;
   border-radius: 4px;
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
-.manage-role-engineer {
-  background: #1e3a5f;
-  color: #3b82f6;
-}
-
-.manage-role-reviewer {
-  background: #3b1f4f;
-  color: #a855f7;
-}
-
-.manage-role-manager {
-  background: #1f3b2f;
-  color: #10b981;
-}
+.manage-role-engineer { background: rgba(86, 156, 214, 0.10); color: var(--semantic-blue); }
+.manage-role-reviewer { background: rgba(167, 139, 250, 0.10); color: var(--semantic-purple); }
+.manage-role-manager  { background: var(--accent-muted); color: var(--accent); }
 
 .manage-agent-model {
-  font-size: 0.75rem;
-  color: #666;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .manage-status {
-  font-size: 0.7rem;
-  padding: 0.1rem 0.35rem;
+  font-size: 10px;
+  padding: 2px 6px;
   border-radius: 4px;
 }
 
-.manage-status-idle {
-  color: #6b7280;
-}
-
-.manage-status-running {
-  color: #10b981;
-}
+.manage-status-idle    { color: var(--text-muted); }
+.manage-status-running { color: var(--accent); }
 
 /* ─── Org List ───────────────────────────────────────── */
 
 .manage-org-list {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 6px;
 }
 
 .manage-org-row {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem 0.75rem;
-  background: #111;
-  border: 1px solid #222;
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-fast);
 }
 
 .manage-org-row:hover {
-  border-color: #333;
-  background: #151515;
+  border-color: var(--border-input);
+  background: var(--bg-hover);
 }
 
 .manage-org-row.active {
-  border-color: #10b981;
-  background: #0f1f17;
+  border-color: var(--accent);
+  background: var(--accent-muted);
 }
 
 .manage-org-name {
   font-weight: 500;
-  color: #e0e0e0;
+  color: var(--text-primary);
 }
 
 .manage-org-slug {
-  font-size: 0.8rem;
-  color: #666;
+  font-size: 12px;
+  color: var(--text-muted);
   flex: 1;
+  font-family: var(--font-mono);
 }
 
 /* ─── Forms ──────────────────────────────────────────── */
@@ -211,12 +199,13 @@
 
 .manage-input,
 .manage-select {
-  background: #1a1a1a;
-  color: #e0e0e0;
-  border: 1px solid #333;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
   border-radius: 6px;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.85rem;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--font-ui);
   min-width: 0;
 }
 
@@ -229,30 +218,35 @@
   min-width: 120px;
 }
 
+.manage-input::placeholder {
+  color: var(--text-faint);
+}
+
 .manage-input:focus,
 .manage-select:focus {
   outline: none;
-  border-color: #10b981;
+  border-color: var(--border-focus);
 }
 
 .manage-btn {
-  padding: 0.5rem 1rem;
+  padding: 8px 16px;
   border: none;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 13px;
   font-weight: 500;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-fast);
   white-space: nowrap;
 }
 
 .manage-btn-primary {
-  background: #10b981;
-  color: #fff;
+  background: var(--accent);
+  color: var(--bg-primary);
 }
 
 .manage-btn-primary:hover:not(:disabled) {
-  background: #059669;
+  background: var(--accent-hover);
 }
 
 .manage-btn:disabled {
@@ -261,13 +255,13 @@
 }
 
 .manage-error {
-  font-size: 0.8rem;
-  color: #ef4444;
+  font-size: 12px;
+  color: var(--semantic-red);
 }
 
 .manage-empty {
-  color: #666;
-  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-size: 13px;
   padding: 0;
   margin: 0;
 }
@@ -280,11 +274,12 @@
 
 .org-select {
   width: 100%;
-  background: #1a1a1a;
-  color: #e0e0e0;
-  border: 1px solid #333;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 0.5rem;
-  font-size: 0.85rem;
+  font-size: 13px;
+  font-family: var(--font-ui);
   margin-bottom: 0.5rem;
 }

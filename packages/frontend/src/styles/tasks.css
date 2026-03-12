@@ -7,10 +7,15 @@
 }
 
 .task-card {
-  background: #111;
-  border: 1px solid #222;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1rem;
+  transition: border-color var(--transition-fast);
+}
+
+.task-card:hover {
+  border-color: var(--border-input);
 }
 
 .task-header {
@@ -21,13 +26,13 @@
 }
 
 .task-id {
-  font-size: 0.75rem;
-  color: #666;
-  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .task-priority {
-  font-size: 0.7rem;
+  font-size: 10px;
   text-transform: uppercase;
   font-weight: 600;
   letter-spacing: 0.05em;
@@ -36,47 +41,61 @@
 .task-title {
   font-weight: 500;
   margin-bottom: 0.5rem;
+  color: var(--text-primary);
 }
 
 .task-footer {
   display: flex;
   gap: 0.75rem;
   align-items: center;
-  font-size: 0.8rem;
+  font-size: 12px;
 }
 
 .task-status {
-  padding: 0.15rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
   border-radius: 4px;
-  font-size: 0.7rem;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
 }
 
-.task-status-todo { background: #1f2937; color: #93c5fd; }
-.task-status-in_progress { background: #1e3a2e; color: #6ee7b7; }
-.task-status-in_review { background: #3b2f1e; color: #fbbf24; }
-.task-status-in_approval { background: #2d1f3b; color: #c084fc; }
-.task-status-merging { background: #1e2d3b; color: #67e8f9; }
-.task-status-done { background: #1a2e1a; color: #4ade80; }
-.task-status-cancelled { background: #2a1a1a; color: #f87171; }
+/* 3-tier status colors: gray (idle/done), whitish (active), red (attention) */
+.task-status-todo        { background: rgba(85, 85, 85, 0.10); color: var(--semantic-gray); }
+.task-status-in_progress { background: rgba(176, 176, 176, 0.10); color: var(--status-active); }
+.task-status-in_review   { background: rgba(176, 176, 176, 0.10); color: var(--status-active); }
+.task-status-in_approval { background: rgba(241, 76, 76, 0.10); color: var(--semantic-red); }
+.task-status-merging     { background: rgba(176, 176, 176, 0.10); color: var(--status-active); }
+.task-status-done        { background: rgba(85, 85, 85, 0.10); color: var(--semantic-gray); }
+.task-status-cancelled   { background: rgba(85, 85, 85, 0.10); color: var(--semantic-gray); }
+
+.task-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
 
 .task-assignee {
-  color: #999;
+  color: var(--text-secondary);
 }
 
 .task-tags {
   display: flex;
-  gap: 0.25rem;
+  gap: 4px;
   margin-top: 0.5rem;
   flex-wrap: wrap;
 }
 
 .task-tag {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.4rem;
-  background: #1a1a2e;
-  color: #818cf8;
+  font-size: 10px;
+  padding: 2px 6px;
+  background: var(--bg-active);
+  color: var(--semantic-blue);
   border-radius: 3px;
 }
 
@@ -89,17 +108,17 @@
 }
 
 .review-badge {
-  font-size: 0.65rem;
-  padding: 0.1rem 0.4rem;
+  font-size: 10px;
+  padding: 2px 6px;
   border-radius: 3px;
   font-weight: 600;
   text-transform: uppercase;
 }
 
-.review-badge-pending { background: #3b2f1e; color: #fbbf24; }
-.review-badge-approved { background: #1a2e1a; color: #4ade80; }
-.review-badge-rejected { background: #2a1a1a; color: #f87171; }
-.review-badge-changes { background: #2e2a1a; color: #fbbf24; }
+.review-badge-pending  { background: rgba(204, 167, 0, 0.10); color: var(--semantic-orange); }
+.review-badge-approved { background: rgba(115, 201, 145, 0.10); color: var(--semantic-green); }
+.review-badge-rejected { background: rgba(241, 76, 76, 0.10); color: var(--semantic-red); }
+.review-badge-changes  { background: rgba(204, 167, 0, 0.10); color: var(--semantic-orange); }
 
 /* ─── Kanban Board ────────────────────────────────────── */
 
@@ -121,22 +140,24 @@
   align-items: center;
   padding: 0.5rem 0;
   margin-bottom: 0.75rem;
-  border-bottom: 2px solid #222;
+  border-bottom: 2px solid var(--border-default);
 }
 
 .kanban-title {
-  font-size: 0.8rem;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  color: #999;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
 }
 
 .kanban-count {
-  font-size: 0.75rem;
-  color: #666;
-  background: #1a1a1a;
-  padding: 0.15rem 0.5rem;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--bg-inset);
+  padding: 2px 8px;
   border-radius: 10px;
+  font-family: var(--font-mono);
 }
 
 .kanban-cards {

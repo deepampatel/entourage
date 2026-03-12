@@ -1,3 +1,73 @@
+/* ─── Design Tokens ──────────────────────────────────── */
+
+:root {
+  /* Backgrounds */
+  --bg-primary:    #1e1e1e;
+  --bg-sidebar:    #252526;
+  --bg-surface:    #252526;
+  --bg-elevated:   #2d2d2d;
+  --bg-hover:      #2a2a2a;
+  --bg-active:     #37373d;
+  --bg-input:      #313131;
+  --bg-inset:      #1a1a1a;
+
+  /* Text */
+  --text-primary:   #c4c4c4;
+  --text-secondary: #858585;
+  --text-muted:     #6a6a6a;
+  --text-faint:     #3e3e3e;
+  --text-heading:   #e0e0e0;
+
+  /* Borders */
+  --border-default: #333333;
+  --border-subtle:  #2a2a2a;
+  --border-input:   #3c3c3c;
+  --border-focus:   #4ade80;
+
+  /* Accent (brand green) */
+  --accent:       #4ade80;
+  --accent-hover: #5ee892;
+  --accent-muted: rgba(74, 222, 128, 0.08);
+  --accent-glow:  rgba(74, 222, 128, 0.3);
+
+  /* Semantic */
+  --semantic-red:          #f14c4c;
+  --semantic-orange:       #cca700;
+  --semantic-yellow:       #e2c08d;
+  --semantic-green:        #73c991;
+  --semantic-blue:         #569cd6;
+  --semantic-purple:       #a78bfa;
+  --semantic-purple-light: #c084fc;
+  --semantic-gray:         #555555;
+
+  /* Status dots */
+  --status-active:    #b0b0b0;
+  --status-idle:      #555555;
+  --status-attention: #f14c4c;
+
+  /* UI Controls */
+  --btn-bg:          #cccccc;
+  --btn-text:        #1e1e1e;
+  --btn-hover:       #aaaaaa;
+  --scrollbar-thumb: #333333;
+  --scrollbar-hover: #555555;
+  --backdrop:        rgba(0, 0, 0, 0.55);
+
+  /* Typography */
+  --font-ui:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* Transitions */
+  --transition-fast:   100ms ease;
+  --transition-normal: 150ms ease;
+  --transition-smooth: 200ms ease;
+
+  /* Shadows */
+  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-panel:    0 8px 24px rgba(0, 0, 0, 0.3);
+  --shadow-modal:    0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
 /* ─── Reset & Base ────────────────────────────────────── */
 
 * {
@@ -7,8 +77,55 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #0a0a0a;
-  color: #e0e0e0;
+  font-family: var(--font-ui);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   line-height: 1.5;
+  letter-spacing: -0.01em;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbars ──────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-hover);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* ─── Animations ──────────────────────────────────────── */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

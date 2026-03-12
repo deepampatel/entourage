@@ -1,8 +1,9 @@
 /* ─── Human Request Cards ────────────────────────────── */
 
 .hr-page h1 {
-  font-size: 1.75rem;
+  font-size: 16px;
   font-weight: 600;
+  color: var(--text-heading);
   margin-bottom: 1.5rem;
 }
 
@@ -13,25 +14,26 @@
 }
 
 .hr-filter-btn {
-  padding: 0.4rem 1rem;
-  background: #1a1a1a;
-  color: #999;
-  border: 1px solid #333;
+  padding: 6px 16px;
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 12px;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-fast);
 }
 
 .hr-filter-btn:hover {
-  color: #fff;
-  border-color: #555;
+  color: var(--text-heading);
+  border-color: var(--border-input);
 }
 
 .hr-filter-active {
-  background: #1f2937;
-  color: #93c5fd;
-  border-color: #374151;
+  background: var(--bg-active);
+  color: var(--text-heading);
+  border-color: var(--border-input);
 }
 
 .hr-list {
@@ -41,15 +43,15 @@
 }
 
 .hr-card {
-  background: #111;
-  border: 1px solid #222;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1rem;
 }
 
-.hr-card-pending { border-left: 3px solid #f59e0b; }
-.hr-card-resolved { border-left: 3px solid #10b981; }
-.hr-card-expired { border-left: 3px solid #ef4444; }
+.hr-card-pending  { border-left: 3px solid var(--semantic-orange); }
+.hr-card-resolved { border-left: 3px solid var(--semantic-green); }
+.hr-card-expired  { border-left: 3px solid var(--semantic-red); }
 
 .hr-header {
   display: flex;
@@ -59,19 +61,19 @@
 }
 
 .hr-id {
-  font-size: 0.75rem;
-  color: #666;
-  font-family: monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
 }
 
 .hr-kind {
-  font-size: 0.7rem;
+  font-size: 10px;
   text-transform: uppercase;
   font-weight: 600;
 }
 
 .hr-status {
-  font-size: 0.7rem;
+  font-size: 10px;
   text-transform: capitalize;
   margin-left: auto;
 }
@@ -80,19 +82,20 @@
   font-weight: 500;
   margin-bottom: 0.5rem;
   line-height: 1.4;
+  color: var(--text-primary);
 }
 
 .hr-meta {
   display: flex;
   gap: 0.75rem;
-  font-size: 0.75rem;
-  color: #666;
+  font-size: 11px;
+  color: var(--text-muted);
   margin-bottom: 0.75rem;
 }
 
-.hr-agent { color: #93c5fd; }
-.hr-task { color: #c084fc; }
-.hr-time { margin-left: auto; }
+.hr-agent { color: var(--semantic-blue); }
+.hr-task  { color: var(--semantic-purple); }
+.hr-time  { margin-left: auto; }
 
 .hr-options {
   display: flex;
@@ -101,18 +104,20 @@
 }
 
 .hr-option-btn {
-  padding: 0.35rem 0.75rem;
-  background: #1f2937;
-  color: #e0e0e0;
-  border: 1px solid #374151;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 12px;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-fast);
 }
 
 .hr-option-btn:hover:not(:disabled) {
-  background: #374151;
+  background: var(--bg-hover);
+  border-color: var(--border-input);
 }
 
 .hr-option-btn:disabled {
@@ -128,33 +133,39 @@
 
 .hr-respond-input {
   flex: 1;
-  padding: 0.4rem 0.75rem;
-  background: #1a1a1a;
-  color: #e0e0e0;
-  border: 1px solid #333;
+  padding: 6px 12px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-input);
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 13px;
+  font-family: var(--font-ui);
+}
+
+.hr-respond-input::placeholder {
+  color: var(--text-faint);
 }
 
 .hr-respond-input:focus {
   outline: none;
-  border-color: #555;
+  border-color: var(--border-focus);
 }
 
 .hr-respond-btn {
-  padding: 0.4rem 1rem;
-  background: #10b981;
-  color: #fff;
+  padding: 6px 16px;
+  background: var(--accent);
+  color: var(--bg-primary);
   border: none;
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 12px;
   font-weight: 600;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background var(--transition-fast);
 }
 
 .hr-respond-btn:hover:not(:disabled) {
-  background: #059669;
+  background: var(--accent-hover);
 }
 
 .hr-respond-btn:disabled {
@@ -164,14 +175,14 @@
 
 .hr-response {
   margin-top: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: #1a2e1a;
+  padding: 8px 12px;
+  background: rgba(115, 201, 145, 0.08);
   border-radius: 6px;
-  font-size: 0.85rem;
-  color: #6ee7b7;
+  font-size: 13px;
+  color: var(--semantic-green);
 }
 
 .hr-response-label {
   font-weight: 600;
-  color: #4ade80;
+  color: var(--accent);
 }

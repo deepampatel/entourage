@@ -2,9 +2,8 @@
 
 .empty-state,
 .sidebar-empty {
-  color: #555;
-  font-size: 0.85rem;
-  font-style: italic;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 .empty-state-page {
@@ -13,17 +12,17 @@
   align-items: center;
   justify-content: center;
   height: 60vh;
-  color: #555;
+  color: var(--text-muted);
 }
 
 .empty-state-page h2 {
-  font-size: 1.5rem;
+  font-size: 16px;
   margin-bottom: 0.5rem;
-  color: #888;
+  color: var(--text-secondary);
 }
 
 .loading {
-  color: #666;
+  color: var(--text-muted);
   padding: 2rem;
   text-align: center;
 }

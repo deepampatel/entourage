@@ -5,13 +5,13 @@
 }
 
 .task-detail-breadcrumb {
-  font-size: 0.8rem;
-  color: #666;
+  font-size: 12px;
+  color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
 .task-detail-breadcrumb a {
-  color: #93c5fd;
+  color: var(--semantic-blue);
   text-decoration: none;
 }
 
@@ -20,8 +20,9 @@
 }
 
 .task-detail-header h1 {
-  font-size: 1.5rem;
+  font-size: 16px;
   font-weight: 600;
+  color: var(--text-heading);
   margin-bottom: 0.75rem;
 }
 
@@ -34,11 +35,11 @@
 }
 
 .task-detail-branch {
-  font-family: monospace;
-  font-size: 0.8rem;
-  color: #818cf8;
-  background: #1a1a2e;
-  padding: 0.15rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--semantic-blue);
+  background: rgba(86, 156, 214, 0.08);
+  padding: 2px 8px;
   border-radius: 4px;
 }
 
@@ -47,16 +48,16 @@
 }
 
 .task-detail-section h2 {
-  font-size: 0.85rem;
+  font-size: 11px;
   font-weight: 600;
-  color: #999;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
   margin-bottom: 0.75rem;
 }
 
 .task-detail-description {
-  color: #ccc;
+  color: var(--text-primary);
   line-height: 1.6;
   white-space: pre-wrap;
 }
@@ -70,18 +71,18 @@
 .task-detail-field {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 4px;
 }
 
 .task-detail-label {
-  font-size: 0.7rem;
-  color: #666;
+  font-size: 10px;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .task-dep-link {
-  color: #93c5fd;
+  color: var(--semantic-blue);
   text-decoration: none;
   margin-right: 0.5rem;
 }
@@ -96,7 +97,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-left: 2px solid #222;
+  border-left: 2px solid var(--border-default);
   margin-left: 0.5rem;
   padding-left: 1rem;
 }
@@ -113,9 +114,9 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #444;
+  background: var(--semantic-gray);
   flex-shrink: 0;
-  margin-top: 0.3rem;
+  margin-top: 4px;
   position: absolute;
   left: -1.35rem;
 }
@@ -124,16 +125,23 @@
   display: flex;
   justify-content: space-between;
   width: 100%;
-  font-size: 0.8rem;
+  font-size: 12px;
 }
 
 .event-type {
-  color: #ccc;
-  font-family: monospace;
-  font-size: 0.75rem;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .event-time {
-  color: #555;
-  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 600px) {
+  .task-detail-grid {
+    grid-template-columns: 1fr;
+  }
 }

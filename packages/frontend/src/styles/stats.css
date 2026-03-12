@@ -8,29 +8,30 @@
 }
 
 .stat-card {
-  background: #111;
-  border: 1px solid #222;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 1.25rem;
 }
 
 .stat-label {
-  font-size: 0.75rem;
-  color: #666;
+  font-size: 11px;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
 }
 
 .stat-value {
-  font-size: 1.75rem;
+  font-size: 24px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-heading);
   font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
 }
 
 .stat-detail {
-  font-size: 0.8rem;
-  color: #555;
-  margin-top: 0.25rem;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
 }

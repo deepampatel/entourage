@@ -7,8 +7,8 @@
 
 .sidebar {
   width: 220px;
-  background: #111;
-  border-right: 1px solid #222;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border-default);
   padding: 1.5rem 1rem;
   flex-shrink: 0;
   display: flex;
@@ -17,54 +17,56 @@
 }
 
 .sidebar-brand h1 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-heading);
 }
 
 .sidebar-label {
   display: block;
-  font-size: 0.7rem;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #666;
+  color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
 
 .team-select {
   width: 100%;
-  background: #1a1a1a;
-  color: #e0e0e0;
-  border: 1px solid #333;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 0.5rem;
-  font-size: 0.85rem;
+  font-size: 13px;
+  font-family: var(--font-ui);
 }
 
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 4px;
 }
 
 .nav-link {
   display: block;
-  padding: 0.5rem 0.75rem;
-  color: #999;
+  padding: 8px 10px;
+  color: var(--text-secondary);
   text-decoration: none;
   border-radius: 6px;
-  font-size: 0.9rem;
-  transition: all 0.15s;
+  font-size: 13px;
+  font-weight: 500;
+  transition: var(--transition-fast);
 }
 
 .nav-link:hover {
-  color: #fff;
-  background: #1a1a1a;
+  color: var(--text-heading);
+  background: var(--bg-hover);
 }
 
 .nav-link.active {
-  color: #fff;
-  background: #1f2937;
+  color: var(--text-heading);
+  background: var(--bg-active);
 }
 
 .sidebar-footer {
@@ -73,39 +75,41 @@
 
 .logout-btn {
   width: 100%;
-  padding: 0.5rem;
+  padding: 8px;
   background: none;
-  border: 1px solid #333;
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  color: #666;
-  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: var(--font-ui);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: var(--transition-fast);
 }
 
 .logout-btn:hover {
-  color: #ef4444;
-  border-color: #ef4444;
+  color: var(--semantic-red);
+  border-color: var(--semantic-red);
 }
 
 .sidebar-empty {
-  font-size: 0.85rem;
-  color: #666;
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
 .main-content {
   flex: 1;
   padding: 2rem;
   overflow-y: auto;
-  max-width: 1400px;
+  max-width: 960px;
 }
 
 /* ─── Dashboard ───────────────────────────────────────── */
 
 .dashboard h1,
 .tasks-page h1 {
-  font-size: 1.75rem;
+  font-size: 16px;
   font-weight: 600;
+  color: var(--text-heading);
   margin-bottom: 1.5rem;
 }
 
@@ -122,21 +126,21 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.6rem 1rem;
+  padding: 10px 16px;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: 13px;
 }
 
 .alert-item.alert-warning {
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  color: #f59e0b;
+  background: rgba(204, 167, 0, 0.08);
+  border: 1px solid rgba(204, 167, 0, 0.25);
+  color: var(--semantic-orange);
 }
 
 .alert-item.alert-critical {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  background: rgba(241, 76, 76, 0.08);
+  border: 1px solid rgba(241, 76, 76, 0.25);
+  color: var(--semantic-red);
 }
 
 .alert-severity {
@@ -149,15 +153,16 @@
 }
 
 .alert-dismiss {
-  padding: 0.2rem 0.5rem;
+  padding: 2px 8px;
   border: 1px solid currentColor;
   border-radius: 4px;
   background: transparent;
   color: inherit;
   cursor: pointer;
-  font-size: 0.75rem;
+  font-size: 11px;
+  font-family: var(--font-ui);
   opacity: 0.7;
-  transition: opacity 0.15s;
+  transition: opacity var(--transition-fast);
   flex-shrink: 0;
 }
 
@@ -175,36 +180,36 @@
 }
 
 .dashboard-section h2 {
-  font-size: 1rem;
+  font-size: 11px;
   font-weight: 600;
-  color: #999;
+  color: var(--text-secondary);
   margin-bottom: 1rem;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.05em;
 }
 
 /* ─── Onboarding ─────────────────────────────────────── */
 
 .onboarding-subtitle {
-  color: #999;
-  font-size: 1rem;
+  color: var(--text-secondary);
+  font-size: 14px;
   margin-bottom: 2rem;
 }
 
 .onboarding-checklist {
   text-align: left;
   display: inline-block;
-  background: #111;
-  border: 1px solid #222;
-  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
   padding: 1.5rem 2rem;
 }
 
 .onboarding-checklist h3 {
-  font-size: 0.8rem;
+  font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #666;
+  color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
@@ -213,12 +218,12 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  font-size: 0.95rem;
-  color: #e0e0e0;
+  font-size: 14px;
+  color: var(--text-primary);
 }
 
 .onboarding-step.completed {
-  color: #666;
+  color: var(--text-muted);
 }
 
 .onboarding-step-icon {
@@ -228,16 +233,16 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: #1f2937;
-  font-size: 0.8rem;
+  background: var(--bg-active);
+  font-size: 12px;
   font-weight: 600;
-  color: #999;
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
 .onboarding-step.completed .onboarding-step-icon {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: var(--accent-muted);
+  color: var(--accent);
 }
 
 .onboarding-step-label {
@@ -245,34 +250,34 @@
 }
 
 .onboarding-step-desc {
-  color: #666;
-  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
 /* ─── Shared UX Helpers ─────────────────────────────── */
 
 .form-help {
-  font-size: 0.8rem;
-  color: #666;
-  margin: 0.15rem 0 0.5rem;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 2px 0 8px;
 }
 
 .form-help-row {
   display: flex;
   gap: 1.5rem;
-  margin-top: 0.35rem;
+  margin-top: 4px;
 }
 
 .empty-state-title {
-  font-size: 1.1rem;
+  font-size: 15px;
   font-weight: 600;
-  color: #e0e0e0;
-  margin: 0 0 0.35rem;
+  color: var(--text-heading);
+  margin: 0 0 4px;
 }
 
 .empty-state-desc {
-  font-size: 0.9rem;
-  color: #666;
+  font-size: 13px;
+  color: var(--text-muted);
   margin: 0 0 1rem;
   max-width: 400px;
   margin-left: auto;
@@ -282,4 +287,12 @@
 
 .empty-state-cta {
   margin-top: 0.5rem;
+}
+
+/* ─── Responsive ─────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .sidebar {
+    display: none;
+  }
 }
