@@ -131,6 +131,57 @@ async def test_list_tasks_filter_by_status(client, team):
 
 
 @pytest.mark.asyncio
+async def test_list_tasks_excludes_archived_by_default(client, team):
+    """Archived tasks are hidden from list endpoint unless explicitly included."""
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Archive me"},
+    )
+    task_id = resp.json()["id"]
+
+    for status in ["in_progress", "in_review", "in_approval", "merging", "done"]:
+        await client.post(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": status},
+        )
+
+    archive_resp = await client.post(f"/api/v1/tasks/{task_id}/archive", json={})
+    assert archive_resp.status_code == 200
+    assert archive_resp.json()["status"] == "archived"
+
+    list_resp = await client.get(f"/api/v1/teams/{team['id']}/tasks")
+    assert list_resp.status_code == 200
+    assert len(list_resp.json()) == 0
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_include_archived_flag(client, team):
+    """include_archived=true returns archived tasks in the default listing."""
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Archive me too"},
+    )
+    task_id = resp.json()["id"]
+
+    for status in ["in_progress", "in_review", "in_approval", "merging", "done"]:
+        await client.post(
+            f"/api/v1/tasks/{task_id}/status",
+            json={"status": status},
+        )
+
+    await client.post(f"/api/v1/tasks/{task_id}/archive", json={})
+
+    list_resp = await client.get(
+        f"/api/v1/teams/{team['id']}/tasks",
+        params={"include_archived": "true"},
+    )
+    assert list_resp.status_code == 200
+    tasks = list_resp.json()
+    assert len(tasks) == 1
+    assert tasks[0]["status"] == "archived"
+
+
+@pytest.mark.asyncio
 async def test_get_task(client, team):
     """GET /tasks/:id should return task details."""
     create_resp = await client.post(
@@ -286,7 +337,7 @@ async def test_invalid_transition_skip_steps(client, team):
 
 @pytest.mark.asyncio
 async def test_invalid_transition_from_done(client, team):
-    """Can't transition out of 'done' (terminal state)."""
+    """Can't transition from 'done' to active states."""
     resp = await client.post(
         f"/api/v1/teams/{team['id']}/tasks",
         json={"title": "Terminal state"},
@@ -307,7 +358,7 @@ async def test_invalid_transition_from_done(client, team):
 
 @pytest.mark.asyncio
 async def test_invalid_transition_from_cancelled(client, team):
-    """Can't transition out of 'cancelled' (terminal state)."""
+    """Can't transition from 'cancelled' to active states."""
     resp = await client.post(
         f"/api/v1/teams/{team['id']}/tasks",
         json={"title": "Cancelled task"},
@@ -321,6 +372,55 @@ async def test_invalid_transition_from_cancelled(client, team):
         json={"status": "todo"},
     )
     assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_archive_done_task(client, team):
+    """Done tasks can be archived."""
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Archive done"},
+    )
+    task_id = resp.json()["id"]
+
+    for s in ["in_progress", "in_review", "in_approval", "merging", "done"]:
+        await client.post(f"/api/v1/tasks/{task_id}/status", json={"status": s})
+
+    archive_resp = await client.post(f"/api/v1/tasks/{task_id}/archive", json={})
+    assert archive_resp.status_code == 200
+    assert archive_resp.json()["status"] == "archived"
+
+
+@pytest.mark.asyncio
+async def test_archive_cancelled_task(client, team):
+    """Cancelled tasks can be archived."""
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Archive cancelled"},
+    )
+    task_id = resp.json()["id"]
+
+    await client.post(
+        f"/api/v1/tasks/{task_id}/status",
+        json={"status": "cancelled"},
+    )
+    archive_resp = await client.post(f"/api/v1/tasks/{task_id}/archive", json={})
+    assert archive_resp.status_code == 200
+    assert archive_resp.json()["status"] == "archived"
+
+
+@pytest.mark.asyncio
+async def test_archive_rejected_for_active_task(client, team):
+    """Only done/cancelled tasks can be archived."""
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Not ready"},
+    )
+    task_id = resp.json()["id"]
+
+    archive_resp = await client.post(f"/api/v1/tasks/{task_id}/archive", json={})
+    assert archive_resp.status_code == 409
+    assert "can be archived" in archive_resp.json()["detail"]
 
 
 # ═══════════════════════════════════════════════════════════
@@ -386,6 +486,111 @@ async def test_dependency_unblocks_after_done(client, team):
     )
     assert resp.status_code == 200
     assert resp.json()["status"] == "in_progress"
+
+
+@pytest.mark.asyncio
+async def test_get_task_with_dependent_tasks_info(client, team):
+    """GET /tasks/:id should return dependent task information.
+
+    Learn: The API enriches task responses with dependent_tasks array,
+    containing id, title, and status for each task in the depends_on list.
+    This allows the frontend to show dependency status without extra API calls.
+    """
+    # Create task A
+    resp_a = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task A - Foundation", "priority": "high"},
+    )
+    task_a_id = resp_a.json()["id"]
+
+    # Create task B
+    resp_b = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task B - API Layer", "priority": "medium"},
+    )
+    task_b_id = resp_b.json()["id"]
+
+    # Create task C (depends on A and B)
+    resp_c = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task C - Integration", "depends_on": [task_a_id, task_b_id]},
+    )
+    task_c = resp_c.json()
+    task_c_id = task_c["id"]
+
+    # Verify depends_on is set correctly
+    assert task_c["depends_on"] == [task_a_id, task_b_id]
+
+    # Get task C with details
+    resp = await client.get(f"/api/v1/tasks/{task_c_id}")
+    assert resp.status_code == 200
+    task_detail = resp.json()
+
+    # Verify dependent_tasks array exists and has correct structure
+    assert "dependent_tasks" in task_detail
+    assert len(task_detail["dependent_tasks"]) == 2
+
+    # Verify each dependent task has id, title, and status
+    dep_tasks = {dt["id"]: dt for dt in task_detail["dependent_tasks"]}
+
+    assert task_a_id in dep_tasks
+    assert dep_tasks[task_a_id]["title"] == "Task A - Foundation"
+    assert dep_tasks[task_a_id]["status"] == "todo"
+
+    assert task_b_id in dep_tasks
+    assert dep_tasks[task_b_id]["title"] == "Task B - API Layer"
+    assert dep_tasks[task_b_id]["status"] == "todo"
+
+    # Update task A status and verify it's reflected
+    await client.post(
+        f"/api/v1/tasks/{task_a_id}/status",
+        json={"status": "in_progress"}
+    )
+
+    # Get task C again
+    resp = await client.get(f"/api/v1/tasks/{task_c_id}")
+    task_detail = resp.json()
+    dep_tasks = {dt["id"]: dt for dt in task_detail["dependent_tasks"]}
+
+    # Verify task A status is updated
+    assert dep_tasks[task_a_id]["status"] == "in_progress"
+    assert dep_tasks[task_b_id]["status"] == "todo"
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_with_dependent_tasks_info(client, team):
+    """GET /teams/:id/tasks should include dependent task information.
+
+    Learn: The list endpoint also enriches each task with dependent_tasks,
+    allowing the UI to show dependency status in list views without N+1 queries.
+    """
+    # Create task A
+    resp_a = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task A"},
+    )
+    task_a_id = resp_a.json()["id"]
+
+    # Create task B (depends on A)
+    resp_b = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task B", "depends_on": [task_a_id]},
+    )
+
+    # List tasks
+    resp = await client.get(f"/api/v1/teams/{team['id']}/tasks")
+    assert resp.status_code == 200
+    tasks = resp.json()
+
+    # Find task B in the list
+    task_b = next(t for t in tasks if t["title"] == "Task B")
+
+    # Verify dependent_tasks is included
+    assert "dependent_tasks" in task_b
+    assert len(task_b["dependent_tasks"]) == 1
+    assert task_b["dependent_tasks"][0]["id"] == task_a_id
+    assert task_b["dependent_tasks"][0]["title"] == "Task A"
+    assert task_b["dependent_tasks"][0]["status"] == "todo"
 
 
 # ═══════════════════════════════════════════════════════════
