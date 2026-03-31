@@ -327,12 +327,14 @@ server.tool(
     team_id: z.string().describe("Team UUID"),
     status: z.string().describe("Filter by status (todo, in_progress, in_review, etc.)").optional(),
     assignee_id: z.string().describe("Filter by assigned agent UUID").optional(),
+    include_archived: z.boolean().describe("Include archived tasks when no status filter is provided").default(false),
   },
   async (params) => {
     try {
       const tasks = await client.listTasks(params.team_id, {
         status: params.status,
         assignee_id: params.assignee_id,
+        include_archived: params.include_archived,
       });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(tasks, null, 2) }],
@@ -400,12 +402,34 @@ server.tool(
   "Change task status. Validates transitions (can't skip steps) and enforces DAG dependencies.",
   {
     task_id: z.number().describe("Task ID"),
-    status: z.enum(["todo", "in_progress", "in_review", "in_approval", "merging", "done", "cancelled"]).describe("New status"),
+    status: z.enum(["todo", "in_progress", "in_review", "in_approval", "merging", "done", "cancelled", "archived"]).describe("New status"),
     actor_id: z.string().describe("UUID of the agent/user making the change").optional(),
   },
   async (params) => {
     try {
       const task = await client.changeTaskStatus(params.task_id, params.status, params.actor_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(task, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "archive_task",
+  "Archive a task that is already done or cancelled.",
+  {
+    task_id: z.number().describe("Task ID"),
+    actor_id: z.string().describe("UUID of the agent/user making the change").optional(),
+  },
+  async (params) => {
+    try {
+      const task = await client.archiveTask(params.task_id, params.actor_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(task, null, 2) }],
       };
@@ -449,6 +473,25 @@ server.tool(
       const events = await client.getTaskEvents(params.task_id);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(events, null, 2) }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
+  "get_dependent_tasks",
+  "Get the list of tasks that depend on this task (dependent tasks). Shows task IDs, titles, and current status.",
+  { task_id: z.number().describe("Task ID") },
+  async (params) => {
+    try {
+      const dependentTasks = await client.getDependentTasks(params.task_id);
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify(dependentTasks, null, 2) }],
       };
     } catch (error) {
       return {
@@ -1260,11 +1303,11 @@ server.tool(
 
 server.tool(
   "wait_for_task_completion",
-  "Block until a task reaches a terminal status (done, cancelled, or in_review). Use this as a manager agent to wait for an engineer to finish a task.",
+  "Block until a task reaches a terminal status (done, cancelled, archived, or in_review). Use this as a manager agent to wait for an engineer to finish a task.",
   {
     task_id: z.number().describe("Task ID to wait for"),
     timeout_seconds: z.number().describe("Max seconds to wait (default 3600 = 1 hour)").default(3600),
-    terminal_statuses: z.array(z.string()).describe("Statuses to consider terminal").default(["done", "cancelled", "in_review"]),
+    terminal_statuses: z.array(z.string()).describe("Statuses to consider terminal").default(["done", "cancelled", "archived", "in_review"]),
   },
   async (params) => {
     try {

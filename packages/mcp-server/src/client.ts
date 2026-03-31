@@ -160,6 +160,12 @@ export async function registerRepo(
 
 // ─── Phase 2: Tasks / Messages ─────────────────────────────
 
+export interface DependentTaskInfo {
+  id: number;
+  title: string;
+  status: string;
+}
+
 export interface Task {
   id: number;
   team_id: string;
@@ -170,6 +176,7 @@ export interface Task {
   dri_id: string | null;
   assignee_id: string | null;
   depends_on: number[];
+  dependent_tasks?: DependentTaskInfo[];
   repo_ids: string[];
   tags: string[];
   branch: string;
@@ -219,11 +226,12 @@ export async function createTask(
 
 export async function listTasks(
   teamId: string,
-  opts: { status?: string; assignee_id?: string; limit?: number } = {}
+  opts: { status?: string; assignee_id?: string; include_archived?: boolean; limit?: number } = {}
 ): Promise<Task[]> {
   const params: Record<string, string> = {};
   if (opts.status) params.status = opts.status;
   if (opts.assignee_id) params.assignee_id = opts.assignee_id;
+  if (opts.include_archived) params.include_archived = String(opts.include_archived);
   if (opts.limit) params.limit = String(opts.limit);
   return request(`/api/v1/teams/${teamId}/tasks`, { params });
 }
@@ -253,6 +261,16 @@ export async function changeTaskStatus(
   });
 }
 
+export async function archiveTask(
+  taskId: number,
+  actorId?: string
+): Promise<Task> {
+  return request(`/api/v1/tasks/${taskId}/archive`, {
+    method: "POST",
+    body: actorId ? { actor_id: actorId } : {},
+  });
+}
+
 export async function assignTask(
   taskId: number,
   assigneeId: string
@@ -265,6 +283,12 @@ export async function assignTask(
 
 export async function getTaskEvents(taskId: number): Promise<TaskEvent[]> {
   return request(`/api/v1/tasks/${taskId}/events`);
+}
+
+export async function getDependentTasks(taskId: number): Promise<DependentTaskInfo[]> {
+  // Dependent tasks are included in the task detail response
+  const task = await getTask(taskId);
+  return task.dependent_tasks || [];
 }
 
 export async function sendMessage(
@@ -884,13 +908,13 @@ export async function addTeamConvention(
  *
  * Learn: Manager agents use this to wait for engineer tasks to finish.
  * Similar to pollForResponse but watches task status instead.
- * Terminal states: done, cancelled, in_review (engineers move to in_review when done).
+ * Terminal states: done, cancelled, archived, in_review (engineers move to in_review when done).
  */
 export async function pollForTaskCompletion(
   taskId: number,
   pollIntervalMs: number = 10000,
   timeoutMs: number = 3600000,
-  terminalStatuses: string[] = ["done", "cancelled", "in_review"]
+  terminalStatuses: string[] = ["done", "cancelled", "archived", "in_review"]
 ): Promise<Task> {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
