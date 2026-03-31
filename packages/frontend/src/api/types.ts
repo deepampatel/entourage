@@ -48,6 +48,7 @@ export interface Task {
   dri_id: string | null;
   assignee_id: string | null;
   depends_on: number[];
+  dependent_tasks?: DependentTaskInfo[];
   repo_ids: string[];
   tags: string[];
   branch: string;

@@ -14,8 +14,10 @@ import {
   useAgents,
   useApproveTask,
   useRejectTask,
+  useArchiveTask,
 } from "../hooks/useApi";
 import { ReviewPanel } from "../components/ReviewPanel";
+import { useToast } from "../components/Toast";
 import {
   STATUS_LABELS,
   PRIORITY_COLORS,
@@ -37,6 +39,8 @@ export function TaskDetail({ teamId }: TaskDetailProps) {
   const { data: agents } = useAgents(teamId);
   const approveMut = useApproveTask(teamId);
   const rejectMut = useRejectTask(teamId);
+  const archiveMut = useArchiveTask(teamId);
+  const { showToast } = useToast();
 
   if (taskLoading) {
     return <div className="loading">Loading task...</div>;
@@ -62,6 +66,7 @@ export function TaskDetail({ teamId }: TaskDetailProps) {
 
   const showApproveReject =
     task.status === "in_review" || task.status === "in_approval";
+  const showArchive = task.status === "done" || task.status === "cancelled";
 
   return (
     <div className="task-detail">
@@ -101,6 +106,56 @@ export function TaskDetail({ teamId }: TaskDetailProps) {
         <div className="task-detail-section">
           <h2>Description</h2>
           <p className="task-detail-description">{task.description}</p>
+        </div>
+      )}
+
+      {/* Dependent Tasks */}
+      {task.dependent_tasks && task.dependent_tasks.length > 0 && (
+        <div className="task-detail-section">
+          <h2>Depends On</h2>
+          <div className="dependent-tasks-grid">
+            {task.dependent_tasks.map((dep) => {
+              const depStatusLabel =
+                STATUS_LABELS[dep.status as TaskStatus] || dep.status;
+              const depPriorityColor =
+                PRIORITY_COLORS[dep.priority as Priority] ||
+                "var(--semantic-gray)";
+              const isBlocked = dep.status !== "done";
+
+              return (
+                <Link
+                  key={dep.id}
+                  to={`/tasks/${dep.id}`}
+                  className={`dependent-task-card ${
+                    isBlocked ? "blocked" : "ready"
+                  }`}
+                >
+                  <div className="dependent-task-header">
+                    <span className="dependent-task-id">#{dep.id}</span>
+                    {isBlocked && (
+                      <span className="dependent-task-blocked-badge">
+                        Blocking
+                      </span>
+                    )}
+                  </div>
+                  <div className="dependent-task-title">{dep.title}</div>
+                  <div className="dependent-task-meta">
+                    <span
+                      className={`task-status task-status-${dep.status}`}
+                    >
+                      {depStatusLabel}
+                    </span>
+                    <span
+                      className="dependent-task-priority"
+                      style={{ color: depPriorityColor }}
+                    >
+                      {dep.priority}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -148,24 +203,42 @@ export function TaskDetail({ teamId }: TaskDetailProps) {
       </div>
 
       {/* Approve / Reject actions */}
-      {showApproveReject && (
+      {(showApproveReject || showArchive) && (
         <div className="task-detail-section">
           <h2>Actions</h2>
           <div className="review-actions">
-            <button
-              className="review-btn review-btn-approve"
-              onClick={() => taskId && approveMut.mutate(taskId)}
-              disabled={approveMut.isPending}
-            >
-              {approveMut.isPending ? "Approving..." : "Approve"}
-            </button>
-            <button
-              className="review-btn review-btn-reject"
-              onClick={() => taskId && rejectMut.mutate(taskId)}
-              disabled={rejectMut.isPending}
-            >
-              {rejectMut.isPending ? "Rejecting..." : "Reject"}
-            </button>
+            {showApproveReject && (
+              <>
+                <button
+                  className="review-btn review-btn-approve"
+                  onClick={() => taskId && approveMut.mutate(taskId)}
+                  disabled={approveMut.isPending}
+                >
+                  {approveMut.isPending ? "Approving..." : "Approve"}
+                </button>
+                <button
+                  className="review-btn review-btn-reject"
+                  onClick={() => taskId && rejectMut.mutate(taskId)}
+                  disabled={rejectMut.isPending}
+                >
+                  {rejectMut.isPending ? "Rejecting..." : "Reject"}
+                </button>
+              </>
+            )}
+            {showArchive && (
+              <button
+                className="review-btn review-btn-archive"
+                onClick={() =>
+                  taskId &&
+                  archiveMut.mutate(taskId, {
+                    onSuccess: () => showToast("Task archived", "success"),
+                  })
+                }
+                disabled={archiveMut.isPending}
+              >
+                {archiveMut.isPending ? "Archiving..." : "Archive"}
+              </button>
+            )}
           </div>
         </div>
       )}
