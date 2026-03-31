@@ -291,15 +291,33 @@ class PlannerService:
                 return run_check.task_graph
 
         # Manager produced analysis but couldn't call MCP tool.
-        # Use Claude API to convert the analysis into structured task graph.
+        if not agent_analysis or len(agent_analysis.strip()) < 50:
+            logger.warning(
+                "Manager agent produced no useful analysis for run %s "
+                "(%d chars), falling back to template",
+                run_id, len(agent_analysis),
+            )
+            return await self._plan_from_template(
+                run_id, run.intent, template
+            )
+
+        # Convert analysis to structured task graph
         logger.info(
             "Manager agent produced analysis (%d chars), "
-            "converting to structured task graph via API",
+            "converting to structured task graph",
             len(agent_analysis),
         )
-        return await self._convert_analysis_to_task_graph(
-            run_id, run.intent, agent_analysis, template
-        )
+
+        if settings.anthropic_api_key:
+            # Use Claude API for structured conversion
+            return await self._convert_analysis_to_task_graph(
+                run_id, run.intent, agent_analysis, template
+            )
+        else:
+            # No API key — parse the agent's text output directly
+            return await self._parse_analysis_to_task_graph(
+                run_id, run.intent, agent_analysis, template
+            )
 
     async def _convert_analysis_to_task_graph(
         self,
@@ -366,6 +384,98 @@ class PlannerService:
         )
 
         await self.run_svc.change_status(run_id, "awaiting_plan_approval")
+        return task_graph
+
+    async def _parse_analysis_to_task_graph(
+        self,
+        run_id: uuid.UUID,
+        intent: str,
+        agent_analysis: str,
+        template: str | None = None,
+    ) -> dict:
+        """Parse manager agent's text output into a task graph without API.
+
+        Extracts task info from the agent's natural language analysis.
+        Uses the intent as description fallback when parsing fails.
+        Creates a focused task graph — 1 task for simple work, 2-3 for complex.
+        """
+        import re
+
+        # Try to extract task count and descriptions from the analysis
+        # Look for numbered items, bullet points, or "task" mentions
+        lines = agent_analysis.strip().split("\n")
+        extracted_tasks = []
+
+        for line in lines:
+            line = line.strip()
+            # Match patterns like "1. Fix the...", "- Task: ...", "### Task 0: ..."
+            match = re.match(
+                r'^(?:\d+[\.\)]\s*|[-*]\s*|###?\s*Task\s*\d+[:\s]*)'
+                r'(?:\*\*)?(.+?)(?:\*\*)?$',
+                line,
+            )
+            if match:
+                title = match.group(1).strip()
+                # Skip meta-commentary lines
+                if len(title) > 10 and not any(
+                    skip in title.lower()
+                    for skip in ["i need", "i should", "let me", "looking at", "i can see"]
+                ):
+                    extracted_tasks.append(title[:200])
+
+        if not extracted_tasks:
+            # Couldn't parse — create a single focused task from the intent
+            extracted_tasks = [intent[:200]]
+
+        # Limit to 5 tasks max
+        extracted_tasks = extracted_tasks[:5]
+
+        # Determine complexity from count
+        complexity = "S" if len(extracted_tasks) <= 2 else "M"
+
+        # Build task graph
+        tasks = []
+        for i, title in enumerate(extracted_tasks):
+            # Simple linear deps for parsed tasks
+            deps = [i - 1] if i > 0 else []
+            tasks.append({
+                "title": title,
+                "description": f"{title}\n\nContext from codebase analysis:\n{agent_analysis[:500]}",
+                "complexity": complexity,
+                "assigned_role": "engineer",
+                "dependencies": deps,
+            })
+
+        task_graph = {"tasks": tasks}
+
+        # Estimate costs and store
+        estimated_cost = self._estimate_cost(task_graph)
+        task_graph["estimated_cost_usd"] = estimated_cost
+
+        await self.run_svc.set_task_graph(run_id, task_graph)
+
+        run = await self.db.get(Run, run_id)
+        if run:
+            run.estimated_cost_usd = estimated_cost
+            await self.db.flush()
+
+        await self.events.append(
+            stream_id=f"run:{run_id}",
+            event_type=RUN_PLAN_GENERATED,
+            data={
+                "run_id": str(run_id),
+                "task_count": len(tasks),
+                "estimated_cost_usd": estimated_cost,
+                "source": "manager_agent_parsed",
+            },
+        )
+
+        await self.run_svc.change_status(run_id, "awaiting_plan_approval")
+
+        logger.info(
+            "Parsed manager analysis into %d tasks for run %s",
+            len(tasks), run_id,
+        )
         return task_graph
 
     def _build_manager_planning_prompt(
