@@ -36,7 +36,7 @@ VALID_RUN_TRANSITIONS: dict[str, set[str]] = {
     "contracting": {"awaiting_plan_approval", "failed", "cancelled"},
     "awaiting_plan_approval": {"executing", "planning", "cancelled"},
     "executing": {"reviewing", "paused", "failed", "cancelled"},
-    "reviewing": {"merging", "executing", "failed", "cancelled"},
+    "reviewing": {"merging", "done", "executing", "failed", "cancelled"},
     "merging": {"done", "failed"},
     "paused": {"executing", "cancelled"},
     "done": set(),

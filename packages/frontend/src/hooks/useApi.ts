@@ -431,6 +431,17 @@ export function useRejectPlan(teamId: string) {
   });
 }
 
+export function useChangeRunStatus(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ runId, status }: { runId: string; status: string }) =>
+      apiClient.post<Run>(`/api/v1/runs/${runId}/status`, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
+    },
+  });
+}
+
 // ─── Contract hooks ──────────────────────────────────────
 
 export function useRunContracts(runId: string | undefined) {

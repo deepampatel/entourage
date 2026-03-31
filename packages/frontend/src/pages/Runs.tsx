@@ -8,6 +8,7 @@
 import { useState } from "react";
 import {
   useApprovePlan,
+  useChangeRunStatus,
   useCreateRun,
   useGenerateContracts,
   useRepos,
@@ -58,6 +59,7 @@ interface RunsProps {
 const STATUS_FILTERS: (RunStatus | "all")[] = [
   "all",
   "executing",
+  "reviewing",
   "awaiting_plan_approval",
   "done",
   "failed",
@@ -207,6 +209,7 @@ function RunCard({
   const rejectPlan = useRejectPlan(teamId);
   const startRun = useStartRun(teamId);
   const generateContracts = useGenerateContracts(teamId);
+  const changeStatus = useChangeRunStatus(teamId);
   const { showToast } = useToast();
 
   const status = run.status as RunStatus;
@@ -275,6 +278,54 @@ function RunCard({
               Reject
             </button>
           </>
+        )}
+        {status === "reviewing" && (
+          <>
+            <button
+              className="run-btn run-btn-success"
+              onClick={() => changeStatus.mutate(
+                { runId: run.id, status: "done" },
+                { onSuccess: () => showToast("Run marked as done!", "success") }
+              )}
+              disabled={changeStatus.isPending}
+            >
+              Mark Done
+            </button>
+            <button
+              className="run-btn"
+              onClick={() => changeStatus.mutate(
+                { runId: run.id, status: "executing" },
+                { onSuccess: () => showToast("Run re-executing...", "success") }
+              )}
+              disabled={changeStatus.isPending}
+            >
+              Re-run
+            </button>
+          </>
+        )}
+        {status === "failed" && (
+          <button
+            className="run-btn"
+            onClick={() => changeStatus.mutate(
+              { runId: run.id, status: "draft" },
+              { onSuccess: () => showToast("Run reset to draft", "success") }
+            )}
+            disabled={changeStatus.isPending}
+          >
+            Retry
+          </button>
+        )}
+        {(status === "executing" || status === "reviewing" || status === "failed") && (
+          <button
+            className="run-btn run-btn-danger"
+            onClick={() => changeStatus.mutate(
+              { runId: run.id, status: "cancelled" },
+              { onSuccess: () => showToast("Run cancelled", "success") }
+            )}
+            disabled={changeStatus.isPending}
+          >
+            Cancel
+          </button>
         )}
       </div>
 
