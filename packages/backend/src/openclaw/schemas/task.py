@@ -14,6 +14,17 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+# ─── Dependent Task Info ────────────────────────────────
+
+class DependentTaskInfo(BaseModel):
+    """Information about a dependent task."""
+    id: int
+    title: str
+    status: str
+
+    model_config = {"from_attributes": True}
+
+
 # ─── Tasks ───────────────────────────────────────────────
 
 class TaskCreate(BaseModel):
@@ -37,7 +48,10 @@ class TaskUpdate(BaseModel):
 
 class StatusChange(BaseModel):
     """Request to change task status. Validated by the state machine."""
-    status: str = Field(..., pattern=r"^(todo|in_progress|in_review|in_approval|merging|done|cancelled)$")
+    status: str = Field(
+        ...,
+        pattern=r"^(todo|in_progress|in_review|in_approval|merging|done|cancelled|archived)$",
+    )
     actor_id: Optional[uuid.UUID] = None  # who initiated the change
 
 
@@ -56,6 +70,56 @@ class TaskRead(BaseModel):
     dri_id: Optional[uuid.UUID]
     assignee_id: Optional[uuid.UUID]
     depends_on: list[int]
+    repo_ids: list[uuid.UUID]
+    tags: list[str]
+    branch: str
+    created_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class TaskDetail(BaseModel):
+    """Detailed task information including dependent tasks with their statuses."""
+    id: int
+    team_id: uuid.UUID
+    title: str
+    description: str
+    status: str
+    priority: str
+    dri_id: Optional[uuid.UUID]
+    assignee_id: Optional[uuid.UUID]
+    depends_on: list[int]
+    dependent_tasks: list[DependentTaskInfo] = Field(
+        default_factory=list,
+        description="List of dependent tasks with their current statuses"
+    )
+    repo_ids: list[uuid.UUID]
+    tags: list[str]
+    branch: str
+    created_at: datetime
+    updated_at: datetime
+    completed_at: Optional[datetime]
+
+    model_config = {"from_attributes": True}
+
+
+class TaskListItem(BaseModel):
+    """Task list item with simplified dependent task information."""
+    id: int
+    team_id: uuid.UUID
+    title: str
+    description: str
+    status: str
+    priority: str
+    dri_id: Optional[uuid.UUID]
+    assignee_id: Optional[uuid.UUID]
+    depends_on: list[int]
+    dependent_tasks: list[DependentTaskInfo] = Field(
+        default_factory=list,
+        description="List of dependent tasks with their current statuses"
+    )
     repo_ids: list[uuid.UUID]
     tags: list[str]
     branch: str
