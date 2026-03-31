@@ -56,6 +56,15 @@ export interface Task {
   completed_at: string | null;
 }
 
+export interface DependentTaskInfo {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  priority: Priority;
+  assignee_id: string | null;
+  completed_at: string | null;
+}
+
 export interface TaskEvent {
   id: number;
   type: string;
@@ -107,7 +116,8 @@ export type TaskStatus =
   | "in_approval"
   | "merging"
   | "done"
-  | "cancelled";
+  | "cancelled"
+  | "archived";
 
 export type Priority = "low" | "medium" | "high" | "critical";
 
@@ -119,6 +129,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   merging: "Merging",
   done: "Done",
   cancelled: "Cancelled",
+  archived: "Archived",
 };
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
