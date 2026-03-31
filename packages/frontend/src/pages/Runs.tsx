@@ -574,6 +574,7 @@ export function Runs({ teamId }: RunsProps) {
   useTeamSocket(teamId);
 
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
   const [showCreate, setShowCreate] = useState(false);
 
   const { data: runs, isLoading } = useRuns(
@@ -601,6 +602,28 @@ export function Runs({ teamId }: RunsProps) {
           onClose={() => setShowCreate(false)}
         />
       )}
+
+      {/* Filter bar */}
+      <div className="filter-bar">
+        <input
+          type="text"
+          placeholder="Search runs..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="search-input"
+        />
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="status-filter-dropdown"
+        >
+          <option value="all">All Statuses</option>
+          <option value="executing">Executing</option>
+          <option value="reviewing">Reviewing</option>
+          <option value="done">Done</option>
+          <option value="failed">Failed</option>
+        </select>
+      </div>
 
       {/* Status filters */}
       <div className="run-filters">
