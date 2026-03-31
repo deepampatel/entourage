@@ -15,6 +15,7 @@ from openclaw.db.engine import get_db
 from openclaw.schemas.team import (
     AgentCreate,
     AgentRead,
+    AgentUpdate,
     OrgCreate,
     OrgRead,
     RepoCreate,
@@ -93,6 +94,33 @@ async def create_agent(
 @router.get("/teams/{team_id}/agents", response_model=list[AgentRead])
 async def list_agents(team_id: uuid.UUID, svc: TeamService = Depends(_svc)):
     return await svc.list_agents(team_id)
+
+
+@router.patch("/agents/{agent_id}", response_model=AgentRead)
+async def update_agent(
+    agent_id: uuid.UUID,
+    body: AgentUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update agent fields (name, role, model, config)."""
+    from openclaw.db.models import Agent
+
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    if body.name is not None:
+        agent.name = body.name
+    if body.role is not None:
+        agent.role = body.role
+    if body.model is not None:
+        agent.model = body.model
+    if body.config is not None:
+        agent.config = {**agent.config, **body.config}
+
+    await db.commit()
+    await db.refresh(agent)
+    return agent
 
 
 # ─── Repositories ───────────────────────────────────────

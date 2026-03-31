@@ -6,6 +6,7 @@ Learn: Pydantic v2 models validate request/response data. Separate
 
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -56,6 +57,13 @@ class AgentCreate(BaseModel):
     role: str = Field(default="engineer", pattern=r"^(manager|engineer|reviewer)$")
     model: str = Field(default="claude-sonnet-4-20250514")
     config: dict = Field(default_factory=dict)
+
+
+class AgentUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    role: Optional[str] = Field(None, pattern=r"^(manager|engineer|reviewer)$")
+    model: Optional[str] = None
+    config: Optional[dict] = None
 
 
 class AgentRead(BaseModel):

@@ -87,6 +87,25 @@ export function useCreateAgent(teamId: string) {
   });
 }
 
+export function useUpdateAgent(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      agentId,
+      ...body
+    }: {
+      agentId: string;
+      name?: string;
+      role?: string;
+      model?: string;
+      config?: Record<string, unknown>;
+    }) => apiClient.patch<Agent>(`/api/v1/agents/${agentId}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agents", teamId] });
+    },
+  });
+}
+
 // ─── Agents ────────────────────────────────────────────
 
 export function useAgents(teamId: string | undefined) {
