@@ -24,9 +24,9 @@ const KIND_LABELS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "#f59e0b",
-  resolved: "#10b981",
-  expired: "#ef4444",
+  pending: "var(--semantic-orange)",
+  resolved: "var(--semantic-green)",
+  expired: "var(--semantic-red)",
 };
 
 export function HumanRequestCard({

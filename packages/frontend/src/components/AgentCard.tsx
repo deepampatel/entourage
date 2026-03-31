@@ -17,10 +17,10 @@ interface AgentCardProps {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  idle: "#6b7280",
-  working: "#10b981",
-  paused: "#f59e0b",
-  error: "#ef4444",
+  idle: "var(--semantic-gray)",
+  working: "var(--semantic-green)",
+  paused: "var(--semantic-orange)",
+  error: "var(--semantic-red)",
 };
 
 export function AgentCard({ agent, tasks, onRunAgent, isRunning }: AgentCardProps) {
@@ -34,7 +34,7 @@ export function AgentCard({ agent, tasks, onRunAgent, isRunning }: AgentCardProp
       <div className="agent-header">
         <span
           className="agent-status-dot"
-          style={{ backgroundColor: STATUS_COLORS[agent.status] || "#6b7280" }}
+          style={{ backgroundColor: STATUS_COLORS[agent.status] || "var(--semantic-gray)" }}
         />
         <span className="agent-name">{agent.name}</span>
       </div>

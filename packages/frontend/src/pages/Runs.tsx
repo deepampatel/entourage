@@ -10,6 +10,7 @@ import {
   useApprovePlan,
   useCreateRun,
   useGenerateContracts,
+  useRepos,
   useRunContracts,
   useRuns,
   useRunTasks,
@@ -21,7 +22,6 @@ import {
 import { useTeamSocket } from "../hooks/useTeamSocket";
 import { useToast } from "../components/Toast";
 import {
-  RUN_STATUS_COLORS,
   RUN_STATUS_LABELS,
   type Run,
   type RunStatus,
@@ -65,7 +65,7 @@ const STATUS_FILTERS: (RunStatus | "all")[] = [
 
 function CostBar({ actual, limit }: { actual: number; limit: number }) {
   const pct = limit > 0 ? Math.min((actual / limit) * 100, 100) : 0;
-  const color = pct >= 100 ? "#ef4444" : pct >= 80 ? "#f59e0b" : "#10b981";
+  const color = pct >= 100 ? "var(--semantic-red)" : pct >= 80 ? "var(--semantic-orange)" : "var(--semantic-green)";
   return (
     <div className="cost-bar">
       <div className="cost-bar-fill" style={{ width: `${pct}%`, backgroundColor: color }} />
@@ -197,8 +197,10 @@ function RunCard({
   run: Run;
   teamId: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const shouldAutoExpand = run.status === "awaiting_plan_approval" || run.status === "failed";
+  const [expanded, setExpanded] = useState(shouldAutoExpand);
   const [expandedTaskSandbox, setExpandedTaskSandbox] = useState<number | null>(null);
+  const [expandedTaskOutput, setExpandedTaskOutput] = useState<number | null>(null);
   const { data: tasks } = useRunTasks(expanded ? run.id : undefined);
   const { data: contracts } = useRunContracts(expanded ? run.id : undefined);
   const approvePlan = useApprovePlan(teamId);
@@ -208,7 +210,6 @@ function RunCard({
   const { showToast } = useToast();
 
   const status = run.status as RunStatus;
-  const statusColor = RUN_STATUS_COLORS[status] || "#6b7280";
   const statusLabel = RUN_STATUS_LABELS[status] || status;
 
   return (
@@ -217,14 +218,24 @@ function RunCard({
         <div className="run-card-title">
           <h3>{run.title}</h3>
           <span
-            className="run-status-badge"
-            style={{ backgroundColor: statusColor }}
+            className={`run-status-badge ${status}`}
             title={STATUS_TOOLTIPS[status] || ""}
           >
             {statusLabel}
           </span>
         </div>
         <p className="run-intent">{run.intent}</p>
+        {run.pr_url && (
+          <a
+            href={run.pr_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="run-pr-link"
+            onClick={(e) => e.stopPropagation()}
+          >
+            View Pull Request →
+          </a>
+        )}
       </div>
 
       <div className="run-card-meta">
@@ -311,19 +322,7 @@ function RunCard({
                       {task.agent_id.slice(0, 8)}
                     </span>
                   )}
-                  <span
-                    className="run-task-status"
-                    style={{
-                      color:
-                        task.status === "done"
-                          ? "#10b981"
-                          : task.status === "failed"
-                            ? "#ef4444"
-                            : task.status === "in_progress"
-                              ? "#3b82f6"
-                              : "#6b7280",
-                    }}
-                  >
+                  <span className={`run-task-status run-task-status-${task.status}`}>
                     {task.status}
                     {isParallel && " ⚡"}
                   </span>
@@ -338,6 +337,56 @@ function RunCard({
                     </span>
                   )}
                 </div>
+                {/* Task description + error details */}
+                {(task.description || task.error) && (
+                  <div className="run-task-details">
+                    {task.description && (
+                      <p className="run-task-description">{task.description}</p>
+                    )}
+                    {task.error && (
+                      <div className="run-task-error">
+                        <span className="run-task-error-label">Error:</span> {task.error}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {/* Agent output viewer */}
+                {task.result && (
+                  <div className="agent-output-section" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="sandbox-output-toggle"
+                      onClick={() =>
+                        setExpandedTaskOutput(
+                          expandedTaskOutput === task.id ? null : task.id
+                        )
+                      }
+                    >
+                      {expandedTaskOutput === task.id ? "Hide Output" : "View Output"}
+                    </button>
+                    {expandedTaskOutput === task.id && (
+                      <div className="agent-output">
+                        {task.result.stdout && (
+                          <div className="sandbox-output-section">
+                            <h5>stdout</h5>
+                            <pre>{task.result.stdout}</pre>
+                          </div>
+                        )}
+                        {task.result.stderr && (
+                          <div className="sandbox-output-section">
+                            <h5>stderr</h5>
+                            <pre>{task.result.stderr}</pre>
+                          </div>
+                        )}
+                        <div className="sandbox-output-meta">
+                          exit={task.result.exit_code ?? "?"} |{" "}
+                          {task.result.duration_seconds
+                            ? `${task.result.duration_seconds.toFixed(1)}s`
+                            : "?"}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {sandboxOpen && (
                   <TaskSandboxDetail
                     runId={run.id}
@@ -364,7 +413,7 @@ function RunCard({
                   <span className="contract-name">{c.name}</span>
                   <span
                     className="contract-lock-status"
-                    style={{ color: c.locked ? "#10b981" : "#f59e0b" }}
+                    style={{ color: c.locked ? "var(--semantic-green)" : "var(--semantic-orange)" }}
                   >
                     {c.locked ? "locked" : "pending"}
                   </span>
@@ -409,7 +458,9 @@ function CreateRunForm({
   const [intent, setIntent] = useState("");
   const [budget, setBudget] = useState(10);
   const [template, setTemplate] = useState("");
+  const [repositoryId, setRepositoryId] = useState("");
   const createRun = useCreateRun(teamId);
+  const { data: repos } = useRepos(teamId);
   const { showToast } = useToast();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -420,6 +471,7 @@ function CreateRunForm({
         intent,
         budget_limit_usd: budget,
         ...(template ? { template } : {}),
+        ...(repositoryId ? { repository_id: repositoryId } : {}),
       },
       {
         onSuccess: () => {
@@ -482,6 +534,28 @@ function CreateRunForm({
           Max spend on AI API calls. $5-10 for small tasks, $20-50 for features.
         </p>
       </div>
+      {repos && repos.length > 0 && (
+        <div>
+          <label>
+            Repository:
+            <select
+              value={repositoryId}
+              onChange={(e) => setRepositoryId(e.target.value)}
+              className="create-run-select"
+            >
+              <option value="">All repositories</option>
+              {repos.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name} ({r.local_path})
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="form-help">
+            Target a specific repo, or leave blank for multi-repo runs.
+          </p>
+        </div>
+      )}
       <div className="form-actions">
         <button type="submit" className="run-btn run-btn-primary" disabled={createRun.isPending}>
           Create

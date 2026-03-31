@@ -113,3 +113,20 @@ ALERT_ACKNOWLEDGED = "alert.acknowledged"
 
 SECURITY_VIOLATION_BLOCKED = "security.violation.blocked"
 SECURITY_VIOLATION_LOGGED = "security.violation.logged"
+
+# ─── Phase 4B: Reaction engine ─────────────────────────────
+
+REACTION_FIRED = "reaction.fired"
+REACTION_ESCALATED = "reaction.escalated"
+AGENT_STUCK_DETECTED = "agent.stuck_detected"
+GLOBAL_PAUSE_ACTIVATED = "global_pause.activated"
+GLOBAL_PAUSE_LIFTED = "global_pause.lifted"
+
+# ─── Phase 4C: Crash recovery ──────────────────────────────
+
+RECOVERY_STARTED = "recovery.started"
+RECOVERY_COMPLETED = "recovery.completed"
+RECOVERY_AGENT_RESET = "recovery.agent_reset"
+RECOVERY_TASK_RESET = "recovery.task_reset"
+RECOVERY_SESSION_CLOSED = "recovery.session_closed"
+RECOVERY_RUN_FAILED = "recovery.run_failed"

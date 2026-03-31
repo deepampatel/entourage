@@ -80,6 +80,7 @@ class RunTaskRead(BaseModel):
     retry_count: int = 0
     branch_name: str
     error: Optional[str] = None
+    result: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
     started_at: Optional[datetime] = None

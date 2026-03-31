@@ -1,20 +1,18 @@
-"""Claude Code adapter — spawns Claude Code CLI as a subprocess.
+"""Claude Code adapter — spawns Claude Code CLI via tmux runtime.
 
-Learn: Claude Code is Anthropic's coding agent CLI. It supports:
-- --print: Non-interactive mode (reads prompt, works, prints output, exits)
-- --mcp-config: JSON file describing MCP servers to connect to
+Phase 3: Uses tmux by default for interactive, observable, crash-survivable
+agent sessions. Falls back to --print subprocess when tmux is unavailable.
+
+Claude Code CLI supports:
+- Interactive mode: agent stays alive, receives prompts via stdin
+- --print: Non-interactive fire-and-forget (legacy fallback)
+- --mcp-config: JSON describing MCP servers to connect to
 - --allowedTools: Restrict which tools the agent can use
 - --max-turns: Safety limit on agentic loop iterations
-
-The adapter writes a temporary MCP config file that points Claude Code
-at our MCP server. When Claude Code calls ask_human(wait=true), the
-MCP tool blocks until a human responds — enabling seamless human-in-the-loop.
 """
 
-import json
 import os
 import shutil
-import tempfile
 
 from openclaw.agent.adapters.base import AdapterConfig, AdapterResult, AgentAdapter
 
@@ -22,14 +20,35 @@ from openclaw.agent.adapters.base import AdapterConfig, AdapterResult, AgentAdap
 class ClaudeCodeAdapter(AgentAdapter):
     """Adapter for Claude Code CLI (claude command)."""
 
+    # Common install locations to search beyond PATH
+    _EXTRA_SEARCH_PATHS = [
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/.npm-global/bin"),
+        "/usr/local/bin",
+        "/opt/homebrew/bin",
+    ]
+
     @property
     def name(self) -> str:
         return "claude_code"
 
+    def _find_claude_binary(self) -> str | None:
+        """Locate the claude binary on PATH or common install locations."""
+        found = shutil.which("claude")
+        if found:
+            return found
+        # Check common install directories not always on PATH
+        for extra_dir in self._EXTRA_SEARCH_PATHS:
+            candidate = os.path.join(extra_dir, "claude")
+            if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                return candidate
+        return None
+
     def validate_environment(self) -> tuple[bool, str]:
         """Check that the `claude` binary is available."""
-        if shutil.which("claude"):
-            return True, "Claude Code CLI found"
+        binary = self._find_claude_binary()
+        if binary:
+            return True, f"Claude Code CLI found at {binary}"
         return (
             False,
             "Claude Code CLI not found on PATH. "
@@ -75,24 +94,6 @@ class ClaudeCodeAdapter(AgentAdapter):
             task_title, task_description, agent_id, team_id, task_id,
             conventions=conventions, context=context,
         )
-
-    def _build_conventions_section(self, conventions: list[dict] | None, prefix: str = "Follow these team standards:") -> str:
-        """Build the conventions section common to all prompts."""
-        if not conventions:
-            return ""
-        lines = ["TEAM CONVENTIONS:", prefix]
-        for c in conventions:
-            lines.append(f"- {c['key']}: {c['content']}")
-        return "\n".join(lines) + "\n\n"
-
-    def _build_context_section(self, context: dict | None) -> str:
-        """Build the context carryover section from previous runs."""
-        if not context:
-            return ""
-        lines = ["PREVIOUS CONTEXT:", "Key findings from earlier work on this task:"]
-        for k, v in context.items():
-            lines.append(f"- {k}: {v}")
-        return "\n".join(lines) + "\n\n"
 
     def _build_security_section(self, config: "AdapterConfig | None" = None) -> str:
         """Build write-path restrictions section for security enforcement."""
@@ -360,56 +361,191 @@ YOUR IDENTITY:
 Begin by checking your inbox for the review request.
 """
 
-    async def run(self, prompt: str, config: AdapterConfig) -> AdapterResult:
-        """Spawn Claude Code with our MCP server configured.
+    def get_launch_command(
+        self, config: AdapterConfig, mcp_config_path: str
+    ) -> list[str]:
+        """Build the CLI command to launch Claude Code (interactive mode).
 
-        Learn: We write a temp MCP config file, then run:
-        claude --print --mcp-config <path> --allowedTools "mcp__entourage__*" <prompt>
-
-        Claude Code spawns our MCP server as a child process (stdio transport).
-        The MCP server makes HTTP calls to our backend API.
+        Returns the command list WITHOUT --print so the agent stays alive
+        and can receive follow-up messages via the runtime.
         """
-        # Write temporary MCP config
-        mcp_config = {
-            "mcpServers": {
-                "entourage": {
-                    "command": config.mcp_server_command[0],
-                    "args": config.mcp_server_command[1:],
-                    "env": {
-                        "OPENCLAW_API_URL": config.api_url,
-                    },
-                }
-            }
+        claude_bin = self._find_claude_binary()
+        if not claude_bin:
+            raise RuntimeError("Claude Code CLI not found on PATH.")
+
+        return [
+            claude_bin,
+            "--mcp-config", mcp_config_path,
+            "--allowedTools", "mcp__entourage__*",
+            "--max-turns", "100",
+        ]
+
+    def get_environment(self, config: AdapterConfig) -> dict[str, str]:
+        """Environment variables to pass to the agent process."""
+        return {
+            "ENTOURAGE_AGENT_ID": config.agent_id,
+            "ENTOURAGE_TEAM_ID": config.team_id,
+            "ENTOURAGE_TASK_ID": str(config.task_id),
+            **config.env_overrides,
         }
 
-        # Create temp file in working directory for clean cleanup
-        config_dir = tempfile.mkdtemp(prefix="entourage-mcp-")
-        config_path = os.path.join(config_dir, "mcp-config.json")
+    async def run(self, prompt: str, config: AdapterConfig) -> AdapterResult:
+        """Spawn Claude Code — uses tmux runtime for interactive sessions.
 
+        Phase 3: Agents run in tmux by default (observable, crash-survivable,
+        can receive follow-up messages). Falls back to --print subprocess
+        only when tmux is unavailable.
+        """
+        config_path, config_dir = self._write_mcp_config(config)
+
+        claude_bin = self._find_claude_binary()
+        if not claude_bin:
+            return AdapterResult(
+                exit_code=-1, stdout="", stderr="",
+                duration_seconds=0.0,
+                error="Claude Code CLI not found on PATH.",
+            )
+
+        # Try tmux runtime first (interactive, observable)
         try:
-            with open(config_path, "w") as f:
-                json.dump(mcp_config, f)
-
-            # Build command
-            cmd = [
-                "claude",
-                "--print",  # Non-interactive: print result and exit
-                "--mcp-config",
-                config_path,
-                "--allowedTools",
-                "mcp__entourage__*",  # Only allow our MCP tools
-                "--max-turns",
-                "100",  # Safety limit
-                prompt,
-            ]
-
-            # Run using the shared subprocess helper
-            return await self._run_subprocess(cmd, config)
-
-        finally:
-            # Clean up temp config
+            return await self._run_interactive(
+                prompt, config, claude_bin, config_path, config_dir
+            )
+        except Exception as e:
+            import logging
+            logger = logging.getLogger("openclaw.agent.adapters.claude_code")
+            logger.warning(
+                "Tmux runtime failed (%s), falling back to --print mode", e,
+            )
+            # Fall back to --print subprocess
             try:
-                os.unlink(config_path)
-                os.rmdir(config_dir)
-            except OSError:
-                pass
+                return await self._run_print_mode(
+                    prompt, config, claude_bin, config_path
+                )
+            finally:
+                self._cleanup_mcp_config(config_path, config_dir)
+
+    async def _run_interactive(
+        self,
+        prompt: str,
+        config: AdapterConfig,
+        claude_bin: str,
+        config_path: str,
+        config_dir: str,
+    ) -> AdapterResult:
+        """Run Claude Code interactively in a tmux session.
+
+        The agent is launched without --print so it stays alive. The prompt
+        is delivered post-launch via tmux load-buffer (handles arbitrary
+        length without truncation).
+
+        The method blocks until the agent exits or times out, then returns
+        the captured pane output as AdapterResult.
+        """
+        import asyncio
+        import time
+        import logging
+        from openclaw.agent.runtime import get_runtime, RuntimeConfig
+
+        logger = logging.getLogger("openclaw.agent.adapters.claude_code")
+
+        runtime = get_runtime("tmux")
+        valid, msg = runtime.validate()
+        if not valid:
+            raise RuntimeError(f"Tmux not available: {msg}")
+
+        # Write prompt to file and create a launcher script.
+        # This avoids ALL shell quoting issues — the script reads
+        # the prompt from file, so no escaping needed.
+        prompt_path = os.path.join(config_dir, "prompt.txt")
+        with open(prompt_path, "w") as pf:
+            pf.write(prompt)
+
+        # Output file — captures stdout alongside tmux pane display
+        output_path = os.path.join(config_dir, "output.txt")
+
+        launcher_path = os.path.join(config_dir, "run-agent.sh")
+        with open(launcher_path, "w") as lf:
+            lf.write("#!/bin/bash\n")
+            # Use tee to capture stdout to file AND display in tmux
+            lf.write(f'"{claude_bin}" --print \\\n')
+            lf.write(f'  --mcp-config "{config_path}" \\\n')
+            lf.write(f'  --allowedTools "mcp__entourage__*" \\\n')
+            lf.write(f'  --max-turns 100 \\\n')
+            lf.write(f'  "$(cat \'{prompt_path}\')" 2>&1 | tee "{output_path}"\n')
+        os.chmod(launcher_path, 0o755)
+
+        cmd = [launcher_path]
+        env = self.get_environment(config)
+        session_id = f"task-{config.task_id}"
+
+        rt_config = RuntimeConfig(
+            session_id=session_id,
+            command=cmd,
+            cwd=config.working_directory,
+            env=env,
+            startup_delay_seconds=0.0,
+        )
+
+        # Spawn the agent in tmux
+        rt_session = await runtime.create(rt_config)
+
+        # Poll until exit or timeout
+        start = time.monotonic()
+        while True:
+            alive = await runtime.is_alive(rt_session)
+            if not alive:
+                break
+
+            elapsed = time.monotonic() - start
+            if elapsed > config.timeout_seconds:
+                output = await runtime.read_output(rt_session, 500)
+                await runtime.kill(rt_session)
+                self._cleanup_mcp_config(config_path, config_dir)
+                return AdapterResult(
+                    exit_code=-1,
+                    stdout=output,
+                    stderr="",
+                    duration_seconds=elapsed,
+                    error=f"Agent timed out after {config.timeout_seconds:.0f}s",
+                )
+
+            await asyncio.sleep(5.0)
+
+        duration = time.monotonic() - start
+
+        # Read stdout from output file (preferred) or pane capture (fallback)
+        output = ""
+        try:
+            with open(output_path, "r") as of:
+                output = of.read()
+        except (FileNotFoundError, OSError):
+            output = await runtime.read_output(rt_session, 500)
+
+        # Don't clean up MCP config yet — caller may need output_path
+        # self._cleanup_mcp_config(config_path, config_dir)
+
+        return AdapterResult(
+            exit_code=0,
+            stdout=output,
+            stderr="",
+            duration_seconds=duration,
+        )
+
+    async def _run_print_mode(
+        self,
+        prompt: str,
+        config: AdapterConfig,
+        claude_bin: str,
+        config_path: str,
+    ) -> AdapterResult:
+        """Fallback: run Claude Code with --print (fire-and-forget)."""
+        cmd = [
+            claude_bin,
+            "--print",
+            "--mcp-config", config_path,
+            "--allowedTools", "mcp__entourage__*",
+            "--max-turns", "100",
+            prompt,
+        ]
+        return await self._run_subprocess(cmd, config)

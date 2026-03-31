@@ -18,6 +18,7 @@ import type {
   HumanRequest,
   MonthlyRollup,
   Org,
+  Repository,
   Run,
   RunMetrics,
   RunTask,
@@ -94,6 +95,31 @@ export function useAgents(teamId: string | undefined) {
     queryFn: () => apiClient.get<Agent[]>(`/api/v1/teams/${teamId}/agents`),
     enabled: !!teamId,
     refetchInterval: 10_000,
+  });
+}
+
+// ─── Repositories ─────────────────────────────────────
+
+export function useRepos(teamId: string | undefined) {
+  return useQuery({
+    queryKey: ["repos", teamId],
+    queryFn: () => apiClient.get<Repository[]>(`/api/v1/teams/${teamId}/repos`),
+    enabled: !!teamId,
+  });
+}
+
+export function useRegisterRepo(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      name: string;
+      local_path: string;
+      default_branch?: string;
+    }) =>
+      apiClient.post<Repository>(`/api/v1/teams/${teamId}/repos`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["repos", teamId] });
+    },
   });
 }
 
@@ -330,6 +356,8 @@ export function useCreateRun(teamId: string) {
       title: string;
       intent: string;
       budget_limit_usd?: number;
+      repository_id?: string;
+      template?: string;
     }) =>
       apiClient.post<Run>(
         `/api/v1/teams/${teamId}/runs`,

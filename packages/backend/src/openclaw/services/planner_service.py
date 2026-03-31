@@ -163,11 +163,15 @@ class PlannerService:
     is usable without an API key.
     """
 
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: AsyncSession, session_factory=None):
         self.db = db
         self.events = EventStore(db)
         self.run_svc = RunService(db)
         self._client = None  # Lazy init — only when Claude is actually needed
+        if session_factory is None:
+            from openclaw.db.engine import async_session_factory
+            session_factory = async_session_factory
+        self._session_factory = session_factory
 
     @property
     def client(self):
@@ -184,16 +188,27 @@ class PlannerService:
         return self._client
 
     async def plan(self, run_id: uuid.UUID) -> dict:
-        """Generate a TaskGraph for a run's intent.
+        """Generate a TaskGraph by dispatching the manager agent.
 
-        1. Load run (get intent)
+        The manager agent IS the planner. It gets dispatched into the repo
+        with Claude Code, reads the codebase, understands the architecture,
+        and creates the task graph using MCP tools.
+
+        This replaces the old blind API call with a codebase-aware agent.
+
+        Flow:
+        1. Load run (get intent + team)
         2. Transition run → planning
-        3. Call Claude (or fallback to template) for TaskGraph
-        4. Validate output
-        5. Estimate cost per task
-        6. Store task_graph in run, create RunTask rows
-        7. Transition run → awaiting_plan_approval
+        3. Find the manager agent for this team
+        4. Dispatch manager agent with planning prompt
+        5. Manager reads codebase + calls set_run_task_graph MCP tool
+        6. Manager transitions run → awaiting_plan_approval
+        7. Return the task graph
         """
+        from sqlalchemy import select
+        from openclaw.db.models import Agent
+        from openclaw.agent.runner import AgentRunner
+
         run = await self.db.get(Run, run_id)
         if not run:
             raise ValueError(f"Run {run_id} not found")
@@ -202,50 +217,143 @@ class PlannerService:
         if run.status == "draft":
             await self.run_svc.change_status(run_id, "planning")
 
-        # Extract template from metadata (if set during creation)
+        # Extract template from metadata
         meta = run.run_metadata or {}
         template = meta.get("template")
 
-        # Fallback to template-based planning when no API key
-        if not settings.anthropic_api_key:
-            logger.info(
-                "No ANTHROPIC_API_KEY set, using template-based planning "
-                "for run %s", run_id
+        # Find the manager agent for this team
+        result = await self.db.execute(
+            select(Agent).where(
+                Agent.team_id == run.team_id,
+                Agent.role == "manager",
+            ).limit(1)
+        )
+        manager = result.scalars().first()
+
+        if not manager:
+            logger.warning(
+                "No manager agent for team %s, falling back to template planning",
+                run.team_id,
             )
             return await self._plan_from_template(
                 run_id, run.intent, template
             )
 
-        # Build prompt and call Claude
-        prompt = self._build_planning_prompt(
-            run.intent, template=template
+        await self.db.commit()  # flush before spawning agent
+
+        # Build the planning prompt for the manager agent
+        prompt = self._build_manager_planning_prompt(
+            run_id=str(run_id),
+            intent=run.intent,
+            team_id=str(run.team_id),
+            agent_id=str(manager.id),
+            template=template,
         )
 
-        logger.info("Calling Claude to plan run %s", run_id)
-        response = await self.client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=4096,
-            tools=[TASK_GRAPH_TOOL],
-            tool_choice={"type": "tool", "name": "create_task_graph"},
-            messages=[{"role": "user", "content": prompt}],
+        # Dispatch the manager agent to plan
+        logger.info(
+            "Dispatching manager agent %s to plan run %s",
+            manager.id, run_id,
         )
 
-        # Extract task_graph from tool_use response
-        task_graph = self._extract_task_graph(response)
+        runner = AgentRunner(session_factory=self._session_factory)
+        result = await runner.run_agent(
+            agent_id=str(manager.id),
+            team_id=str(run.team_id),
+            prompt_override=prompt,
+            run_task_id=0,  # Use 0 for planning phase
+        )
 
-        # Estimate costs
+        # Get the manager's analysis from stdout
+        agent_analysis = result.get("stdout", "")
+
+        if result.get("error") and not agent_analysis:
+            logger.error(
+                "Manager agent failed to plan run %s: %s",
+                run_id, result["error"],
+            )
+            return await self._plan_from_template(
+                run_id, run.intent, template
+            )
+
+        # Check if the manager called set_run_task_graph via MCP
+        async with self._session_factory() as db2:
+            run_check = await db2.get(Run, run_id)
+            if run_check and run_check.task_graph and run_check.task_graph.get("tasks"):
+                logger.info(
+                    "Manager agent set task graph via MCP: %d tasks",
+                    len(run_check.task_graph["tasks"]),
+                )
+                if run_check.status == "planning":
+                    svc = RunService(db2)
+                    await svc.change_status(run_id, "awaiting_plan_approval")
+                    await db2.commit()
+                return run_check.task_graph
+
+        # Manager produced analysis but couldn't call MCP tool.
+        # Use Claude API to convert the analysis into structured task graph.
+        logger.info(
+            "Manager agent produced analysis (%d chars), "
+            "converting to structured task graph via API",
+            len(agent_analysis),
+        )
+        return await self._convert_analysis_to_task_graph(
+            run_id, run.intent, agent_analysis, template
+        )
+
+    async def _convert_analysis_to_task_graph(
+        self,
+        run_id: uuid.UUID,
+        intent: str,
+        agent_analysis: str,
+        template: str | None = None,
+    ) -> dict:
+        """Convert manager agent's text analysis to structured task graph.
+
+        The manager agent read the codebase and produced an analysis.
+        Now we use a quick Claude API call to convert that into the
+        structured JSON format needed for RunTasks.
+        """
+        prompt = (
+            "You are converting a software architect's analysis into a structured task graph.\n\n"
+            f"ORIGINAL INTENT: {intent}\n\n"
+            f"ARCHITECT'S ANALYSIS (from codebase review):\n{agent_analysis}\n\n"
+            "Convert this analysis into concrete tasks. Follow the architect's recommendations "
+            "for task count, dependencies, and complexity. If the analysis suggests 1-2 tasks, "
+            "create 1-2 tasks. Don't add unnecessary tasks.\n\n"
+            "IMPORTANT: Include specific file paths mentioned in the analysis. "
+            "Maximize parallelism — only add dependencies when truly needed."
+        )
+
+        try:
+            response = await self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=4096,
+                tools=[TASK_GRAPH_TOOL],
+                tool_choice={"type": "tool", "name": "create_task_graph"},
+                messages=[{"role": "user", "content": prompt}],
+            )
+
+            task_graph = self._extract_task_graph(response)
+        except Exception as e:
+            logger.warning(
+                "Failed to convert analysis to task graph: %s, "
+                "falling back to template",
+                e,
+            )
+            return await self._plan_from_template(run_id, intent, template)
+
+        # Estimate costs and store
         estimated_cost = self._estimate_cost(task_graph)
         task_graph["estimated_cost_usd"] = estimated_cost
 
-        # Store task graph + create RunTask rows
         await self.run_svc.set_task_graph(run_id, task_graph)
 
-        # Update estimated cost on run
         run = await self.db.get(Run, run_id)
-        run.estimated_cost_usd = estimated_cost
-        await self.db.flush()
+        if run:
+            run.estimated_cost_usd = estimated_cost
+            await self.db.flush()
 
-        # Record event
         await self.events.append(
             stream_id=f"run:{run_id}",
             event_type=RUN_PLAN_GENERATED,
@@ -253,15 +361,102 @@ class PlannerService:
                 "run_id": str(run_id),
                 "task_count": len(task_graph.get("tasks", [])),
                 "estimated_cost_usd": estimated_cost,
+                "source": "manager_agent",
             },
         )
 
-        # Transition to awaiting approval
-        await self.run_svc.change_status(
-            run_id, "awaiting_plan_approval"
-        )
-
+        await self.run_svc.change_status(run_id, "awaiting_plan_approval")
         return task_graph
+
+    def _build_manager_planning_prompt(
+        self,
+        run_id: str,
+        intent: str,
+        team_id: str,
+        agent_id: str,
+        template: str | None = None,
+    ) -> str:
+        """Build the prompt for the manager agent to plan a run.
+
+        The manager agent will:
+        1. Read the codebase to understand the project
+        2. Decompose the intent into a task graph
+        3. Call set_run_task_graph MCP tool
+        4. Transition the run to awaiting_plan_approval
+        """
+        template_hint = ""
+        if template and template in RUN_TEMPLATES:
+            tmpl = RUN_TEMPLATES[template]
+            template_hint = f"\nTemplate hint ({template}): {tmpl['hints']}\n"
+
+        return f"""You are the PLANNING MANAGER for run {run_id}.
+
+YOUR JOB: Read the codebase, understand its structure, then decompose this intent
+into a task graph that AI coding agents can execute.
+
+INTENT:
+{intent}
+{template_hint}
+STEP 1 — READ THE CODEBASE:
+Before planning, explore the project structure. Look at:
+- The directory layout (what folders exist, where code lives)
+- Existing patterns (how similar features are implemented)
+- Key files that will need to be modified
+- Test patterns (how tests are organized)
+
+STEP 2 — DECOMPOSE INTO TASKS:
+Create a task graph where:
+- Each task is a focused unit of work for ONE agent
+- Tasks that CAN run in parallel SHOULD have no dependencies between them
+- Only add dependencies when task B truly needs task A's output
+- Descriptions must include SPECIFIC file paths, function names, patterns to follow
+- Keep it minimal — don't create tasks for things that don't need doing
+- A simple utility function = 1 task, not 4
+
+SIZING GUIDE:
+- S: Single file change, <30 min (add a utility, fix a typo, config change)
+- M: Multi-file feature, 30-90 min (new endpoint with tests)
+- L: Complex feature, 90-180 min (new subsystem)
+- XL: Major feature, 180+ min (rarely needed — split into smaller tasks)
+
+STEP 3 — SUBMIT THE PLAN:
+Call the MCP tool to set the task graph:
+
+mcp__entourage__set_run_task_graph(
+    run_id="{run_id}",
+    tasks=[
+        {{
+            "title": "...",
+            "description": "Specific description with file paths and acceptance criteria",
+            "complexity": "S|M|L|XL",
+            "assigned_role": "engineer",
+            "dependencies": [],
+            "integration_hints": ["How this connects to other tasks"]
+        }},
+        ...
+    ]
+)
+
+STEP 4 — TRANSITION THE RUN:
+After setting the task graph, transition the run:
+mcp__entourage__change_task_status is NOT what you need.
+Instead the system will auto-transition after you set the task graph.
+
+YOUR IDENTITY:
+- agent_id: {agent_id}
+- team_id: {team_id}
+- run_id: {run_id}
+
+IMPORTANT RULES:
+- DO read the codebase first. Your plan quality depends on understanding the project.
+- DO maximize parallelism — independent tasks should NOT depend on each other.
+- DO include specific file paths in task descriptions.
+- DON'T create unnecessary tasks (no "create data models" for a utility function).
+- DON'T make everything sequential — find what can run in parallel.
+- DON'T skip calling set_run_task_graph — that's your deliverable.
+
+Begin by exploring the project structure, then create the task graph.
+"""
 
     def _build_planning_prompt(
         self,

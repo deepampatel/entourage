@@ -56,7 +56,7 @@ export function TaskDetail({ teamId }: TaskDetailProps) {
   const statusLabel =
     STATUS_LABELS[task.status as TaskStatus] || task.status;
   const priorityColor =
-    PRIORITY_COLORS[task.priority as Priority] || "#6b7280";
+    PRIORITY_COLORS[task.priority as Priority] || "var(--semantic-gray)";
   const assignee = agents?.find((a) => a.id === task.assignee_id);
   const latestReview = reviews?.length ? reviews[reviews.length - 1] : null;
 

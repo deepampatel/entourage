@@ -68,7 +68,8 @@
 .task-status-in_review   { background: rgba(176, 176, 176, 0.10); color: var(--status-active); }
 .task-status-in_approval { background: rgba(241, 76, 76, 0.10); color: var(--semantic-red); }
 .task-status-merging     { background: rgba(176, 176, 176, 0.10); color: var(--status-active); }
-.task-status-done        { background: rgba(85, 85, 85, 0.10); color: var(--semantic-gray); }
+.task-status-done        { background: rgba(115, 201, 145, 0.10); color: var(--semantic-green); }
+.task-status-failed      { background: rgba(241, 76, 76, 0.10); color: var(--semantic-red); }
 .task-status-cancelled   { background: rgba(85, 85, 85, 0.10); color: var(--semantic-gray); }
 
 .task-status::before {

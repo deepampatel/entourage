@@ -13,6 +13,8 @@ import {
   useCreateTeam,
   useAgents,
   useCreateAgent,
+  useRepos,
+  useRegisterRepo,
 } from "../hooks/useApi";
 import { useToast } from "../components/Toast";
 
@@ -201,6 +203,72 @@ function CreateAgentForm({ teamId }: { teamId: string }) {
   );
 }
 
+// ─── Register Repo Form ────────────────────────────────
+
+function RegisterRepoForm({ teamId }: { teamId: string }) {
+  const [name, setName] = useState("");
+  const [localPath, setLocalPath] = useState("");
+  const [branch, setBranch] = useState("main");
+  const registerRepo = useRegisterRepo(teamId);
+  const { showToast } = useToast();
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !localPath.trim()) return;
+    registerRepo.mutate(
+      {
+        name: name.trim(),
+        local_path: localPath.trim(),
+        default_branch: branch.trim() || "main",
+      },
+      {
+        onSuccess: () => {
+          setName("");
+          setLocalPath("");
+          setBranch("main");
+          showToast("Repository registered!", "success");
+        },
+      }
+    );
+  };
+
+  return (
+    <form className="manage-form manage-repo-form" onSubmit={handleSubmit}>
+      <input
+        type="text"
+        placeholder="Repo name (e.g. api-service)"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        className="manage-input"
+      />
+      <input
+        type="text"
+        placeholder="Local path (e.g. /home/user/projects/api)"
+        value={localPath}
+        onChange={(e) => setLocalPath(e.target.value)}
+        className="manage-input"
+      />
+      <input
+        type="text"
+        placeholder="Default branch"
+        value={branch}
+        onChange={(e) => setBranch(e.target.value)}
+        className="manage-input manage-input-sm"
+      />
+      <button
+        type="submit"
+        className="manage-btn manage-btn-primary"
+        disabled={registerRepo.isPending || !name.trim() || !localPath.trim()}
+      >
+        {registerRepo.isPending ? "Adding..." : "Add Repo"}
+      </button>
+      {registerRepo.isError && (
+        <span className="manage-error">{registerRepo.error.message}</span>
+      )}
+    </form>
+  );
+}
+
 // ─── Team Detail Panel ──────────────────────────────────
 
 function TeamPanel({
@@ -211,16 +279,46 @@ function TeamPanel({
   teamName: string;
 }) {
   const { data: agents } = useAgents(teamId);
+  const { data: repos } = useRepos(teamId);
+  const [showRepoForm, setShowRepoForm] = useState(false);
 
   return (
     <div className="manage-card">
       <div className="manage-card-header">
         <h3>{teamName}</h3>
-        <span className="manage-badge">{agents?.length ?? 0} agents</span>
+        <div className="manage-badges">
+          <span className="manage-badge">{agents?.length ?? 0} agents</span>
+          <span className="manage-badge">{repos?.length ?? 0} repos</span>
+        </div>
       </div>
 
+      {/* Repositories */}
+      {repos && repos.length > 0 && (
+        <div className="manage-repo-list">
+          <h4 className="manage-subsection-title">Repositories</h4>
+          {repos.map((r) => (
+            <div key={r.id} className="manage-repo-row">
+              <span className="manage-repo-name">{r.name}</span>
+              <span className="manage-repo-path">{r.local_path}</span>
+              <span className="manage-repo-branch">{r.default_branch}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <button
+        className="manage-btn manage-btn-secondary manage-btn-sm"
+        onClick={() => setShowRepoForm(!showRepoForm)}
+      >
+        {showRepoForm ? "Cancel" : "+ Add Repository"}
+      </button>
+
+      {showRepoForm && <RegisterRepoForm teamId={teamId} />}
+
+      {/* Agents */}
       {agents && agents.length > 0 && (
         <div className="manage-agent-list">
+          <h4 className="manage-subsection-title">Agents</h4>
           {agents.map((a) => (
             <div key={a.id} className="manage-agent-row">
               <span className="manage-agent-name">{a.name}</span>

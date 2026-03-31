@@ -117,22 +117,38 @@
 }
 
 .run-status-badge.draft,
-.run-status-badge.completed,
 .run-status-badge.cancelled {
-  background: rgba(85, 85, 85, 0.10);
+  background: rgba(107, 128, 138, 0.12);
   color: var(--semantic-gray);
 }
 
 .run-status-badge.planning,
-.run-status-badge.running {
-  background: rgba(176, 176, 176, 0.10);
-  color: var(--status-active);
+.run-status-badge.contracting,
+.run-status-badge.merging {
+  background: rgba(167, 139, 250, 0.12);
+  color: var(--semantic-purple);
 }
 
-.run-status-badge.awaiting_approval,
+.run-status-badge.awaiting_plan_approval,
+.run-status-badge.paused {
+  background: rgba(204, 167, 0, 0.12);
+  color: var(--semantic-orange);
+}
+
+.run-status-badge.executing,
+.run-status-badge.reviewing {
+  background: rgba(86, 156, 214, 0.12);
+  color: var(--semantic-blue);
+}
+
+.run-status-badge.done {
+  background: rgba(115, 201, 145, 0.12);
+  color: var(--semantic-green);
+}
+
 .run-status-badge.failed {
-  background: rgba(241, 76, 76, 0.10);
-  color: var(--status-attention);
+  background: rgba(241, 76, 76, 0.12);
+  color: var(--semantic-red);
 }
 
 .run-intent {
@@ -351,6 +367,146 @@
   color: var(--text-secondary);
   flex-shrink: 0;
   font-family: var(--font-mono);
+}
+
+/* ─── Task Status Colors ──────────────────────────────── */
+
+.run-task-status-todo        { color: var(--semantic-gray); }
+.run-task-status-in_progress { color: var(--semantic-blue); }
+.run-task-status-done        { color: var(--semantic-green); }
+.run-task-status-failed      { color: var(--semantic-red); }
+.run-task-status-cancelled   { color: var(--semantic-gray); }
+
+/* ─── Task Details (description + error) ──────────────── */
+
+.run-task-details {
+  padding: 6px 0 6px 2rem;
+}
+
+.run-task-description {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.run-task-error {
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: rgba(241, 76, 76, 0.06);
+  border: 1px solid rgba(241, 76, 76, 0.15);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--semantic-red);
+  line-height: 1.4;
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
+
+.run-task-error-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+/* ─── PR Link ─────────────────────────────────────────── */
+
+.run-pr-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.run-pr-link:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+/* ─── Task Run Group (Tasks page) ─────────────────────── */
+
+.task-run-group {
+  margin-bottom: 1.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+.task-run-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.task-run-group-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.task-run-group-title h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-heading);
+}
+
+.task-run-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.run-task-card {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.run-task-card:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.run-task-card.has-error {
+  border-left: 2px solid var(--semantic-red);
+  padding-left: 0.75rem;
+}
+
+.run-task-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 13px;
+}
+
+.run-task-card-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.run-task-meta {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 4px;
+  padding-left: 2rem;
+}
+
+.run-task-role {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: capitalize;
 }
 
 /* ─── Create Run Form ─────────────────────────────── */
@@ -628,6 +784,16 @@
   color: var(--text-secondary);
   border-top: 1px solid var(--border-subtle);
   font-family: var(--font-mono);
+}
+
+/* ─── Agent Output ────────────────────────────────────── */
+
+.agent-output-section {
+  padding: 4px 8px 8px;
+}
+
+.agent-output .sandbox-output-section pre {
+  max-height: 400px;
 }
 
 /* ─── Empty State ──────────────────────────────────────── */

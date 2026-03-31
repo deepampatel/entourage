@@ -68,10 +68,10 @@ export function Analytics({ teamId }: AnalyticsProps) {
           value={`${(metrics?.success_rate ?? 0).toFixed(0)}%`}
           color={
             (metrics?.success_rate ?? 0) >= 80
-              ? "#10b981"
+              ? "var(--semantic-green)"
               : (metrics?.success_rate ?? 0) >= 50
-                ? "#f59e0b"
-                : "#ef4444"
+                ? "var(--semantic-orange)"
+                : "var(--semantic-red)"
           }
         />
         <StatCard

@@ -94,6 +94,97 @@
   font-weight: 500;
 }
 
+/* ─── Badges row ────────────────────────────────────── */
+
+.manage-badges {
+  display: flex;
+  gap: 6px;
+}
+
+/* ─── Subsection title ──────────────────────────────── */
+
+.manage-subsection-title {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 6px;
+}
+
+/* ─── Repo List ─────────────────────────────────────── */
+
+.manage-repo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 0.75rem;
+}
+
+.manage-repo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 6px 8px;
+  background: var(--bg-inset);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.manage-repo-name {
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 100px;
+}
+
+.manage-repo-path {
+  flex: 1;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.manage-repo-branch {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(86, 156, 214, 0.10);
+  color: var(--semantic-blue);
+  font-family: var(--font-mono);
+}
+
+.manage-repo-form {
+  margin-top: 0.5rem;
+}
+
+.manage-input-sm {
+  max-width: 120px;
+  flex: 0 0 auto;
+}
+
+/* ─── Secondary / Small buttons ─────────────────────── */
+
+.manage-btn-secondary {
+  background: var(--bg-inset);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  margin-bottom: 0.75rem;
+}
+
+.manage-btn-secondary:hover:not(:disabled) {
+  border-color: var(--border-input);
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.manage-btn-sm {
+  padding: 5px 12px;
+  font-size: 12px;
+}
+
 /* ─── Agent List ─────────────────────────────────────── */
 
 .manage-agent-list {

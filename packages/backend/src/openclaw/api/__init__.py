@@ -16,8 +16,10 @@ from openclaw.api.auth import router as auth_router
 from openclaw.api.dispatch import router as dispatch_router
 from openclaw.api.git import router as git_router
 from openclaw.api.health import router as health_router
+from openclaw.api.health_detailed import router as health_detailed_router
 from openclaw.api.human_requests import router as human_requests_router
 from openclaw.api.reviews import router as reviews_router
+from openclaw.api.runtime import router as runtime_router
 from openclaw.api.sessions import router as sessions_router
 from openclaw.api.settings import router as settings_router
 from openclaw.api.tasks import router as tasks_router
@@ -36,6 +38,7 @@ api_router = APIRouter(prefix="/api/v1")
 
 # Open routes — no auth required
 api_router.include_router(health_router, tags=["health"])
+api_router.include_router(health_detailed_router, tags=["health"])
 api_router.include_router(auth_router, tags=["auth"])
 
 # Protected routes — require valid JWT or API key
@@ -54,3 +57,4 @@ api_router.include_router(analytics_router, tags=["analytics"], dependencies=_au
 api_router.include_router(alerts_router, tags=["alerts"], dependencies=_auth)
 api_router.include_router(settings_router, tags=["settings"], dependencies=_auth)
 api_router.include_router(security_router, tags=["security"], dependencies=_auth)
+api_router.include_router(runtime_router, tags=["runtime"], dependencies=_auth)

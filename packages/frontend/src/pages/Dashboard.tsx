@@ -100,7 +100,7 @@ export function Dashboard({ teamId }: DashboardProps) {
         <StatCard
           label="Pending Requests"
           value={pendingRequests?.length ?? 0}
-          color={pendingRequests?.length ? "#f59e0b" : undefined}
+          color={pendingRequests?.length ? "var(--semantic-orange)" : undefined}
         />
         <StatCard
           label="Cost (7d)"

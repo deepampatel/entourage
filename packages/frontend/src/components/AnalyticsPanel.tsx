@@ -51,7 +51,7 @@ export function CostTrendChart({ data }: CostTrendChartProps) {
           y1={chartHeight}
           x2={chartWidth}
           y2={chartHeight}
-          stroke="#e5e7eb"
+          stroke="var(--border-default)"
           strokeWidth="1"
         />
 
@@ -202,7 +202,7 @@ export function RunSuccessGauge({ rate, label }: RunSuccessGaugeProps) {
   const radius = 45;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (rate / 100) * circumference;
-  const color = rate >= 80 ? "#10b981" : rate >= 50 ? "#f59e0b" : "#ef4444";
+  const color = rate >= 80 ? "var(--semantic-green)" : rate >= 50 ? "var(--semantic-orange)" : "var(--semantic-red)";
 
   return (
     <div className="analytics-gauge">
@@ -213,7 +213,7 @@ export function RunSuccessGauge({ rate, label }: RunSuccessGaugeProps) {
           cy="60"
           r={radius}
           fill="none"
-          stroke="#e5e7eb"
+          stroke="var(--border-default)"
           strokeWidth="8"
         />
         {/* Progress arc */}

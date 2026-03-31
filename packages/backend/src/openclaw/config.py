@@ -73,6 +73,12 @@ class Settings(BaseSettings):
     sandbox_memory_limit: str = "512m"
     sandbox_cpus: float = 1.0
 
+    # Reaction engine
+    reaction_engine_enabled: bool = True
+    reaction_poll_interval_seconds: float = 30.0
+    stuck_agent_threshold_minutes: int = 30
+    global_pause_duration_seconds: int = 300
+
     # Observability
     structured_logging: bool = True
     log_file_json: str = "openclaw.jsonl"

@@ -15,9 +15,9 @@ interface ReviewPanelProps {
 }
 
 const VERDICT_COLORS: Record<string, string> = {
-  approve: "#10b981",
-  reject: "#ef4444",
-  request_changes: "#f59e0b",
+  approve: "var(--semantic-green)",
+  reject: "var(--semantic-red)",
+  request_changes: "var(--semantic-orange)",
 };
 
 const VERDICT_LABELS: Record<string, string> = {

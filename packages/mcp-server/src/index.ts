@@ -1610,6 +1610,36 @@ server.tool(
 );
 
 server.tool(
+  "set_run_task_graph",
+  "Set the task graph for a run — creates RunTask rows from a structured task list. Use this as a manager agent to submit your decomposition plan. The run must be in 'draft' or 'planning' status. After setting the task graph, transition the run to 'awaiting_plan_approval'.",
+  {
+    run_id: z.string().describe("Run UUID"),
+    tasks: z.array(z.object({
+      title: z.string().describe("Short task title"),
+      description: z.string().describe("Detailed description including specific files, patterns, and acceptance criteria"),
+      complexity: z.enum(["S", "M", "L", "XL"]).describe("S: <30min, M: 30-90min, L: 90-180min, XL: 180+min"),
+      assigned_role: z.enum(["engineer", "reviewer"]).default("engineer"),
+      dependencies: z.array(z.number()).describe("Zero-indexed IDs of tasks that must complete before this one").default([]),
+      integration_hints: z.array(z.string()).describe("How this task's output connects to other tasks").default([]),
+    })).describe("Array of tasks forming the task graph"),
+  },
+  async (params) => {
+    try {
+      const taskGraph = { tasks: params.tasks };
+      const run = await client.setRunTaskGraph(params.run_id, taskGraph);
+      return {
+        content: [{ type: "text" as const, text: `Task graph set with ${params.tasks.length} tasks.\n\n${JSON.stringify(run, null, 2)}` }],
+      };
+    } catch (error) {
+      return {
+        content: [{ type: "text" as const, text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
+        isError: true,
+      };
+    }
+  }
+);
+
+server.tool(
   "start_run",
   "Start planning for a run — kicks off the LLM planner to decompose the intent into a task graph. Run must be in 'draft' status.",
   {

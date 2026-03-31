@@ -1,12 +1,13 @@
 """Execution loop — dispatches RunTasks in parallel, respecting dependencies.
 
-Phase 2: Parallel execution with resource monitoring. Tasks whose dependencies
-are satisfied are dispatched concurrently, up to max_concurrent_run_tasks.
+Phase 3: Parallel execution with worktree isolation, atomic agent acquisition,
+and event-driven dispatch. Tasks whose dependencies are satisfied are dispatched
+concurrently, up to max_concurrent_run_tasks.
 
-Learn: The loop tracks running tasks as asyncio.Task futures in a dict. Each
-iteration collects completed futures, dispatches new ready tasks, and sleeps.
-When max_concurrent_run_tasks=1, serial behavior is preserved (backward
-compatible with Phase 1).
+Key improvements over Phase 2:
+- Git worktrees: Each task runs in an isolated checkout (no file conflicts)
+- Atomic agent acquire: UPDATE ... WHERE status='idle' prevents double-dispatch
+- Event-driven: Task completion triggers immediate re-dispatch (no polling delay)
 """
 
 import asyncio
@@ -18,7 +19,7 @@ from typing import Optional
 
 import redis.asyncio as aioredis
 
-from sqlalchemy import select
+from sqlalchemy import select, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from openclaw.agent.runner import AgentRunner
@@ -46,6 +47,7 @@ from openclaw.services.run_budget_service import (
 )
 from openclaw.services.run_service import RunService
 from openclaw.services.resource_monitor import ResourceMonitor
+from openclaw.services.git_service import GitService
 
 logger = logging.getLogger("openclaw.services.execution_loop")
 
@@ -53,12 +55,11 @@ logger = logging.getLogger("openclaw.services.execution_loop")
 class ExecutionLoop:
     """Dispatches RunTasks in parallel, respecting dependencies.
 
-    Learn: The loop is stateless — each call to run() creates fresh DB
-    sessions. This makes it safe to launch via asyncio.create_task().
-
-    Key upgrade from Phase 1:
+    Phase 3 upgrades:
+    - Git worktree isolation: Each task runs in its own checkout
+    - Atomic agent acquisition: DB-level compare-and-swap prevents double-dispatch
+    - Event-driven wakeup: Task completions signal immediate re-dispatch
     - _find_ready_tasks() returns ALL ready tasks (not just one)
-    - _find_idle_agents() returns multiple agents
     - Running tasks tracked as asyncio.Task futures
     - ResourceMonitor gates dispatch on CPU/memory/disk
     """
@@ -70,6 +71,9 @@ class ExecutionLoop:
         self._session_factory = session_factory
         self._resource_monitor = ResourceMonitor()
         self._sandbox_mgr = SandboxManager()
+        # Event-driven wakeup: set when a task completes so the loop
+        # can re-dispatch immediately instead of sleeping.
+        self._wakeup = asyncio.Event()
 
     async def run(self, run_id: uuid.UUID) -> dict:
         """Main loop: dispatch ready tasks in parallel until done or failure.
@@ -250,34 +254,71 @@ class ExecutionLoop:
                         await asyncio.sleep(settings.task_polling_interval_seconds)
                         continue
 
-                    agents = await self._find_idle_agents(
+                    # ── Atomic agent acquisition ───────────────────
+                    agents = await self._acquire_agents_atomic(
                         db, team_id, len(ready)
                     )
 
                     if not agents:
                         logger.info(
-                            "No idle agents for run %s, waiting %ds",
+                            "No idle agents for run %s, waiting",
                             run_id,
-                            settings.task_polling_interval_seconds,
                         )
-                        await asyncio.sleep(settings.task_polling_interval_seconds)
+                        self._wakeup.clear()
+                        try:
+                            await asyncio.wait_for(
+                                self._wakeup.wait(),
+                                timeout=settings.task_polling_interval_seconds,
+                            )
+                        except asyncio.TimeoutError:
+                            pass
                         continue
 
                     # ── Dispatch ready tasks in parallel ───────────────
+                    # Create worktrees for each task if the run has a repo
+                    run = await db.get(Run, run_id)
+                    repo_id = run.repository_id if run else None
+                    worktree_paths: dict[int, Optional[str]] = {}
+
                     for task, agent in zip(ready, agents):
                         task.status = "in_progress"
                         task.agent_id = agent.id
                         task.started_at = datetime.now(timezone.utc)
+
+                        # Create git worktree for isolated file access
+                        wt_path = None
+                        if repo_id:
+                            try:
+                                git_svc = GitService(db)
+                                wt_info = await git_svc.create_worktree(
+                                    task.id, repo_id
+                                )
+                                wt_path = wt_info.path
+                                logger.info(
+                                    "Created worktree for task %d at %s",
+                                    task.id, wt_path,
+                                )
+                            except Exception:
+                                logger.warning(
+                                    "Failed to create worktree for task %d, "
+                                    "falling back to repo root",
+                                    task.id,
+                                    exc_info=True,
+                                )
+                        worktree_paths[task.id] = wt_path
+
                     await db.commit()
 
                     # Create asyncio tasks outside the DB session
                     for task, agent in zip(ready, agents):
                         agent_id_str = str(agent.id)
                         logger.info(
-                            "Dispatching run task %d (%s) to agent %s",
+                            "Dispatching run task %d (%s) to agent %s%s",
                             task.id,
                             task.title,
                             agent_id_str,
+                            f" [worktree: {worktree_paths.get(task.id)}]"
+                            if worktree_paths.get(task.id) else "",
                         )
 
                         # Fire task started event
@@ -294,6 +335,7 @@ class ExecutionLoop:
                                 team_id=str(team_id),
                                 task_title=task.title,
                                 task_description=task.description,
+                                worktree_path=worktree_paths.get(task.id),
                             )
                         )
 
@@ -326,7 +368,16 @@ class ExecutionLoop:
                         "reason": "Budget exceeded",
                     }
 
-                await asyncio.sleep(settings.task_polling_interval_seconds)
+                # Event-driven wait: sleep until wakeup signal OR timeout
+                self._wakeup.clear()
+                try:
+                    await asyncio.wait_for(
+                        self._wakeup.wait(),
+                        timeout=settings.task_polling_interval_seconds,
+                    )
+                    logger.debug("Run %s: woken by task completion event", run_id)
+                except asyncio.TimeoutError:
+                    pass  # Normal polling fallback
 
         except Exception as e:
             logger.exception(
@@ -483,6 +534,84 @@ class ExecutionLoop:
         )
         return list(result.scalars().all())
 
+    async def _acquire_agent_atomic(
+        self,
+        db: AsyncSession,
+        team_id: uuid.UUID,
+        role: str = "engineer",
+    ) -> Optional[Agent]:
+        """Atomically acquire a single idle agent via compare-and-swap.
+
+        Uses UPDATE ... WHERE status='idle' ... LIMIT 1 RETURNING to
+        prevent double-dispatch. If two tasks try to grab the same agent
+        concurrently, only one succeeds — the other gets None.
+
+        This is the Phase 3 replacement for _find_idle_agent().
+        """
+        # Use raw SQL for atomic CAS — SQLAlchemy ORM doesn't support
+        # UPDATE ... LIMIT 1 RETURNING natively on PostgreSQL.
+        result = await db.execute(
+            text("""
+                UPDATE agents
+                SET status = 'working'
+                WHERE id = (
+                    SELECT id FROM agents
+                    WHERE team_id = :team_id
+                      AND role = :role
+                      AND status = 'idle'
+                    LIMIT 1
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING id
+            """),
+            {"team_id": str(team_id), "role": role},
+        )
+        row = result.fetchone()
+        if not row:
+            return None
+        # Refresh the ORM object from DB
+        agent = await db.get(Agent, uuid.UUID(str(row[0])))
+        return agent
+
+    async def _acquire_agents_atomic(
+        self,
+        db: AsyncSession,
+        team_id: uuid.UUID,
+        max_count: int = 1,
+        role: str = "engineer",
+    ) -> list[Agent]:
+        """Atomically acquire up to max_count idle agents.
+
+        Each agent is set to 'working' atomically — no race conditions.
+        Uses FOR UPDATE SKIP LOCKED so concurrent acquires don't block.
+        """
+        result = await db.execute(
+            text("""
+                UPDATE agents
+                SET status = 'working'
+                WHERE id IN (
+                    SELECT id FROM agents
+                    WHERE team_id = :team_id
+                      AND role = :role
+                      AND status = 'idle'
+                    ORDER BY id
+                    LIMIT :max_count
+                    FOR UPDATE SKIP LOCKED
+                )
+                RETURNING id
+            """),
+            {"team_id": str(team_id), "role": role, "max_count": max_count},
+        )
+        rows = result.fetchall()
+        if not rows:
+            return []
+        agents = []
+        for row in rows:
+            agent = await db.get(Agent, uuid.UUID(str(row[0])))
+            if agent:
+                agents.append(agent)
+        return agents
+
     async def _find_idle_agent(
         self,
         db: AsyncSession,
@@ -503,8 +632,12 @@ class ExecutionLoop:
         team_id: str,
         task_title: str,
         task_description: str,
+        worktree_path: Optional[str] = None,
     ) -> bool:
         """Dispatch a single run task via AgentRunner.
+
+        Phase 3: Accepts worktree_path for isolated file access. Signals
+        the wakeup event on completion so the loop re-dispatches immediately.
 
         Returns True on success, False on failure.
         """
@@ -513,15 +646,34 @@ class ExecutionLoop:
             logger, logging.INFO, "task.dispatched",
             task_id=run_task_id, agent_id=agent_id,
             run_id=str(run_id), title=task_title,
+            worktree=worktree_path or "(repo root)",
         )
         runner = AgentRunner(session_factory=self._session_factory)
 
+        # Build sibling context for parallel awareness
+        sibling_context = ""
+        try:
+            from openclaw.services.sibling_context import SiblingContextBuilder
+            async with self._session_factory() as db:
+                builder = SiblingContextBuilder(db)
+                sibling_context = await builder.build_context(run_id, run_task_id)
+        except Exception:
+            logger.debug("Failed to build sibling context", exc_info=True)
+
         # Build prompt for the agent
+        sibling_section = f"\n\n{sibling_context}" if sibling_context else ""
+        worktree_section = (
+            f"\n\nYou are working in an isolated git worktree at: {worktree_path}\n"
+            f"Your changes will not affect other agents. Commit freely."
+            if worktree_path else ""
+        )
         prompt = (
             f"## Run Task: {task_title}\n\n"
             f"{task_description}\n\n"
             f"Complete this task. When done, commit your changes with a clear "
             f"commit message describing what was done."
+            f"{worktree_section}"
+            f"{sibling_section}"
         )
 
         try:
@@ -529,18 +681,34 @@ class ExecutionLoop:
                 agent_id=agent_id,
                 team_id=team_id,
                 prompt_override=prompt,
+                working_directory=worktree_path,
+                run_task_id=run_task_id,
             )
 
-            if result.get("error"):
-                # Record the error on the run task
-                async with self._session_factory() as db:
-                    ptask = await db.get(RunTask, run_task_id)
-                    if ptask:
+            # Always store agent output in RunTask.result
+            async with self._session_factory() as db:
+                ptask = await db.get(RunTask, run_task_id)
+                if ptask:
+                    ptask.result = {
+                        "stdout": result.get("stdout", ""),
+                        "stderr": result.get("stderr", ""),
+                        "exit_code": result.get("exit_code"),
+                        "duration_seconds": result.get("duration_seconds"),
+                        "worktree": worktree_path,
+                    }
+                    if result.get("error"):
                         ptask.error = result["error"]
-                        await db.commit()
-                return False
+                    await db.commit()
 
-            return result.get("exit_code", 1) == 0
+            success = not result.get("error") and result.get("exit_code", 1) == 0
+
+            # Release agent back to idle
+            await self._release_agent(agent_id)
+
+            # Signal wakeup so loop re-dispatches immediately
+            self._wakeup.set()
+
+            return success
 
         except Exception as e:
             logger.exception(
@@ -551,7 +719,31 @@ class ExecutionLoop:
                 if ptask:
                     ptask.error = str(e)
                     await db.commit()
+
+            # Release agent even on failure
+            await self._release_agent(agent_id)
+            self._wakeup.set()
+
             return False
+
+    async def _release_agent(self, agent_id: str) -> None:
+        """Release an agent back to idle status after task completion."""
+        try:
+            async with self._session_factory() as db:
+                await db.execute(
+                    text("""
+                        UPDATE agents SET status = 'idle'
+                        WHERE id = :agent_id
+                    """),
+                    {"agent_id": agent_id},
+                )
+                await db.commit()
+        except Exception:
+            logger.warning(
+                "Failed to release agent %s back to idle",
+                agent_id,
+                exc_info=True,
+            )
 
     # ─── Task lifecycle helpers ────────────────────────────────────
 

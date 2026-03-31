@@ -61,10 +61,39 @@ async def lifespan(app: FastAPI):
     merge_task = asyncio.create_task(merge_worker.run_loop())
     logger.info("openclaw.merge_worker_started")
 
+    # Run crash recovery (Phase 4C) — scan for orphaned state
+    from openclaw.services.recovery import RecoveryManager
+    try:
+        recovery = RecoveryManager()
+        report = await recovery.run()
+        if report.had_orphans:
+            logger.warning(
+                "openclaw.recovery_found_orphans",
+                agents_reset=report.agents_reset,
+                tasks_reset=report.tasks_reset,
+                sessions_closed=report.sessions_closed,
+            )
+    except Exception as e:
+        logger.warning("openclaw.recovery_failed", error=str(e))
+
+    # Start reaction engine (Phase 4B) — automated event responses
+    from openclaw.services.reaction_engine import ReactionEngine
+    reaction_engine = ReactionEngine()
+    reaction_task = asyncio.create_task(reaction_engine.run_loop(poll_interval=30.0))
+    logger.info("openclaw.reaction_engine_started")
+
     yield
 
     # Shutdown
     logger.info("openclaw.shutdown")
+
+    # Stop reaction engine
+    reaction_engine.stop()
+    reaction_task.cancel()
+    try:
+        await reaction_task
+    except asyncio.CancelledError:
+        pass
 
     # Stop merge worker
     merge_worker.stop()

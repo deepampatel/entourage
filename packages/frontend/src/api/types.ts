@@ -28,6 +28,16 @@ export interface Agent {
   created_at: string;
 }
 
+export interface Repository {
+  id: string;
+  team_id: string;
+  name: string;
+  local_path: string;
+  default_branch: string;
+  config: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface Task {
   id: number;
   team_id: string;
@@ -112,10 +122,10 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
-  low: "#6b7280",
-  medium: "#3b82f6",
-  high: "#f59e0b",
-  critical: "#ef4444",
+  low: "var(--semantic-gray)",
+  medium: "var(--semantic-blue)",
+  high: "var(--semantic-orange)",
+  critical: "var(--semantic-red)",
 };
 
 // ─── Human Requests ─────────────────────────────────────
@@ -220,6 +230,12 @@ export interface RunTask {
   retry_count: number;
   branch_name: string;
   error: string | null;
+  result: {
+    stdout?: string;
+    stderr?: string;
+    exit_code?: number;
+    duration_seconds?: number;
+  } | null;
   created_at: string;
   updated_at: string;
   started_at: string | null;
@@ -268,17 +284,17 @@ export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
 };
 
 export const RUN_STATUS_COLORS: Record<RunStatus, string> = {
-  draft: "#6b7280",
-  planning: "#8b5cf6",
-  contracting: "#a855f7",
-  awaiting_plan_approval: "#f59e0b",
-  executing: "#3b82f6",
-  reviewing: "#06b6d4",
-  merging: "#8b5cf6",
-  done: "#10b981",
-  paused: "#f97316",
-  failed: "#ef4444",
-  cancelled: "#6b7280",
+  draft: "var(--semantic-gray)",
+  planning: "var(--semantic-purple)",
+  contracting: "var(--semantic-purple-light)",
+  awaiting_plan_approval: "var(--semantic-orange)",
+  executing: "var(--semantic-blue)",
+  reviewing: "var(--semantic-blue)",
+  merging: "var(--semantic-purple)",
+  done: "var(--semantic-green)",
+  paused: "var(--semantic-orange)",
+  failed: "var(--semantic-red)",
+  cancelled: "var(--semantic-gray)",
 };
 
 // ─── Analytics ──────────────────────────────────────────

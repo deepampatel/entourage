@@ -25,7 +25,7 @@ const VERDICT_BADGE: Record<string, { label: string; className: string }> = {
 export function TaskCard({ task, agents, review }: TaskCardProps) {
   const assignee = agents?.find((a) => a.id === task.assignee_id);
   const statusLabel = STATUS_LABELS[task.status as TaskStatus] || task.status;
-  const priorityColor = PRIORITY_COLORS[task.priority as Priority] || "#6b7280";
+  const priorityColor = PRIORITY_COLORS[task.priority as Priority] || "var(--semantic-gray)";
 
   const verdictInfo = review?.verdict
     ? VERDICT_BADGE[review.verdict]

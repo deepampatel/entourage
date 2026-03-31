@@ -259,8 +259,18 @@ class ReviewService:
         if not task or not task.assignee_id:
             return  # No assignee to notify
 
-        # ── Format feedback from review comments ──────────────
+        # ── Format feedback from review comments (deduplicated) ──
         comments = review.comments or []
+
+        # Filter out comments already dispatched in previous review cycles
+        try:
+            from openclaw.services.review_dedup import ReviewDeduplicator
+            dedup = ReviewDeduplicator(self.db)
+            comments = await dedup.filter_new_comments(review.task_id, comments)
+            dedup.mark_dispatched(review.task_id, comments)
+        except Exception:
+            pass  # Dedup is best-effort; fall through to send all comments
+
         feedback_lines = [f"## Review Feedback (Attempt #{review.attempt})"]
         if summary:
             feedback_lines.append(f"\n**Summary:** {summary}\n")

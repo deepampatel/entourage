@@ -1,21 +1,21 @@
 """Agent adapter base — pluggable interface for coding agent backends.
 
-Learn: Entourage doesn't build its own coding agent. It dispatches to
-existing tools (Claude Code, Codex, Aider) and provides orchestration
-(tasks, reviews, human-in-the-loop, costs) via our MCP server.
+Entourage dispatches to existing coding agents (Claude Code, Codex, Aider)
+and provides orchestration (tasks, reviews, HITL, costs) via MCP server.
 
 Each adapter knows how to:
-1. Spawn a specific coding agent as a subprocess
+1. Spawn a specific coding agent (subprocess or tmux)
 2. Configure it with our MCP server for Entourage tools
 3. Build a prompt with task context + MCP tool instructions
 4. Handle timeouts and cleanup
 
-The subprocess pattern follows git_service.py's _run_git:
-asyncio.create_subprocess_exec + asyncio.wait_for + timeout handling.
+Common utilities (MCP config, prompt sections) live here to avoid duplication.
 """
 
 import asyncio
+import json
 import os
+import tempfile
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -129,6 +129,59 @@ class AgentAdapter(ABC):
         specific binaries on PATH.
         """
         return True, "ok"
+
+    # ─── Shared utilities (used by all adapters) ─────────────
+
+    def _write_mcp_config(self, config: AdapterConfig) -> tuple[str, str]:
+        """Write MCP config to a temp file. Returns (config_path, config_dir).
+
+        All adapters need to tell their coding agent how to connect to
+        our MCP server. This standardizes the config format.
+        """
+        mcp_config = {
+            "mcpServers": {
+                "entourage": {
+                    "command": config.mcp_server_command[0],
+                    "args": config.mcp_server_command[1:],
+                    "env": {
+                        "OPENCLAW_API_URL": config.api_url,
+                    },
+                }
+            }
+        }
+        config_dir = tempfile.mkdtemp(prefix="entourage-mcp-")
+        config_path = os.path.join(config_dir, "mcp-config.json")
+        with open(config_path, "w") as f:
+            json.dump(mcp_config, f)
+        return config_path, config_dir
+
+    def _cleanup_mcp_config(self, config_path: str, config_dir: str) -> None:
+        """Remove temp MCP config files."""
+        try:
+            os.unlink(config_path)
+            os.rmdir(config_dir)
+        except OSError:
+            pass
+
+    def _build_conventions_section(
+        self, conventions: list[dict] | None, prefix: str = "Follow these team standards:"
+    ) -> str:
+        """Build the conventions section common to all prompts."""
+        if not conventions:
+            return ""
+        lines = ["TEAM CONVENTIONS:", prefix]
+        for c in conventions:
+            lines.append(f"- {c['key']}: {c['content']}")
+        return "\n".join(lines) + "\n\n"
+
+    def _build_context_section(self, context: dict | None) -> str:
+        """Build the context carryover section from previous runs."""
+        if not context:
+            return ""
+        lines = ["PREVIOUS CONTEXT:", "Key findings from earlier work on this task:"]
+        for k, v in context.items():
+            lines.append(f"- {k}: {v}")
+        return "\n".join(lines) + "\n\n"
 
     async def _run_subprocess(
         self,

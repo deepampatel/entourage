@@ -150,7 +150,7 @@ async def start_run(
         from openclaw.db.engine import async_session_factory
 
         async with async_session_factory() as plan_db:
-            planner = PlannerService(plan_db)
+            planner = PlannerService(plan_db, session_factory=async_session_factory)
             await planner.plan(run_id)
 
     background_tasks.add_task(_plan)
@@ -307,10 +307,21 @@ async def set_task_graph(
     run_id: uuid.UUID,
     body: TaskGraphBody,
     svc: RunService = Depends(_svc),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Store the task graph (from planner or manual input)."""
+    """Store the task graph (from planner agent or manual input).
+
+    If the run is in 'planning' status, auto-transitions to
+    'awaiting_plan_approval' after storing the task graph.
+    """
     try:
-        return await svc.set_task_graph(run_id, body.task_graph)
+        run = await svc.set_task_graph(run_id, body.task_graph)
+
+        # Auto-transition if called during planning phase
+        if run.status == "planning":
+            run = await svc.change_status(run_id, "awaiting_plan_approval")
+
+        return run
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

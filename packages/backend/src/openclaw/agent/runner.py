@@ -84,6 +84,8 @@ class AgentRunner:
         task_id: Optional[int] = None,
         prompt_override: Optional[str] = None,
         adapter_override: Optional[str] = None,
+        working_directory: Optional[str] = None,
+        run_task_id: Optional[int] = None,
     ) -> dict:
         """Execute a full agent run cycle.
 
@@ -176,13 +178,16 @@ class AgentRunner:
         mcp_path = _find_mcp_server_path()
         api_url = f"http://localhost:{settings.port}"
 
+        # Use run_task_id for unique session naming, fall back to task_id
+        effective_task_id = run_task_id or task_id or 0
+
         adapter_config = AdapterConfig(
             mcp_server_command=["node", mcp_path],
-            working_directory=os.getcwd(),
+            working_directory=working_directory or os.getcwd(),
             api_url=api_url,
             agent_id=agent_id,
             team_id=effective_team_id,
-            task_id=task_id or 0,
+            task_id=effective_task_id,
             timeout_seconds=agent.config.get(
                 "timeout_seconds", settings.agent_timeout_seconds
             ),
@@ -250,6 +255,21 @@ class AgentRunner:
             except Exception:
                 logger.debug("Failed to publish to Redis", exc_info=True)
 
+            # ── Check for rate limit errors → trigger global pause ──
+            if result.error and any(
+                phrase in (result.error + result.stderr).lower()
+                for phrase in ("rate limit", "429", "too many requests", "overloaded")
+            ):
+                try:
+                    from openclaw.services.reaction_engine import ReactionEngine
+                    engine = ReactionEngine(session_factory=self._session_factory)
+                    await engine.activate_global_pause(
+                        effective_team_id,
+                        reason=f"Rate limit detected in agent {agent_id}",
+                    )
+                except Exception:
+                    logger.debug("Failed to activate global pause", exc_info=True)
+
             log_structured(
                 logger, logging.INFO, "agent.run.completed",
                 agent_id=agent_id, adapter=adapter_name,
@@ -264,6 +284,8 @@ class AgentRunner:
                 "duration_seconds": round(result.duration_seconds, 1),
                 "error": error,
                 "adapter": adapter_name,
+                "stdout": result.stdout,
+                "stderr": result.stderr,
             }
 
         except Exception as e:

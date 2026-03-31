@@ -1,18 +1,11 @@
 """Codex adapter — spawns OpenAI Codex CLI as a subprocess.
 
-Learn: Codex is OpenAI's coding agent CLI. It supports:
-- Full-auto mode for non-interactive operation
-- MCP server configuration via config file
-- Working directory context for repo-aware coding
-
-The adapter follows the same pattern as Claude Code:
-write temp MCP config → spawn subprocess → handle timeout → return result.
+DEPRECATED: OpenAI sunset Codex in 2024. This adapter is maintained
+for backward compatibility but should not be used for new deployments.
+Use claude_code adapter instead.
 """
 
-import json
-import os
 import shutil
-import tempfile
 
 from openclaw.agent.adapters.base import AdapterConfig, AdapterResult, AgentAdapter
 
@@ -89,44 +82,16 @@ the task to in_review status.
 """
 
     async def run(self, prompt: str, config: AdapterConfig) -> AdapterResult:
-        """Spawn Codex CLI with our MCP server configured.
-
-        Learn: Codex supports MCP configuration similar to Claude Code.
-        We write a temp config and pass it via --mcp-config flag.
-        """
-        # Write temporary MCP config
-        mcp_config = {
-            "mcpServers": {
-                "entourage": {
-                    "command": config.mcp_server_command[0],
-                    "args": config.mcp_server_command[1:],
-                    "env": {
-                        "OPENCLAW_API_URL": config.api_url,
-                    },
-                }
-            }
-        }
-
-        config_dir = tempfile.mkdtemp(prefix="entourage-mcp-")
-        config_path = os.path.join(config_dir, "mcp-config.json")
+        """Spawn Codex CLI with our MCP server configured."""
+        config_path, config_dir = self._write_mcp_config(config)
 
         try:
-            with open(config_path, "w") as f:
-                json.dump(mcp_config, f)
-
             cmd = [
                 "codex",
-                "--full-auto",  # Non-interactive mode
-                "--mcp-config",
-                config_path,
+                "--full-auto",
+                "--mcp-config", config_path,
                 prompt,
             ]
-
             return await self._run_subprocess(cmd, config)
-
         finally:
-            try:
-                os.unlink(config_path)
-                os.rmdir(config_dir)
-            except OSError:
-                pass
+            self._cleanup_mcp_config(config_path, config_dir)

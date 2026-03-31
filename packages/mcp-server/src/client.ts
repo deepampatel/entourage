@@ -1122,6 +1122,16 @@ export async function startRun(runId: string): Promise<Run> {
   return request(`/api/v1/runs/${runId}/start`, { method: "POST" });
 }
 
+export async function setRunTaskGraph(
+  runId: string,
+  taskGraph: { tasks: Array<Record<string, unknown>> }
+): Promise<Run> {
+  return request(`/api/v1/runs/${runId}/task-graph`, {
+    method: "POST",
+    body: { task_graph: taskGraph },
+  });
+}
+
 export async function getRunTasks(runId: string): Promise<RunTask[]> {
   return request(`/api/v1/runs/${runId}/tasks`);
 }
