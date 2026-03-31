@@ -122,23 +122,86 @@ This makes both classes fully testable without monkeypatching — tests inject a
 runner = AgentRunner(session_factory=self._session_factory)
 ```
 
-### Template-Based Planner
+### Manager-as-Planner (Phase 3)
 
-When no `ANTHROPIC_API_KEY` is configured, the `PlannerService` generates task graphs from built-in templates instead of calling Claude. Five templates are available: **feature**, **bugfix**, **refactor**, **migration**, and **custom**.
+The `PlannerService` dispatches the **manager agent** (Claude Code) to read the codebase and produce a context-aware task graph. The manager explores the project structure, understands existing patterns, and creates tasks with specific file paths and acceptance criteria.
 
-The Anthropic client is lazily initialized (only created when actually needed), preventing crashes from missing config:
+**Planning flow:**
+1. Manager agent runs in tmux with access to the full repo
+2. Agent reads files, understands architecture, produces analysis
+3. Analysis is converted to structured JSON via Claude API (`create_task_graph` tool)
+4. RunTasks are created from the structured output
+
+**Fallback chain** (always produces a plan):
+- Manager agent analysis → API structured conversion → template fallback
+
+When no `ANTHROPIC_API_KEY` is configured, the system uses built-in templates: **feature**, **bugfix**, **refactor**, **migration**, and **custom**.
+
+### Tmux Runtime (Phase 3)
+
+Agents run in tmux sessions instead of bare subprocesses:
+
+```
+┌────────────────────────────────────────────┐
+│  tmux session: eo-task-365                 │
+│  ┌──────────────────────────────────────┐  │
+│  │  claude --print --mcp-config ...     │  │
+│  │  (agent working on task)             │  │
+│  └──────────────────────────────────────┘  │
+│  stdout tee'd to output.txt               │
+│  remain-on-exit: on (read output after)   │
+└────────────────────────────────────────────┘
+```
+
+**Why tmux over subprocess:**
+- **Live observation**: `tmux attach -t eo-task-365`
+- **Crash survival**: tmux persists if the backend process dies
+- **No stdout limits**: read output via `capture-pane` or tee file
+- **Exit detection**: `remain-on-exit` + `pane_dead` flag check
+
+**Launcher scripts** avoid shell quoting issues with multi-line prompts:
+```bash
+#!/bin/bash
+claude --print --mcp-config /tmp/config.json \
+  --allowedTools "mcp__entourage__*" \
+  --max-turns 100 \
+  "$(cat '/tmp/prompt.txt')" 2>&1 | tee "/tmp/output.txt"
+```
+
+### Atomic Agent Acquisition
+
+The execution loop uses `FOR UPDATE SKIP LOCKED` to prevent double-dispatch:
+
+```sql
+UPDATE agents SET status = 'working'
+WHERE id = (
+    SELECT id FROM agents
+    WHERE team_id = :team_id AND role = 'engineer' AND status = 'idle'
+    LIMIT 1
+    FOR UPDATE SKIP LOCKED
+)
+RETURNING id
+```
+
+Two tasks acquiring agents concurrently will never grab the same agent.
+
+### Event-Driven Dispatch
+
+Task completion triggers immediate re-dispatch via `asyncio.Event`:
 
 ```python
-@property
-def client(self):
-    if self._client is None:
-        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    return self._client
+# In _run_task(), after agent finishes:
+self._wakeup.set()  # Unblocks the main loop instantly
+
+# In main loop, instead of sleep(10):
+await asyncio.wait_for(self._wakeup.wait(), timeout=10.0)
 ```
+
+This eliminates polling latency — the next task starts within milliseconds of its predecessor completing.
 
 ### Run Execution Loop
 
-The `ExecutionLoop` manages the full run lifecycle: DRAFT → PLANNING → AWAITING_PLAN_APPROVAL → EXECUTING → REVIEWING → DONE. It handles task dispatch, agent supervision, retry logic with backoff, and progress tracking — all with budget enforcement and graceful shutdown.
+The `ExecutionLoop` manages the full run lifecycle: DRAFT → PLANNING → AWAITING_PLAN_APPROVAL → EXECUTING → REVIEWING → DONE. It handles parallel task dispatch with git worktree isolation, atomic agent acquisition, event-driven wakeup, retry logic, sandbox testing, and progress tracking — all with budget enforcement and graceful shutdown.
 
 ## Tech Stack
 
@@ -214,18 +277,28 @@ GitHub/GitLab webhook ingestion:
 - Maps GitHub labels to task priority (`critical`/`urgent`/`P0` → critical, etc.)
 - Optional auto-assign to idle agents via `webhook.config.auto_assign`
 
-### Agent Adapter System (Phase 11)
-Pluggable adapters that launch and manage external AI coding agents. Each adapter subclasses `AgentAdapter` and implements `run()` (start the agent process) and `build_prompt()` (format the task into agent-specific instructions).
+### Agent Adapter System (Phase 11, upgraded in Phase 3)
+Pluggable adapters that launch and manage external AI coding agents. Each adapter subclasses `AgentAdapter` and implements `run()` and `build_prompt()`. Common utilities (`_write_mcp_config`, `_build_conventions_section`, `_build_context_section`) live in the base class.
 
 Three built-in adapters in `packages/backend/src/openclaw/agent/adapters/`:
 
-| Adapter | Agent | How it works |
-|---------|-------|-------------|
-| `claude_code.py` | Claude Code | Spawns `claude` CLI with `--print` mode, streams output |
-| `codex.py` | OpenAI Codex | Spawns `codex` CLI, captures stdout |
-| `aider.py` | Aider | Spawns `aider` with `--message` flag, reads result |
+| Adapter | Agent | Runtime | How it works |
+|---------|-------|---------|-------------|
+| `claude_code.py` | Claude Code | **tmux** | Launcher script in tmux session, `--print` mode, stdout tee'd to file. Fallback to subprocess if tmux unavailable. |
+| `codex.py` | OpenAI Codex | subprocess | ⚠️ Deprecated (OpenAI sunset Codex). Spawns `codex` CLI. |
+| `aider.py` | Aider | subprocess | Spawns `aider` with `--message` flag, reads result |
 
-All adapters run the agent process in a task worktree so changes are branch-isolated. The adapter system is used by the CLI `run` command and the dispatcher when auto-assigning work.
+All adapters run in the task's worktree so changes are branch-isolated. The Claude Code adapter creates a launcher script to avoid shell quoting issues with multi-line prompts in tmux.
+
+### New Services (Phase 3)
+
+| Service | Purpose |
+|---------|---------|
+| `activity_detector.py` | Reads Claude Code JSONL session files for real-time agent state (active/idle/stuck/blocked) |
+| `reaction_engine.py` | Automated responses to system events — stuck agent detection, rate limit pausing, auto-retry |
+| `recovery.py` | Crash recovery on startup — resets stale sessions, orphaned tasks, stuck agents |
+| `review_dedup.py` | SHA-256 fingerprinting prevents duplicate review comments |
+| `sibling_context.py` | Injects parallel task awareness into agent prompts (what other agents are doing) |
 
 ### Team Conventions
 Team coding conventions stored in `teams.config` JSONB (no migration needed). CRUD via `/settings/teams/{id}/conventions`. Active conventions are loaded by `AgentRunner` and injected into all adapter prompts — agents follow team standards automatically.

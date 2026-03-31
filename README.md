@@ -11,8 +11,8 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/tests-395_passing-6366f1?style=flat-square" alt="Tests" />
-  <img src="https://img.shields.io/badge/MCP_tools-58-8b5cf6?style=flat-square" alt="MCP Tools" />
+  <img src="https://img.shields.io/badge/tests-435_passing-6366f1?style=flat-square" alt="Tests" />
+  <img src="https://img.shields.io/badge/MCP_tools-59-8b5cf6?style=flat-square" alt="MCP Tools" />
   <img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
   <img src="https://img.shields.io/badge/TypeScript-5.0+-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript" />
   <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL" />
@@ -28,9 +28,9 @@ entourage run "Add rate limiting middleware to all API routes"
 ```
 
 That single command:
-1. **Creates** a run from your intent
-2. **Plans** a task graph (AI-generated or template-based — works without an API key)
-3. **Dispatches** agents to work in parallel, in isolated git worktrees
+1. **Plans** — the manager agent reads your codebase, understands the architecture, and decomposes intent into a dependency DAG
+2. **Dispatches** — multiple agents work in parallel, each in an isolated git worktree and tmux session
+3. **Observes** — watch any agent live with `tmux attach -t eo-task-42`
 4. **Pauses** when agents hit ambiguity — they ask you, not guess
 5. **Reviews** code with file-anchored comments and approve/reject verdicts
 6. **Merges** via a managed queue with squash/rebase strategies
@@ -44,13 +44,15 @@ You should. Entourage doesn't replace your coding agent — it gives it an engin
 | | Solo agent | With Entourage |
 |:--|:-----------|:---------------|
 | **Work intake** | Copy-paste into chat | `run "intent"` → task graph → execution |
-| **Coordination** | One agent, one thread | Multiple agents working in parallel across tasks |
+| **Coordination** | One agent, one thread | Multiple agents in parallel tmux sessions |
+| **Observation** | Read the output when done | `tmux attach -t eo-task-42` — watch live |
 | **Memory** | Context window only | Persistent tasks, events, sessions — survives restarts |
+| **Planning** | You decompose the work | Manager agent reads codebase, creates task DAG |
 | **Safety** | Hope for the best | Budget caps, state machine, human checkpoints |
 | **Review** | Read the chat output | File-anchored comments, approve/reject/request-changes |
 | **Ambiguity** | Agent guesses | Agent calls `ask_human` and waits for your answer |
 | **Isolation** | Shared workspace | Branch-per-task git worktrees — agents can't stomp each other |
-| **Audit** | Scroll through chat history | Immutable event store (who did what, when, why) |
+| **Crash recovery** | Start over | Tmux sessions persist, stale agents auto-reset on startup |
 | **Cost** | Check the Anthropic dashboard | Per-session, per-task, per-team tracking with daily caps |
 
 ## Screenshots
@@ -96,28 +98,28 @@ You say "Add rate limiting"
          │
          ▼
 ┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
-│  Run CLI        │────▶│  Task Planner    │────▶│  Execution     │
-│  entourage run  │     │  AI or template  │     │  Loop          │
-└─────────────────┘     └──────────────────┘     └───────┬────────┘
-                                                         │
+│  Run CLI        │────▶│  Manager Agent   │────▶│  Execution     │
+│  entourage run  │     │  reads codebase  │     │  Loop          │
+└─────────────────┘     │  creates DAG     │     └───────┬────────┘
+                        └──────────────────┘             │
                               ┌───────────────────────────┼────────────────┐
                               │                           │                │
                               ▼                           ▼                ▼
                      ┌────────────────┐         ┌────────────────┐  ┌──────────┐
+                     │  tmux: eo-365  │         │  tmux: eo-366  │  │  eo-367  │
                      │  Agent 1       │         │  Agent 2       │  │  Agent 3 │
-                     │  (Claude Code) │         │  (Codex)       │  │  (Aider) │
                      │  worktree: A   │         │  worktree: B   │  │  wt: C   │
                      └───────┬────────┘         └───────┬────────┘  └────┬─────┘
                              │                          │                │
                              ▼                          ▼                ▼
                      ┌──────────────────────────────────────────────────────────┐
-                     │  58 MCP Tools — tasks, git, reviews, sessions, budgets  │
+                     │  59 MCP Tools — tasks, git, reviews, sessions, budgets  │
                      ├──────────────────────────────────────────────────────────┤
                      │  FastAPI Backend — PostgreSQL + Redis + Event Store      │
                      └──────────────────────────────────────────────────────────┘
 ```
 
-Agents connect via [MCP](https://modelcontextprotocol.io) (Model Context Protocol). The backend manages all state. Humans stay in control through the dashboard, CLI, or API.
+Agents run in **tmux sessions** for live observation and crash survival. They connect via [MCP](https://modelcontextprotocol.io) (Model Context Protocol). The backend manages all state. Humans stay in control through the dashboard, CLI, or API.
 
 ## Quick start
 
@@ -155,15 +157,23 @@ uv run entourage run "Add a healthcheck endpoint at /health"
 <td width="50%">
 
 **Run-driven execution**
-- Intent → task graph → parallel execution → review → merge
-- AI planner decomposes work into dependency DAGs
+- Intent → manager agent reads codebase → task DAG → parallel execution → review → merge
+- Manager agent IS the planner — reads your code, understands patterns, creates smart plans
 - Template fallback when no AI provider is configured
 - `entourage run` one-liner or step-by-step control
 
+**Tmux runtime (Phase 3)**
+- Each agent runs in its own tmux session (`eo-task-{id}`)
+- Live observation: `tmux attach -t eo-task-42`
+- Crash-survivable: tmux persists if backend dies
+- Atomic agent acquisition: no double-dispatch race conditions
+- Event-driven dispatch: next task starts instantly when predecessor finishes
+
 **Governed task workflow**
-- 7-state machine with enforced transitions
+- 10-state machine with enforced transitions
 - DAG dependencies — Task B blocks until Task A completes
 - Full event-sourced audit trail for every action
+- Auto-recovery on startup: stale sessions, orphaned tasks, stuck agents
 
 **Cost controls**
 - Per-session token and dollar tracking
@@ -180,15 +190,17 @@ uv run entourage run "Add a healthcheck endpoint at /health"
 
 **Multi-agent teams**
 - Org → team → agent hierarchy with role-based access
-- Manager agents delegate to engineer agents
-- PG LISTEN/NOTIFY instant dispatch
-- Concurrent execution with configurable limits
+- Manager agents read codebase and delegate to engineers
+- Parallel execution with git worktree isolation per task
+- Sibling context: parallel agents know what others are doing
+- Atomic acquisition: `FOR UPDATE SKIP LOCKED` prevents double-dispatch
 
 **Production integrations**
 - GitHub webhooks auto-create tasks from issues/PRs
 - JWT + API key auth with org-scoped access
 - Real-time dashboard via WebSocket + Redis pub/sub
-- 3 agent adapters: Claude Code, Codex, Aider
+- Activity detector + reaction engine for stuck agent recovery
+- 3 agent adapters: Claude Code, Codex (deprecated), Aider
 
 </td>
 </tr>
@@ -221,7 +233,7 @@ entourage logout                     # Remove stored credentials
 
 ## MCP tools
 
-58 tools across 14 categories. Agents discover and call these via the [Model Context Protocol](https://modelcontextprotocol.io).
+59 tools across 14 categories. Agents discover and call these via the [Model Context Protocol](https://modelcontextprotocol.io).
 
 | Category | Tools | # |
 |----------|-------|:-:|
@@ -239,17 +251,17 @@ entourage logout                     # Remove stored credentials
 | **Webhooks** | `create_webhook` `list_webhooks` `update_webhook` | 3 |
 | **Settings** | `get_team_settings` `update_team_settings` `get_team_conventions` `add_team_convention` | 4 |
 | **Orchestration** | `create_tasks_batch` `wait_for_task_completion` `list_team_agents` | 3 |
-| **Runs** | `create_run` `get_run` `list_runs` `plan_run` `approve_run` `get_run_tasks` `cancel_run` `retry_run` | 8 |
+| **Runs** | `create_run` `get_run` `list_runs` `plan_run` `approve_run` `get_run_tasks` `set_run_task_graph` `cancel_run` `retry_run` | 9 |
 
 ## Agent adapters
 
 Entourage dispatches work to pluggable coding agent backends:
 
-| Adapter | CLI | MCP Support | Notes |
-|---------|-----|:-----------:|-------|
-| **Claude Code** | `claude` | ✅ Native | Full MCP integration via `--mcp-config` |
-| **Codex** | `codex` | ✅ Native | OpenAI's agent with `--full-auto --mcp-config` |
-| **Aider** | `aider` | ❌ REST | No MCP; prompt includes curl-based API instructions |
+| Adapter | CLI | Runtime | Notes |
+|---------|-----|:-------:|-------|
+| **Claude Code** | `claude` | tmux | Runs in tmux session with `--print` + stdout tee capture. Live observation via `tmux attach`. |
+| **Codex** | `codex` | subprocess | ⚠️ Deprecated (OpenAI sunset Codex). `--full-auto --mcp-config` |
+| **Aider** | `aider` | subprocess | No MCP; prompt includes curl-based API instructions |
 
 Check adapter availability: `entourage adapters`
 
@@ -262,22 +274,33 @@ packages/
   frontend/       React 19 + Vite 6 + TanStack Query
 ```
 
-15 database models, 9 Alembic migrations, 11 API routers, event sourcing throughout.
+15 database models, 9 Alembic migrations, 13 API routers, event sourcing throughout.
 
 **Key patterns:**
-- **Constructor injection** — `ExecutionLoop` and `AgentRunner` accept `session_factory` for full testability without monkeypatching
-- **Template planner fallback** — Built-in task decomposition templates when no AI provider is configured
+- **Tmux runtime** — Agents run in tmux sessions for observation, crash survival, and stdout capture via `tee`
+- **Atomic agent acquisition** — `UPDATE ... WHERE status='idle' FOR UPDATE SKIP LOCKED` prevents double-dispatch
+- **Event-driven dispatch** — `asyncio.Event` wakeup on task completion (no polling delay)
+- **Manager-as-planner** — Manager agent reads the codebase via Claude Code, then creates the task DAG
+- **Constructor injection** — `ExecutionLoop`, `AgentRunner`, and `PlannerService` accept `session_factory` for testability
+- **Hybrid planning** — Agent analysis → API structured conversion → template fallback (always works)
 - **Lazy client init** — External API clients created on first use, not at import time
 
 ## Tests
 
 ```bash
 cd packages/backend
-uv run pytest tests/ -v          # 395 tests, ~23s
+uv run pytest tests/ -v          # 435+ tests, ~30s
 uv run pytest tests/ --run-e2e   # Include live agent E2E tests
 ```
 
-Per-test savepoint rollback — fully isolated, no cleanup, runs against real Postgres. Includes a full lifecycle integration test: task creation → assignment → human-in-the-loop → code review → approval → merge → done.
+Per-test savepoint rollback — fully isolated, no cleanup, runs against real Postgres.
+
+Key test suites:
+- **`test_parallel_dispatch`** — Worktree isolation, atomic agent acquire, event-driven wakeup, diamond DAG dependencies
+- **`test_tmux_runtime`** — Session lifecycle, IO, env vars, long messages, dead session cleanup
+- **`test_activity_detector`** — JSONL session parsing, stuck/idle/active state detection
+- **`test_reaction_engine`** — Automated stuck detection, global pause, rate limit handling
+- Full lifecycle integration test: task creation → assignment → human-in-the-loop → code review → approval → merge → done
 
 ## Documentation
 
@@ -319,9 +342,14 @@ python examples/batch_orchestration.py  # DAG decomposition + 4 specialist agent
 | 9-12 | Production: auth, webhooks, CLI, agent adapters (Claude Code, Codex, Aider) | ✅ |
 | 13-17 | Polish: merge worker, multi-agent orchestration, E2E tests, full docs | ✅ |
 | 18-19 | Architecture: UX overhaul, DI refactor, run CLI, template planner | ✅ |
-| 20 | Project config (`ENTOURAGE.md` in-repo workflow policy) | 🔜 |
-| 21 | Issue tracker integration (Linear, GitHub Issues) | 🔜 |
-| 22 | Proof-of-work validation (CI status, test results before review) | 🔜 |
+| 20 | **Phase 3: Tmux runtime, atomic dispatch, event-driven wakeup** | ✅ |
+| 21 | **Manager-as-planner: agent reads codebase, creates task DAG** | ✅ |
+| 22 | **Services: activity detector, reaction engine, crash recovery, review dedup, sibling context** | ✅ |
+| 23 | Project config (`ENTOURAGE.md` in-repo workflow policy) | 🔜 |
+| 24 | Issue tracker integration (Linear, GitHub Issues deep sync) | 🔜 |
+| 25 | Proof-of-work validation (CI status, test results before review) | 🔜 |
+| 26 | Agent-to-agent review (reviewer agent auto-reviews before human) | 🔜 |
+| 27 | Multi-repo runs (one intent spans backend + frontend repos) | 🔜 |
 
 ## License
 
