@@ -77,6 +77,25 @@ class AgentRunner:
             session_factory = async_session_factory
         self._session_factory = session_factory
 
+    @staticmethod
+    def _find_repo_root() -> str:
+        """Find the git repo root, falling back to cwd.
+
+        Agents should work from the repo root so they can access
+        all packages (backend, frontend, mcp-server, etc.)
+        """
+        import subprocess
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return result.stdout.strip()
+        except Exception:
+            pass
+        return os.getcwd()
+
     async def run_agent(
         self,
         agent_id: str,
@@ -183,7 +202,7 @@ class AgentRunner:
 
         adapter_config = AdapterConfig(
             mcp_server_command=["node", mcp_path],
-            working_directory=working_directory or os.getcwd(),
+            working_directory=working_directory or self._find_repo_root(),
             api_url=api_url,
             agent_id=agent_id,
             team_id=effective_team_id,

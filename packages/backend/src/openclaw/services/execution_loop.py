@@ -177,6 +177,8 @@ class ExecutionLoop:
                                 "task_count": len(tasks),
                             },
                         )
+                        # Clean up tmux sessions from completed tasks
+                        await self._cleanup_tmux_sessions(tasks)
                         return {
                             "run_id": str(run_id),
                             "status": "reviewing",
@@ -744,6 +746,32 @@ class ExecutionLoop:
                 agent_id,
                 exc_info=True,
             )
+
+    async def _cleanup_tmux_sessions(self, tasks: list) -> None:
+        """Kill tmux sessions left by completed tasks."""
+        import asyncio
+        for task in tasks:
+            session_name = f"eo-task-{task.id}"
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "tmux", "kill-session", "-t", session_name,
+                    stdout=asyncio.subprocess.DEVNULL,
+                    stderr=asyncio.subprocess.DEVNULL,
+                )
+                await proc.wait()
+            except Exception:
+                pass
+        # Also kill the planning session
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "kill-session", "-t", "eo-task-0",
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+        except Exception:
+            pass
+        logger.info("Cleaned up %d tmux sessions", len(tasks) + 1)
 
     # ─── Task lifecycle helpers ────────────────────────────────────
 
