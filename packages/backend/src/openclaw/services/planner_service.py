@@ -5,6 +5,7 @@ Claude Code subprocess. This is a quick planning call, not a coding agent.
 """
 
 import logging
+import os
 import uuid
 from typing import Optional
 
@@ -393,58 +394,90 @@ class PlannerService:
         agent_analysis: str,
         template: str | None = None,
     ) -> dict:
-        """Parse manager agent's text output into a task graph without API.
+        """Parse manager agent's structured text output into a task graph.
 
-        Extracts task info from the agent's natural language analysis.
-        Uses the intent as description fallback when parsing fails.
-        Creates a focused task graph — 1 task for simple work, 2-3 for complex.
+        Expects the format:
+            TASK 0: <title>
+            COMPLEXITY: S
+            DEPS: []
+            DESCRIPTION: <description>
+
+        Falls back to simpler heuristics if structured format not found.
         """
         import re
 
-        # Try to extract task count and descriptions from the analysis
-        # Look for numbered items, bullet points, or "task" mentions
+        tasks = []
         lines = agent_analysis.strip().split("\n")
-        extracted_tasks = []
 
+        # Try structured format: TASK N: title
+        current_task = None
         for line in lines:
             line = line.strip()
-            # Match patterns like "1. Fix the...", "- Task: ...", "### Task 0: ..."
-            match = re.match(
-                r'^(?:\d+[\.\)]\s*|[-*]\s*|###?\s*Task\s*\d+[:\s]*)'
-                r'(?:\*\*)?(.+?)(?:\*\*)?$',
-                line,
-            )
-            if match:
-                title = match.group(1).strip()
-                # Skip meta-commentary lines
-                if len(title) > 10 and not any(
-                    skip in title.lower()
-                    for skip in ["i need", "i should", "let me", "looking at", "i can see"]
-                ):
-                    extracted_tasks.append(title[:200])
 
-        if not extracted_tasks:
-            # Couldn't parse — create a single focused task from the intent
-            extracted_tasks = [intent[:200]]
+            task_match = re.match(r'^TASK\s+\d+:\s*(.+)', line, re.IGNORECASE)
+            if task_match:
+                if current_task:
+                    tasks.append(current_task)
+                current_task = {
+                    "title": task_match.group(1).strip(),
+                    "description": "",
+                    "complexity": "M",
+                    "assigned_role": "engineer",
+                    "dependencies": [],
+                }
+                continue
 
-        # Limit to 5 tasks max
-        extracted_tasks = extracted_tasks[:5]
+            if current_task:
+                comp_match = re.match(r'^COMPLEXITY:\s*(S|M|L|XL)', line, re.IGNORECASE)
+                if comp_match:
+                    current_task["complexity"] = comp_match.group(1).upper()
+                    continue
 
-        # Determine complexity from count
-        complexity = "S" if len(extracted_tasks) <= 2 else "M"
+                deps_match = re.match(r'^DEPS:\s*\[([^\]]*)\]', line, re.IGNORECASE)
+                if deps_match:
+                    deps_str = deps_match.group(1).strip()
+                    if deps_str:
+                        current_task["dependencies"] = [
+                            int(d.strip()) for d in deps_str.split(",")
+                            if d.strip().isdigit()
+                        ]
+                    continue
 
-        # Build task graph
-        tasks = []
-        for i, title in enumerate(extracted_tasks):
-            # Simple linear deps for parsed tasks
-            deps = [i - 1] if i > 0 else []
-            tasks.append({
-                "title": title,
-                "description": f"{title}\n\nContext from codebase analysis:\n{agent_analysis[:500]}",
-                "complexity": complexity,
+                desc_match = re.match(r'^DESCRIPTION:\s*(.+)', line, re.IGNORECASE)
+                if desc_match:
+                    current_task["description"] = desc_match.group(1).strip()
+                    continue
+
+                if line and current_task.get("description"):
+                    current_task["description"] += "\n" + line
+
+        if current_task:
+            tasks.append(current_task)
+
+        # Fallback: numbered items
+        if not tasks:
+            for line in lines:
+                match = re.match(r'^\d+[\.\)]\s*(.+)', line.strip())
+                if match:
+                    title = match.group(1).strip()
+                    if len(title) > 10:
+                        tasks.append({
+                            "title": title[:200],
+                            "description": title,
+                            "complexity": "M",
+                            "assigned_role": "engineer",
+                            "dependencies": [len(tasks) - 1] if tasks else [],
+                        })
+
+        # Last resort: single task from intent
+        if not tasks:
+            tasks = [{
+                "title": intent[:200],
+                "description": intent,
+                "complexity": "M",
                 "assigned_role": "engineer",
-                "dependencies": deps,
-            })
+                "dependencies": [],
+            }]
 
         task_graph = {"tasks": tasks}
 
@@ -478,6 +511,37 @@ class PlannerService:
         )
         return task_graph
 
+    def _generate_file_tree(self, max_depth: int = 4) -> str:
+        """Generate a fast file tree snapshot of the working directory.
+
+        Takes ~1 second instead of the 80s an agent would spend exploring.
+        """
+        import subprocess
+
+        try:
+            result = subprocess.run(
+                ["find", ".", "-type", "f",
+                 "-not", "-path", "./.git/*",
+                 "-not", "-path", "./node_modules/*",
+                 "-not", "-path", "./__pycache__/*",
+                 "-not", "-path", "./.venv/*",
+                 "-not", "-path", "./dist/*",
+                 "-not", "-name", "*.pyc",
+                 ],
+                capture_output=True, text=True, timeout=5,
+                cwd=os.getcwd(),
+            )
+            files = result.stdout.strip().split("\n")
+            # Limit to 200 most relevant files
+            if len(files) > 200:
+                # Prioritize source files
+                src_files = [f for f in files if "/src/" in f or "/tests/" in f]
+                other = [f for f in files if f not in src_files]
+                files = src_files[:150] + other[:50]
+            return "\n".join(sorted(files))
+        except Exception:
+            return "(file tree unavailable)"
+
     def _build_manager_planning_prompt(
         self,
         run_id: str,
@@ -488,85 +552,45 @@ class PlannerService:
     ) -> str:
         """Build the prompt for the manager agent to plan a run.
 
-        The manager agent will:
-        1. Read the codebase to understand the project
-        2. Decompose the intent into a task graph
-        3. Call set_run_task_graph MCP tool
-        4. Transition the run to awaiting_plan_approval
+        Includes a pre-generated file tree so the agent doesn't need
+        to spend time exploring. Goes straight to planning.
         """
         template_hint = ""
         if template and template in RUN_TEMPLATES:
             tmpl = RUN_TEMPLATES[template]
             template_hint = f"\nTemplate hint ({template}): {tmpl['hints']}\n"
 
-        return f"""You are the PLANNING MANAGER for run {run_id}.
+        file_tree = self._generate_file_tree()
 
-YOUR JOB: Read the codebase, understand its structure, then decompose this intent
-into a task graph that AI coding agents can execute.
+        return f"""You are the PLANNING MANAGER. Decompose this intent into tasks.
 
-INTENT:
-{intent}
+INTENT: {intent}
 {template_hint}
-STEP 1 — READ THE CODEBASE:
-Before planning, explore the project structure. Look at:
-- The directory layout (what folders exist, where code lives)
-- Existing patterns (how similar features are implemented)
-- Key files that will need to be modified
-- Test patterns (how tests are organized)
+PROJECT STRUCTURE (already scanned for you — DO NOT explore files yourself):
+{file_tree}
 
-STEP 2 — DECOMPOSE INTO TASKS:
-Create a task graph where:
-- Each task is a focused unit of work for ONE agent
-- Tasks that CAN run in parallel SHOULD have no dependencies between them
-- Only add dependencies when task B truly needs task A's output
-- Descriptions must include SPECIFIC file paths, function names, patterns to follow
-- Keep it minimal — don't create tasks for things that don't need doing
-- A simple utility function = 1 task, not 4
+OUTPUT FORMAT — respond with ONLY a task list in this exact format:
 
-SIZING GUIDE:
-- S: Single file change, <30 min (add a utility, fix a typo, config change)
-- M: Multi-file feature, 30-90 min (new endpoint with tests)
-- L: Complex feature, 90-180 min (new subsystem)
-- XL: Major feature, 180+ min (rarely needed — split into smaller tasks)
+TASK 0: <title>
+COMPLEXITY: S|M|L|XL
+DEPS: [] or [0] or [0, 1]
+DESCRIPTION: <specific description with file paths and acceptance criteria>
 
-STEP 3 — SUBMIT THE PLAN:
-Call the MCP tool to set the task graph:
+TASK 1: <title>
+COMPLEXITY: S|M|L|XL
+DEPS: [0]
+DESCRIPTION: <description>
 
-mcp__entourage__set_run_task_graph(
-    run_id="{run_id}",
-    tasks=[
-        {{
-            "title": "...",
-            "description": "Specific description with file paths and acceptance criteria",
-            "complexity": "S|M|L|XL",
-            "assigned_role": "engineer",
-            "dependencies": [],
-            "integration_hints": ["How this connects to other tasks"]
-        }},
-        ...
-    ]
-)
+RULES:
+- Keep it minimal. A simple utility = 1 task. Don't over-decompose.
+- Maximize parallelism. Independent tasks get DEPS: [].
+- Include SPECIFIC file paths from the project structure above.
+- S = single file (<30min), M = multi-file (30-90min), L = complex (90-180min).
+- DO NOT explore or read files. The structure above is all you need.
+- DO NOT write any code. Just output the task list.
+- DO NOT add commentary before or after the task list.
 
-STEP 4 — TRANSITION THE RUN:
-After setting the task graph, transition the run:
-mcp__entourage__change_task_status is NOT what you need.
-Instead the system will auto-transition after you set the task graph.
-
-YOUR IDENTITY:
-- agent_id: {agent_id}
-- team_id: {team_id}
-- run_id: {run_id}
-
-IMPORTANT RULES:
-- DO read the codebase first. Your plan quality depends on understanding the project.
-- DO maximize parallelism — independent tasks should NOT depend on each other.
-- DO include specific file paths in task descriptions.
-- DON'T create unnecessary tasks (no "create data models" for a utility function).
-- DON'T make everything sequential — find what can run in parallel.
-- DON'T skip calling set_run_task_graph — that's your deliverable.
-
-Begin by exploring the project structure, then create the task graph.
-"""
+Go."""
 
     def _build_planning_prompt(
         self,
