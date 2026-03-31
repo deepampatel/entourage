@@ -66,12 +66,12 @@ function AuthenticatedApp() {
   const { data: teams } = useTeams(orgId || undefined);
   const [teamId, setTeamId] = useState<string>("");
 
-  // Auto-select first org and team
+  // Auto-select first org, last team (most recently created = most active)
   if (orgs?.length && !orgId) {
     setOrgId(orgs[0].id);
   }
   if (teams?.length && !teamId) {
-    setTeamId(teams[0].id);
+    setTeamId(teams[teams.length - 1].id);
   }
 
   const handleLogout = () => {
@@ -85,7 +85,19 @@ function AuthenticatedApp() {
       <nav className="sidebar">
         <div className="sidebar-brand">
           <h1>Entourage</h1>
-          {teams?.[0] && <span className="sidebar-team-name">{teams[0].name}</span>}
+          {teams && teams.length > 1 ? (
+            <select
+              className="sidebar-team-select"
+              value={teamId}
+              onChange={(e) => setTeamId(e.target.value)}
+            >
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          ) : (
+            teams?.[0] && <span className="sidebar-team-name">{teams[0].name}</span>
+          )}
         </div>
 
         {/* Navigation */}

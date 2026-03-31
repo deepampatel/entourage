@@ -35,6 +35,30 @@
   margin-top: 2px;
 }
 
+.sidebar-team-select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  appearance: none;
+}
+
+.sidebar-team-select:hover {
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+.sidebar-team-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .sidebar-label {
   display: block;
   font-size: 10px;
