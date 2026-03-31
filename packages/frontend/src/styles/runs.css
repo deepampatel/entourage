@@ -21,6 +21,78 @@
 
 /* ─── Filters ──────────────────────────────────────────── */
 
+/* Filter Bar (Search + Status Dropdown) */
+.filter-bar {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-bar .search-input {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  transition: var(--transition-fast);
+}
+
+.filter-bar .search-input::placeholder {
+  color: var(--text-faint);
+}
+
+.filter-bar .search-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.filter-bar .status-filter-dropdown {
+  padding: 8px 12px;
+  border: 1px solid var(--border-input);
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-ui);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  min-width: 150px;
+}
+
+.filter-bar .status-filter-dropdown:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.filter-bar .status-filter-dropdown:hover {
+  border-color: var(--accent);
+}
+
+/* Responsive: Stack vertically on small screens */
+@media (max-width: 640px) {
+  .filter-bar {
+    flex-direction: column;
+  }
+
+  .filter-bar .search-input,
+  .filter-bar .status-filter-dropdown {
+    width: 100%;
+  }
+}
+
+/* Filter Tabs */
 .run-filters {
   display: flex;
   gap: 0.5rem;
