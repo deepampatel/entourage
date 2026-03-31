@@ -27,6 +27,14 @@
   letter-spacing: -0.02em;
 }
 
+.sidebar-team-name {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-top: 2px;
+}
+
 .sidebar-label {
   display: block;
   font-size: 10px;

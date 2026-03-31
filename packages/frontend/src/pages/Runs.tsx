@@ -642,24 +642,45 @@ export function Runs({ teamId }: RunsProps) {
 
       {/* Run list */}
       <div className="run-list">
-        {runs?.length === 0 && (
-          <div className="empty-state">
-            <p className="empty-state-title">No runs yet</p>
-            <p className="empty-state-desc">
-              A run takes your description and turns it into working code.
-              Agents plan the work, write code, run tests, and open a PR.
-            </p>
-            <button
-              className="run-btn run-btn-primary empty-state-cta"
-              onClick={() => setShowCreate(true)}
-            >
-              + Create Your First Run
-            </button>
-          </div>
-        )}
-        {runs?.map((r) => (
-          <RunCard key={r.id} run={r} teamId={teamId} />
-        ))}
+        {(() => {
+          const filtered = runs?.filter((r) => {
+            if (searchTerm && !r.title.toLowerCase().includes(searchTerm.toLowerCase())) {
+              return false;
+            }
+            return true;
+          });
+
+          if (!filtered?.length) {
+            return (
+              <div className="empty-state">
+                {runs?.length ? (
+                  <>
+                    <p className="empty-state-title">No matching runs</p>
+                    <p className="empty-state-desc">Try adjusting your search or filter.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="empty-state-title">No runs yet</p>
+                    <p className="empty-state-desc">
+                      A run takes your description and turns it into working code.
+                      Agents plan the work, write code, run tests, and open a PR.
+                    </p>
+                    <button
+                      className="run-btn run-btn-primary empty-state-cta"
+                      onClick={() => setShowCreate(true)}
+                    >
+                      + Create Your First Run
+                    </button>
+                  </>
+                )}
+              </div>
+            );
+          }
+
+          return filtered.map((r) => (
+            <RunCard key={r.id} run={r} teamId={teamId} />
+          ));
+        })()}
       </div>
     </div>
   );

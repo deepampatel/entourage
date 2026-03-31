@@ -6,7 +6,7 @@
  * events trigger invalidation via useTeamSocket.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiClient } from "../api/client";
 import type {
   Agent,
@@ -346,6 +346,20 @@ export function useRunTasks(runId: string | undefined) {
       ),
     enabled: !!runId,
     refetchInterval: 10_000,
+  });
+}
+
+export function useAllRunTasks(runIds: string[]) {
+  return useQueries({
+    queries: runIds.map((runId) => ({
+      queryKey: ["run-tasks", runId] as const,
+      queryFn: () => apiClient.get<RunTask[]>(`/api/v1/runs/${runId}/tasks`),
+      refetchInterval: 10_000,
+    })),
+    combine: (results) => ({
+      data: results.flatMap((r) => r.data ?? []),
+      isLoading: results.some((r) => r.isLoading),
+    }),
   });
 }
 

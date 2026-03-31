@@ -85,47 +85,7 @@ function AuthenticatedApp() {
       <nav className="sidebar">
         <div className="sidebar-brand">
           <h1>Entourage</h1>
-        </div>
-
-        {/* Org selector */}
-        {orgs && orgs.length > 1 && (
-          <div className="sidebar-section">
-            <label className="sidebar-label">Organization</label>
-            <select
-              className="org-select"
-              value={orgId}
-              onChange={(e) => {
-                setOrgId(e.target.value);
-                setTeamId("");
-              }}
-            >
-              {orgs.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Team selector */}
-        <div className="sidebar-section">
-          <label className="sidebar-label">Team</label>
-          {teams?.length ? (
-            <select
-              className="team-select"
-              value={teamId}
-              onChange={(e) => setTeamId(e.target.value)}
-            >
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <span className="sidebar-empty">No teams</span>
-          )}
+          {teams?.[0] && <span className="sidebar-team-name">{teams[0].name}</span>}
         </div>
 
         {/* Navigation */}
