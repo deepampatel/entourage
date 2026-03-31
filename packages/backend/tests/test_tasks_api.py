@@ -593,6 +593,230 @@ async def test_list_tasks_with_dependent_tasks_info(client, team):
     assert task_b["dependent_tasks"][0]["status"] == "todo"
 
 
+@pytest.mark.asyncio
+async def test_dependent_tasks_empty_for_no_dependencies(client, team):
+    """Tasks without dependencies should have empty dependent_tasks array."""
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Independent Task"},
+    )
+    task_id = resp.json()["id"]
+
+    # Get task detail
+    resp = await client.get(f"/api/v1/tasks/{task_id}")
+    assert resp.status_code == 200
+    task = resp.json()
+
+    # Verify dependent_tasks is empty array
+    assert "dependent_tasks" in task
+    assert task["dependent_tasks"] == []
+    assert task["depends_on"] == []
+
+
+@pytest.mark.asyncio
+async def test_dependent_tasks_status_changes_reflected(client, team):
+    """Dependent task status changes should be reflected in subsequent queries.
+
+    Learn: This tests the real-time accuracy of the dependent_tasks data,
+    ensuring the UI always sees current status information.
+    """
+    # Create task A
+    resp_a = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task A - Dependency"},
+    )
+    task_a_id = resp_a.json()["id"]
+
+    # Create task B (depends on A)
+    resp_b = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task B - Dependent", "depends_on": [task_a_id]},
+    )
+    task_b_id = resp_b.json()["id"]
+
+    # Verify initial status
+    resp = await client.get(f"/api/v1/tasks/{task_b_id}")
+    task_b = resp.json()
+    assert task_b["dependent_tasks"][0]["status"] == "todo"
+
+    # Move task A through several status changes
+    status_sequence = ["in_progress", "in_review", "in_approval", "merging", "done"]
+    for status in status_sequence:
+        await client.post(
+            f"/api/v1/tasks/{task_a_id}/status",
+            json={"status": status}
+        )
+
+        # Verify status is reflected in task B's dependent_tasks
+        resp = await client.get(f"/api/v1/tasks/{task_b_id}")
+        task_b = resp.json()
+        assert task_b["dependent_tasks"][0]["status"] == status, \
+            f"Expected status {status} but got {task_b['dependent_tasks'][0]['status']}"
+
+
+@pytest.mark.asyncio
+async def test_dependent_tasks_multiple_dependencies_all_statuses(client, team):
+    """Task with multiple dependencies should show all dependency statuses.
+
+    Learn: UI needs to see all dependencies at once to determine if a task
+    is blocked or ready to start. This tests the N-dependency case.
+    """
+    # Create three dependency tasks
+    task_ids = []
+    for i in range(3):
+        resp = await client.post(
+            f"/api/v1/teams/{team['id']}/tasks",
+            json={"title": f"Dependency {i+1}", "priority": ["low", "medium", "high"][i]},
+        )
+        task_ids.append(resp.json()["id"])
+
+    # Create task that depends on all three
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Main Task", "depends_on": task_ids},
+    )
+    main_task_id = resp.json()["id"]
+
+    # Move each dependency to different status
+    await client.post(f"/api/v1/tasks/{task_ids[0]}/status", json={"status": "in_progress"})
+    await client.post(f"/api/v1/tasks/{task_ids[1]}/status", json={"status": "in_progress"})
+    await client.post(f"/api/v1/tasks/{task_ids[1]}/status", json={"status": "in_review"})
+    # task_ids[2] stays in 'todo'
+
+    # Get main task and verify all dependency statuses
+    resp = await client.get(f"/api/v1/tasks/{main_task_id}")
+    main_task = resp.json()
+
+    assert len(main_task["dependent_tasks"]) == 3
+    dep_tasks_by_id = {dt["id"]: dt for dt in main_task["dependent_tasks"]}
+
+    assert dep_tasks_by_id[task_ids[0]]["status"] == "in_progress"
+    assert dep_tasks_by_id[task_ids[0]]["title"] == "Dependency 1"
+
+    assert dep_tasks_by_id[task_ids[1]]["status"] == "in_review"
+    assert dep_tasks_by_id[task_ids[1]]["title"] == "Dependency 2"
+
+    assert dep_tasks_by_id[task_ids[2]]["status"] == "todo"
+    assert dep_tasks_by_id[task_ids[2]]["title"] == "Dependency 3"
+
+
+@pytest.mark.asyncio
+async def test_dependent_tasks_ordering_preserved(client, team):
+    """Dependent tasks should maintain the same order as depends_on array.
+
+    Learn: UI may rely on the order of dependencies for display purposes.
+    The API should preserve the order from the depends_on array.
+    """
+    # Create three tasks
+    task_ids = []
+    for i in range(3):
+        resp = await client.post(
+            f"/api/v1/teams/{team['id']}/tasks",
+            json={"title": f"Task {chr(65+i)}"},  # A, B, C
+        )
+        task_ids.append(resp.json()["id"])
+
+    # Create dependent task with specific order
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Dependent", "depends_on": task_ids},
+    )
+    dependent_id = resp.json()["id"]
+
+    # Get task and verify order matches
+    resp = await client.get(f"/api/v1/tasks/{dependent_id}")
+    task = resp.json()
+
+    # Extract IDs from dependent_tasks in order
+    dependent_ids_in_order = [dt["id"] for dt in task["dependent_tasks"]]
+
+    # Should match the original depends_on order
+    assert dependent_ids_in_order == task_ids
+
+
+@pytest.mark.asyncio
+async def test_dependent_tasks_cancelled_dependency_shows_status(client, team):
+    """Cancelled dependencies should be reflected in dependent_tasks.
+
+    Learn: UI needs to know if a dependency was cancelled so it can
+    show the task as potentially unblocked (depending on requirements).
+    """
+    # Create task A
+    resp_a = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task A"},
+    )
+    task_a_id = resp_a.json()["id"]
+
+    # Create task B (depends on A)
+    resp_b = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task B", "depends_on": [task_a_id]},
+    )
+    task_b_id = resp_b.json()["id"]
+
+    # Cancel task A
+    await client.post(
+        f"/api/v1/tasks/{task_a_id}/status",
+        json={"status": "cancelled"}
+    )
+
+    # Get task B and verify dependency status
+    resp = await client.get(f"/api/v1/tasks/{task_b_id}")
+    task_b = resp.json()
+
+    assert len(task_b["dependent_tasks"]) == 1
+    assert task_b["dependent_tasks"][0]["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_list_tasks_filtered_by_status_includes_dependent_tasks(client, team):
+    """Filtered task list should still include dependent_tasks information.
+
+    Learn: When filtering tasks by status, we still need dependency info
+    for UI display. This ensures the enrichment works with filters.
+    """
+    # Create task A
+    resp_a = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task A"},
+    )
+    task_a_id = resp_a.json()["id"]
+
+    # Create task B (depends on A)
+    resp_b = await client.post(
+        f"/api/v1/teams/{team['id']}/tasks",
+        json={"title": "Task B", "depends_on": [task_a_id]},
+    )
+    task_b_id = resp_b.json()["id"]
+
+    # Move task B to in_progress (this should fail due to dependency)
+    # But first complete task A so B can start
+    for status in ["in_progress", "in_review", "in_approval", "merging", "done"]:
+        await client.post(f"/api/v1/tasks/{task_a_id}/status", json={"status": status})
+
+    # Now start task B
+    await client.post(f"/api/v1/tasks/{task_b_id}/status", json={"status": "in_progress"})
+
+    # Filter by in_progress status
+    resp = await client.get(
+        f"/api/v1/teams/{team['id']}/tasks",
+        params={"status": "in_progress"}
+    )
+    assert resp.status_code == 200
+    tasks = resp.json()
+
+    # Should have task B
+    assert len(tasks) == 1
+    task_b = tasks[0]
+
+    # Verify dependent_tasks is included even with filter
+    assert "dependent_tasks" in task_b
+    assert len(task_b["dependent_tasks"]) == 1
+    assert task_b["dependent_tasks"][0]["id"] == task_a_id
+    assert task_b["dependent_tasks"][0]["status"] == "done"
+
+
 # ═══════════════════════════════════════════════════════════
 # Event Sourcing
 # ═══════════════════════════════════════════════════════════
