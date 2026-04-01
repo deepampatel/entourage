@@ -511,3 +511,182 @@
 
 .diff-stat-add { color: var(--semantic-green); }
 .diff-stat-del { color: var(--semantic-red); }
+
+/* ─── Expanded Task Detail ────────────────────────────── */
+
+.run-expanded {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border-default);
+  padding-top: 1rem;
+  animation: slide-up var(--transition-smooth);
+}
+
+.run-expanded-header {
+  margin-bottom: 0.75rem;
+}
+
+.run-expanded-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.run-intent-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 0.5rem;
+  line-height: 1.5;
+}
+
+.run-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.run-task-row {
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.run-task-row:hover {
+  background: var(--bg-hover);
+}
+
+.run-task-row.selected {
+  background: var(--bg-active);
+}
+
+.run-task-row.failed {
+  border-left: 2px solid var(--semantic-red);
+}
+
+.run-task-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.run-task-index {
+  width: 18px;
+  font-size: 11px;
+  color: var(--text-faint);
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.run-task-complexity {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-active);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.complexity-S { color: var(--semantic-green); }
+.complexity-M { color: var(--semantic-blue); }
+.complexity-L { color: var(--semantic-orange); }
+.complexity-XL { color: var(--semantic-red); }
+
+.run-task-title {
+  flex: 1;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-task-status {
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.status-todo { color: var(--text-faint); }
+.status-in_progress { color: var(--semantic-blue); }
+.status-done { color: var(--semantic-green); }
+.status-failed { color: var(--semantic-red); }
+
+.run-task-duration {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.run-task-deps {
+  font-size: 10px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+/* Task detail (when clicked) */
+.run-task-detail {
+  padding: 0.5rem 0.75rem 0.75rem 2rem;
+  animation: slide-up 150ms ease;
+}
+
+.run-task-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  margin-bottom: 0.5rem;
+  white-space: pre-wrap;
+}
+
+.run-task-error {
+  font-size: 12px;
+  color: var(--semantic-red);
+  background: var(--semantic-red-muted);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+  font-family: var(--font-mono);
+  white-space: pre-wrap;
+}
+
+.run-task-meta-line {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.run-task-meta-line code {
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+}
+
+.run-task-output {
+  margin-top: 0.5rem;
+}
+
+.run-task-output summary {
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.run-task-output summary:hover {
+  color: var(--text-primary);
+}
+
+.run-task-output pre {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--bg-inset);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  margin-top: 4px;
+  max-height: 300px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}

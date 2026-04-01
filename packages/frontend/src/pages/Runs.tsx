@@ -187,6 +187,8 @@ function DiffViewer({ runId }: { runId: string }) {
 // ─── Run Card ────────────────────────────────────────
 
 function RunCard({ run, teamId }: { run: Run; teamId: string }) {
+  const autoExpand = ["awaiting_plan_approval", "failed"].includes(run.status);
+  const [expanded, setExpanded] = useState(autoExpand);
   const { data: tasks } = useRunTasks(run.id);
   const approvePlan = useApprovePlan(teamId);
   const rejectPlan = useRejectPlan(teamId);
@@ -195,6 +197,7 @@ function RunCard({ run, teamId }: { run: Run; teamId: string }) {
   const mergeRun = useMergeRun(teamId);
   const { showToast } = useToast();
   const [showDiff, setShowDiff] = useState(false);
+  const [expandedTaskId, setExpandedTaskId] = useState<number | null>(null);
 
   const status = run.status as RunStatus;
   const dotColor = STATUS_DOT[status] || "var(--text-faint)";
@@ -209,8 +212,8 @@ function RunCard({ run, teamId }: { run: Run; teamId: string }) {
 
   return (
     <div className={`run-card-v2 ${isActive ? "active" : ""} ${needsAction ? "needs-action" : ""}`}>
-      {/* Header row */}
-      <div className="run-card-top">
+      {/* Header row — click to expand */}
+      <div className="run-card-top" onClick={() => setExpanded(!expanded)} style={{ cursor: "pointer" }}>
         <div className="run-card-title-row">
           <h3 className="run-card-title">{run.title}</h3>
           <div className="run-card-status" style={{ color: dotColor }}>
@@ -348,7 +351,73 @@ function RunCard({ run, teamId }: { run: Run; teamId: string }) {
         )}
       </div>
 
-      {/* Diff viewer (expanded) */}
+      {/* Expanded: full task details */}
+      {expanded && tasks && tasks.length > 0 && (
+        <div className="run-expanded" onClick={(e) => e.stopPropagation()}>
+          <div className="run-expanded-header">
+            <span className="run-expanded-label">
+              Task Graph ({tasks.length} tasks)
+            </span>
+            {run.intent && (
+              <p className="run-intent-text">{run.intent}</p>
+            )}
+          </div>
+          <div className="run-task-list">
+            {tasks.map((task, i) => (
+              <div
+                key={task.id}
+                className={`run-task-row ${task.status === "failed" ? "failed" : ""} ${expandedTaskId === task.id ? "selected" : ""}`}
+                onClick={() => setExpandedTaskId(expandedTaskId === task.id ? null : task.id)}
+              >
+                <div className="run-task-summary">
+                  <span className="run-task-index">{i}</span>
+                  <span className={`run-task-complexity complexity-${task.complexity}`}>
+                    {task.complexity}
+                  </span>
+                  <span className="run-task-title">{task.title}</span>
+                  <span className={`run-task-status status-${task.status}`}>
+                    {task.status.replace("_", " ")}
+                  </span>
+                  {task.result?.duration_seconds && (
+                    <span className="run-task-duration">
+                      {Math.round(task.result.duration_seconds)}s
+                    </span>
+                  )}
+                  {task.dependencies.length > 0 && (
+                    <span className="run-task-deps">
+                      → [{task.dependencies.join(", ")}]
+                    </span>
+                  )}
+                </div>
+                {expandedTaskId === task.id && (
+                  <div className="run-task-detail">
+                    {task.description && (
+                      <div className="run-task-description">{task.description}</div>
+                    )}
+                    {task.error && (
+                      <div className="run-task-error">{task.error}</div>
+                    )}
+                    {task.agent_id && (
+                      <div className="run-task-meta-line">
+                        Agent: <code>{task.agent_id.slice(0, 12)}</code>
+                        {task.retry_count > 0 && ` · ${task.retry_count} retries`}
+                      </div>
+                    )}
+                    {task.result?.stdout && (
+                      <details className="run-task-output">
+                        <summary>Output ({task.result.stdout.length} chars)</summary>
+                        <pre>{task.result.stdout}</pre>
+                      </details>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Diff viewer */}
       {showDiff && status === "reviewing" && run.repository_id && (
         <DiffViewer runId={run.id} />
       )}
