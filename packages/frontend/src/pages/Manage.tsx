@@ -13,6 +13,7 @@ import {
   useUpdateAgent,
   useRepos,
   useRegisterRepo,
+  useValidateRepo,
 } from "../hooks/useApi";
 import { useToast } from "../components/Toast";
 import type { Agent } from "../api/types";
@@ -200,6 +201,14 @@ function CreateAgentForm({ teamId }: { teamId: string }) {
 function RegisterRepoForm({ teamId }: { teamId: string }) {
   const [name, setName] = useState("");
   const [localPath, setLocalPath] = useState("");
+  const [validated, setValidated] = useState<{
+    valid: boolean;
+    default_branch: string | null;
+    is_dirty: boolean;
+    remote_url: string | null;
+    error: string | null;
+  } | null>(null);
+  const validateRepo = useValidateRepo();
   const [branch, setBranch] = useState("main");
   const registerRepo = useRegisterRepo(teamId);
   const { showToast } = useToast();
@@ -220,15 +229,68 @@ function RegisterRepoForm({ teamId }: { teamId: string }) {
     );
   };
 
+  const handleValidate = () => {
+    if (!localPath.trim()) return;
+    validateRepo.mutate(
+      { local_path: localPath.trim() },
+      {
+        onSuccess: (data) => {
+          setValidated(data);
+          if (data.valid && data.default_branch) {
+            setBranch(data.default_branch);
+          }
+          if (data.valid && !name) {
+            // Auto-fill name from path
+            const parts = localPath.trim().split("/");
+            setName(parts[parts.length - 1] || "");
+          }
+        },
+      }
+    );
+  };
+
   return (
-    <form className="manage-form manage-repo-form" onSubmit={handleSubmit}>
-      <input type="text" placeholder="Repo name" value={name} onChange={(e) => setName(e.target.value)} className="manage-input" />
-      <input type="text" placeholder="Local path (e.g. /home/user/project)" value={localPath} onChange={(e) => setLocalPath(e.target.value)} className="manage-input" />
-      <input type="text" placeholder="Branch" value={branch} onChange={(e) => setBranch(e.target.value)} className="manage-input manage-input-sm" />
-      <button type="submit" className="manage-btn manage-btn-primary" disabled={registerRepo.isPending || !name.trim() || !localPath.trim()}>
-        + Add Repo
-      </button>
-    </form>
+    <div>
+      <form className="manage-form manage-repo-form" onSubmit={handleSubmit}>
+        <input type="text" placeholder="Local path (e.g. /home/user/project)" value={localPath}
+          onChange={(e) => { setLocalPath(e.target.value); setValidated(null); }}
+          className="manage-input" />
+        <button type="button" className="manage-btn manage-btn-secondary"
+          onClick={handleValidate} disabled={validateRepo.isPending || !localPath.trim()}>
+          {validateRepo.isPending ? "Checking..." : "Validate"}
+        </button>
+      </form>
+
+      {validated && (
+        <div className={`repo-validation ${validated.valid ? "valid" : "invalid"}`}>
+          {validated.valid ? (
+            <>
+              <span className="repo-valid-badge">Valid git repo</span>
+              <span className="repo-validation-detail">
+                Branch: {validated.default_branch}
+                {validated.is_dirty && " (dirty)"}
+                {validated.remote_url && ` | ${validated.remote_url}`}
+              </span>
+            </>
+          ) : (
+            <span className="repo-invalid-msg">{validated.error}</span>
+          )}
+        </div>
+      )}
+
+      {validated?.valid && (
+        <form className="manage-form manage-repo-form" onSubmit={handleSubmit}>
+          <input type="text" placeholder="Repo name" value={name}
+            onChange={(e) => setName(e.target.value)} className="manage-input" />
+          <input type="text" placeholder="Default branch" value={branch}
+            onChange={(e) => setBranch(e.target.value)} className="manage-input manage-input-sm" />
+          <button type="submit" className="manage-btn manage-btn-primary"
+            disabled={registerRepo.isPending || !name.trim()}>
+            {registerRepo.isPending ? "Adding..." : "+ Register"}
+          </button>
+        </form>
+      )}
+    </div>
   );
 }
 

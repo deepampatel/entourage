@@ -11,8 +11,10 @@ import {
   useChangeRunStatus,
   useCreateRun,
   useGenerateContracts,
+  useMergeRun,
   useRepos,
   useRunContracts,
+  useRunDiff,
   useRuns,
   useRunTasks,
   useRejectPlan,
@@ -210,6 +212,10 @@ function RunCard({
   const startRun = useStartRun(teamId);
   const generateContracts = useGenerateContracts(teamId);
   const changeStatus = useChangeRunStatus(teamId);
+  const mergeRun = useMergeRun(teamId);
+  const showDiff = expanded && run.status === "reviewing" && run.repository_id;
+  const { data: diffData } = useRunDiff(showDiff ? run.id : undefined);
+  const [showDiffViewer, setShowDiffViewer] = useState(false);
   const { showToast } = useToast();
 
   const status = run.status as RunStatus;
@@ -281,21 +287,52 @@ function RunCard({
         )}
         {status === "reviewing" && (
           <>
-            <button
-              className="run-btn run-btn-success"
-              onClick={() => changeStatus.mutate(
-                { runId: run.id, status: "done" },
-                { onSuccess: () => showToast("Run marked as done!", "success") }
-              )}
-              disabled={changeStatus.isPending}
-            >
-              Mark Done
-            </button>
+            {run.repository_id ? (
+              <>
+                <button
+                  className="run-btn run-btn-primary"
+                  onClick={() => setShowDiffViewer(!showDiffViewer)}
+                >
+                  {showDiffViewer ? "Hide Diff" : "Review Diff"}
+                </button>
+                <button
+                  className="run-btn run-btn-success"
+                  onClick={() => mergeRun.mutate(
+                    { runId: run.id, strategy: "merge" },
+                    { onSuccess: () => showToast("Merged to main!", "success") }
+                  )}
+                  disabled={mergeRun.isPending}
+                >
+                  {mergeRun.isPending ? "Merging..." : "Approve & Merge"}
+                </button>
+                <button
+                  className="run-btn"
+                  onClick={() => mergeRun.mutate(
+                    { runId: run.id, strategy: "merge", create_pr: true },
+                    { onSuccess: () => showToast("PR created!", "success") }
+                  )}
+                  disabled={mergeRun.isPending}
+                >
+                  Create PR
+                </button>
+              </>
+            ) : (
+              <button
+                className="run-btn run-btn-success"
+                onClick={() => changeStatus.mutate(
+                  { runId: run.id, status: "done" },
+                  { onSuccess: () => showToast("Run marked as done!", "success") }
+                )}
+                disabled={changeStatus.isPending}
+              >
+                Mark Done
+              </button>
+            )}
             <button
               className="run-btn"
               onClick={() => changeStatus.mutate(
                 { runId: run.id, status: "executing" },
-                { onSuccess: () => showToast("Run re-executing...", "success") }
+                { onSuccess: () => showToast("Re-executing...", "success") }
               )}
               disabled={changeStatus.isPending}
             >
@@ -328,6 +365,50 @@ function RunCard({
           </button>
         )}
       </div>
+
+      {/* Diff viewer for reviewing runs */}
+      {showDiffViewer && diffData && (
+        <div className="run-diff-viewer" onClick={(e) => e.stopPropagation()}>
+          <div className="run-diff-header">
+            <h4>
+              Changes: {diffData.branch} vs {diffData.base}
+            </h4>
+            <span className="run-diff-stats">
+              {diffData.files.length} files changed
+            </span>
+          </div>
+          <div className="run-diff-files">
+            {diffData.files.map((f) => (
+              <div key={f.path} className="run-diff-file-row">
+                <span className={`diff-file-status diff-file-status-${f.status}`}>
+                  {f.status}
+                </span>
+                <span className="diff-file-path">{f.path}</span>
+                <span className="diff-file-stat">
+                  <span className="diff-stat-add">+{f.additions}</span>
+                  <span className="diff-stat-del">-{f.deletions}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+          {diffData.diff && (
+            <pre className="run-diff-content">
+              {diffData.diff.split("\n").map((line, i) => {
+                let cls = "diff-line";
+                if (line.startsWith("+") && !line.startsWith("+++")) cls += " diff-add";
+                else if (line.startsWith("-") && !line.startsWith("---")) cls += " diff-del";
+                else if (line.startsWith("@@")) cls += " diff-hunk";
+                return (
+                  <div key={i} className={cls}>{line}</div>
+                );
+              })}
+            </pre>
+          )}
+          {!diffData.diff && diffData.files.length === 0 && (
+            <p className="run-diff-empty">No changes on feature branch yet.</p>
+          )}
+        </div>
+      )}
 
       {/* Expanded: show task graph + contracts */}
       {expanded && tasks && (

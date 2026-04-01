@@ -247,6 +247,9 @@ export interface RunTask {
     stderr?: string;
     exit_code?: number;
     duration_seconds?: number;
+    diff?: string;
+    worktree?: string;
+    changed_files?: { file: string; status: string; additions: number; deletions: number }[];
   } | null;
   created_at: string;
   updated_at: string;

@@ -509,3 +509,154 @@
   font-weight: 600;
   text-transform: uppercase;
 }
+
+/* ─── Sidepanel Tabs ──────────────────────────────────── */
+
+.sidepanel-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-default);
+  margin: 1rem -1.5rem 0;
+  padding: 0 1.5rem;
+}
+
+.sidepanel-tab {
+  padding: 0.5rem 1rem;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast, 150ms);
+}
+
+.sidepanel-tab:hover:not(:disabled) {
+  color: var(--text-primary);
+}
+
+.sidepanel-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.sidepanel-tab:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.sidepanel-tab-content {
+  padding-top: 1rem;
+}
+
+.task-duration-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-inset, rgba(0,0,0,0.15));
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+/* ─── Diff Viewer ─────────────────────────────────────── */
+
+.diff-file-list {
+  margin-bottom: 1rem;
+}
+
+.diff-file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.diff-file-row:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.03));
+}
+
+.diff-file-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 3px;
+  background: var(--semantic-orange);
+  color: #000;
+}
+
+.diff-file-path {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-viewer {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  background: var(--bg-inset, rgba(0,0,0,0.2));
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  padding: 0;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.diff-line {
+  padding: 0 0.75rem;
+  white-space: pre;
+  min-height: 1.5em;
+}
+
+.diff-add {
+  background: rgba(46, 160, 67, 0.15);
+  color: #3fb950;
+}
+
+.diff-del {
+  background: rgba(248, 81, 73, 0.15);
+  color: #f85149;
+}
+
+.diff-hunk {
+  color: var(--semantic-blue);
+  background: rgba(56, 139, 253, 0.08);
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.diff-meta {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.diff-section {
+  margin-top: 1rem;
+}
+
+.diff-placeholder {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.diff-placeholder .form-help {
+  margin-top: 0.5rem;
+  font-size: 11px;
+}
+
+.task-sidepanel-output.stderr h5 {
+  color: var(--semantic-red);
+}
