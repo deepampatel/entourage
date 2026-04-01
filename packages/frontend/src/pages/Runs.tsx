@@ -5,7 +5,7 @@
  * Supports approve/reject for plans and pause/resume for execution.
  */
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useApprovePlan,
   useChangeRunStatus,
@@ -194,6 +194,187 @@ function TaskSandboxDetail({
   );
 }
 
+// ─── Diff Reviewer (GitHub-style, per-file) ──────────
+
+interface FileDiff {
+  path: string;
+  status: string;
+  additions: number;
+  deletions: number;
+  hunks: string[];
+}
+
+function parseDiffByFile(rawDiff: string): FileDiff[] {
+  const files: FileDiff[] = [];
+  const fileSections = rawDiff.split(/^diff --git /m).filter(Boolean);
+
+  for (const section of fileSections) {
+    const lines = section.split("\n");
+    // Extract file path from "a/path b/path"
+    const headerMatch = lines[0]?.match(/a\/(.+?) b\/(.+)/);
+    const path = headerMatch ? headerMatch[2] : "unknown";
+
+    // Find status
+    let status = "M";
+    if (lines.some((l) => l.startsWith("new file"))) status = "A";
+    if (lines.some((l) => l.startsWith("deleted file"))) status = "D";
+    if (lines.some((l) => l.startsWith("rename"))) status = "R";
+
+    // Count additions/deletions
+    let additions = 0;
+    let deletions = 0;
+    const contentLines: string[] = [];
+    let inContent = false;
+
+    for (const line of lines) {
+      if (line.startsWith("@@")) inContent = true;
+      if (inContent) {
+        contentLines.push(line);
+        if (line.startsWith("+") && !line.startsWith("+++")) additions++;
+        if (line.startsWith("-") && !line.startsWith("---")) deletions++;
+      }
+    }
+
+    files.push({
+      path,
+      status,
+      additions,
+      deletions,
+      hunks: [contentLines.join("\n")],
+    });
+  }
+  return files;
+}
+
+function DiffReviewer({
+  diffData,
+}: {
+  diffData: {
+    diff: string;
+    files: { path: string; status: string; additions: number; deletions: number }[];
+    branch: string;
+    base: string;
+  };
+}) {
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+
+  const fileDiffs = useMemo(
+    () => (diffData.diff ? parseDiffByFile(diffData.diff) : []),
+    [diffData.diff]
+  );
+
+  const toggleFile = (path: string) => {
+    const next = new Set(expandedFiles);
+    if (next.has(path)) next.delete(path);
+    else next.add(path);
+    setExpandedFiles(next);
+  };
+
+  const expandAll = () =>
+    setExpandedFiles(new Set(fileDiffs.map((f) => f.path)));
+  const collapseAll = () => setExpandedFiles(new Set());
+
+  const totalAdd = diffData.files.reduce((s, f) => s + f.additions, 0);
+  const totalDel = diffData.files.reduce((s, f) => s + f.deletions, 0);
+
+  if (!diffData.diff && diffData.files.length === 0) {
+    return (
+      <div className="diff-reviewer" onClick={(e) => e.stopPropagation()}>
+        <p className="run-diff-empty">No changes on feature branch yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="diff-reviewer" onClick={(e) => e.stopPropagation()}>
+      {/* Header */}
+      <div className="diff-reviewer-header">
+        <div className="diff-reviewer-title">
+          <span className="diff-reviewer-branch">{diffData.branch}</span>
+          <span className="diff-reviewer-arrow">→</span>
+          <span className="diff-reviewer-branch">{diffData.base}</span>
+        </div>
+        <div className="diff-reviewer-summary">
+          <span>{diffData.files.length} files</span>
+          <span className="diff-stat-add">+{totalAdd}</span>
+          <span className="diff-stat-del">-{totalDel}</span>
+          <button className="diff-btn" onClick={expandAll}>Expand all</button>
+          <button className="diff-btn" onClick={collapseAll}>Collapse all</button>
+        </div>
+      </div>
+
+      {/* File list with inline diffs */}
+      <div className="diff-file-sections">
+        {fileDiffs.map((file) => {
+          const isExpanded = expandedFiles.has(file.path);
+          const statusLabel =
+            file.status === "A" ? "Added" :
+            file.status === "D" ? "Deleted" :
+            file.status === "R" ? "Renamed" : "Modified";
+
+          return (
+            <div key={file.path} className="diff-file-section">
+              <div
+                className={`diff-file-header ${isExpanded ? "expanded" : ""}`}
+                onClick={() => toggleFile(file.path)}
+              >
+                <span className="diff-file-chevron">{isExpanded ? "▾" : "▸"}</span>
+                <span className={`diff-file-badge diff-file-badge-${file.status}`}>
+                  {statusLabel}
+                </span>
+                <span className="diff-file-name">
+                  {file.path.split("/").slice(0, -1).join("/") + "/"}
+                  <strong>{file.path.split("/").pop()}</strong>
+                </span>
+                <span className="diff-file-counts">
+                  <span className="diff-stat-add">+{file.additions}</span>
+                  <span className="diff-stat-del">-{file.deletions}</span>
+                </span>
+              </div>
+
+              {isExpanded && (
+                <div className="diff-file-content">
+                  {file.hunks.map((hunk, hi) => (
+                    <pre key={hi} className="diff-hunk-block">
+                      {hunk.split("\n").map((line, li) => {
+                        let cls = "diff-code-line";
+                        if (line.startsWith("+") && !line.startsWith("+++"))
+                          cls += " diff-add";
+                        else if (line.startsWith("-") && !line.startsWith("---"))
+                          cls += " diff-del";
+                        else if (line.startsWith("@@"))
+                          cls += " diff-hunk-header";
+                        return (
+                          <div key={li} className={cls}>
+                            <span className="diff-line-prefix">
+                              {line.startsWith("+") && !line.startsWith("+++")
+                                ? "+"
+                                : line.startsWith("-") && !line.startsWith("---")
+                                ? "-"
+                                : " "}
+                            </span>
+                            <span className="diff-line-content">
+                              {line.startsWith("+") || line.startsWith("-")
+                                ? line.slice(1)
+                                : line}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </pre>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── useMemo import needed ───────────────────────────
+
 function RunCard({
   run,
   teamId,
@@ -368,46 +549,7 @@ function RunCard({
 
       {/* Diff viewer for reviewing runs */}
       {showDiffViewer && diffData && (
-        <div className="run-diff-viewer" onClick={(e) => e.stopPropagation()}>
-          <div className="run-diff-header">
-            <h4>
-              Changes: {diffData.branch} vs {diffData.base}
-            </h4>
-            <span className="run-diff-stats">
-              {diffData.files.length} files changed
-            </span>
-          </div>
-          <div className="run-diff-files">
-            {diffData.files.map((f) => (
-              <div key={f.path} className="run-diff-file-row">
-                <span className={`diff-file-status diff-file-status-${f.status}`}>
-                  {f.status}
-                </span>
-                <span className="diff-file-path">{f.path}</span>
-                <span className="diff-file-stat">
-                  <span className="diff-stat-add">+{f.additions}</span>
-                  <span className="diff-stat-del">-{f.deletions}</span>
-                </span>
-              </div>
-            ))}
-          </div>
-          {diffData.diff && (
-            <pre className="run-diff-content">
-              {diffData.diff.split("\n").map((line, i) => {
-                let cls = "diff-line";
-                if (line.startsWith("+") && !line.startsWith("+++")) cls += " diff-add";
-                else if (line.startsWith("-") && !line.startsWith("---")) cls += " diff-del";
-                else if (line.startsWith("@@")) cls += " diff-hunk";
-                return (
-                  <div key={i} className={cls}>{line}</div>
-                );
-              })}
-            </pre>
-          )}
-          {!diffData.diff && diffData.files.length === 0 && (
-            <p className="run-diff-empty">No changes on feature branch yet.</p>
-          )}
-        </div>
+        <DiffReviewer diffData={diffData} />
       )}
 
       {/* Expanded: show task graph + contracts */}

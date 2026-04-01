@@ -877,118 +877,199 @@
   font-size: 14px;
 }
 
-/* ─── Run Diff Viewer ─────────────────────────────────── */
+/* ─── Diff Reviewer (GitHub-style) ────────────────────── */
 
-.run-diff-viewer {
+.diff-reviewer {
   margin-top: 1rem;
   border: 1px solid var(--border-default);
   border-radius: 8px;
   overflow: hidden;
-  background: var(--bg-inset, rgba(0,0,0,0.15));
+  background: var(--bg-surface);
 }
 
-.run-diff-header {
+.diff-reviewer-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0.75rem 1rem;
+  background: var(--bg-inset, rgba(0,0,0,0.15));
   border-bottom: 1px solid var(--border-default);
 }
 
-.run-diff-header h4 {
-  margin: 0;
+.diff-reviewer-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
 }
 
-.run-diff-stats {
-  font-size: 11px;
+.diff-reviewer-branch {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(56, 139, 253, 0.12);
+  color: var(--semantic-blue);
+}
+
+.diff-reviewer-arrow {
   color: var(--text-muted);
 }
 
-.run-diff-files {
-  border-bottom: 1px solid var(--border-default);
-}
-
-.run-diff-file-row {
+.diff-reviewer-summary {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.35rem 1rem;
   font-size: 12px;
-  font-family: var(--font-mono);
+  color: var(--text-muted);
 }
 
-.run-diff-file-row:hover {
-  background: var(--bg-hover, rgba(255,255,255,0.03));
-}
-
-.diff-file-status {
-  width: 16px;
-  height: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-weight: 700;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-
-.diff-file-status-A { background: var(--semantic-green); color: #000; }
-.diff-file-status-M { background: var(--semantic-orange); color: #000; }
-.diff-file-status-D { background: var(--semantic-red); color: #fff; }
-
-.diff-file-path {
-  flex: 1;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.diff-file-stat {
-  display: flex;
-  gap: 0.5rem;
+.diff-btn {
+  padding: 3px 8px;
   font-size: 11px;
+  background: var(--bg-input, rgba(0,0,0,0.2));
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.diff-btn:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
 }
 
 .diff-stat-add { color: var(--semantic-green); }
 .diff-stat-del { color: var(--semantic-red); }
 
-.run-diff-content {
+/* File sections */
+.diff-file-sections {
+  /* no padding — sections are edge-to-edge */
+}
+
+.diff-file-section {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.diff-file-section:last-child {
+  border-bottom: none;
+}
+
+.diff-file-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  font-size: 12px;
+  background: var(--bg-inset, rgba(0,0,0,0.08));
+  user-select: none;
+}
+
+.diff-file-header:hover {
+  background: var(--bg-hover, rgba(255,255,255,0.03));
+}
+
+.diff-file-header.expanded {
+  border-bottom: 1px solid var(--border-default);
+}
+
+.diff-file-chevron {
+  width: 12px;
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.diff-file-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.diff-file-badge-A { background: var(--semantic-green); color: #000; }
+.diff-file-badge-M { background: var(--semantic-orange); color: #000; }
+.diff-file-badge-D { background: var(--semantic-red); color: #fff; }
+.diff-file-badge-R { background: var(--semantic-purple); color: #fff; }
+
+.diff-file-name {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-file-name strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.diff-file-counts {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+/* Diff content (per-file) */
+.diff-file-content {
+  overflow-x: auto;
+}
+
+.diff-hunk-block {
+  margin: 0;
   font-family: var(--font-mono);
   font-size: 11px;
-  line-height: 1.5;
-  margin: 0;
-  padding: 0;
-  max-height: 500px;
-  overflow: auto;
+  line-height: 1.6;
 }
 
-.run-diff-content .diff-line {
-  padding: 0 1rem;
-  white-space: pre;
-  min-height: 1.5em;
+.diff-code-line {
+  display: flex;
+  min-height: 1.6em;
 }
 
-.run-diff-content .diff-add {
-  background: rgba(46, 160, 67, 0.15);
-  color: #3fb950;
+.diff-code-line.diff-add {
+  background: rgba(46, 160, 67, 0.12);
 }
 
-.run-diff-content .diff-del {
-  background: rgba(248, 81, 73, 0.15);
-  color: #f85149;
+.diff-code-line.diff-del {
+  background: rgba(248, 81, 73, 0.12);
 }
 
-.run-diff-content .diff-hunk {
-  color: var(--semantic-blue);
+.diff-code-line.diff-hunk-header {
   background: rgba(56, 139, 253, 0.08);
-  padding-top: 0.25rem;
-  padding-bottom: 0.25rem;
+  color: var(--semantic-blue);
+  padding: 0.15rem 0;
 }
+
+.diff-line-prefix {
+  width: 20px;
+  flex-shrink: 0;
+  text-align: center;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.diff-code-line.diff-add .diff-line-prefix { color: var(--semantic-green); }
+.diff-code-line.diff-del .diff-line-prefix { color: var(--semantic-red); }
+
+.diff-line-content {
+  flex: 1;
+  padding-left: 0.5rem;
+  white-space: pre;
+  color: var(--text-primary);
+}
+
+.diff-code-line.diff-add .diff-line-content { color: #3fb950; }
+.diff-code-line.diff-del .diff-line-content { color: #f85149; }
 
 .run-diff-empty {
   text-align: center;
