@@ -1,71 +1,84 @@
-/* ─── Design Tokens ──────────────────────────────────── */
+/* ─── Design Tokens — Warm Dark (Notion/Arc energy) ──── */
 
 :root {
-  /* Backgrounds */
-  --bg-primary:    #1e1e1e;
-  --bg-sidebar:    #252526;
-  --bg-surface:    #252526;
-  --bg-elevated:   #2d2d2d;
-  --bg-hover:      #2a2a2a;
-  --bg-active:     #37373d;
-  --bg-input:      #313131;
-  --bg-inset:      #1a1a1a;
+  /* Backgrounds — warm grays with slight brown undertone */
+  --bg-primary:    #1a1917;
+  --bg-sidebar:    #201f1d;
+  --bg-surface:    #242320;
+  --bg-elevated:   #2c2b27;
+  --bg-hover:      rgba(255, 255, 255, 0.04);
+  --bg-active:     rgba(255, 255, 255, 0.07);
+  --bg-input:      #1e1d1b;
+  --bg-inset:      #161514;
 
-  /* Text */
-  --text-primary:   #c4c4c4;
-  --text-secondary: #858585;
-  --text-muted:     #6a6a6a;
-  --text-faint:     #525252;
-  --text-heading:   #e0e0e0;
+  /* Text — cream-warm whites, not blue-cool */
+  --text-primary:   #ece8e1;
+  --text-secondary: #a8a29e;
+  --text-muted:     #78716c;
+  --text-faint:     #57534e;
+  --text-heading:   #faf5ef;
 
-  /* Borders */
-  --border-default: #333333;
-  --border-subtle:  #2a2a2a;
-  --border-input:   #3c3c3c;
-  --border-focus:   #4ade80;
+  /* Borders — mostly replaced by shadows, kept for inputs */
+  --border-default: rgba(255, 255, 255, 0.06);
+  --border-subtle:  rgba(255, 255, 255, 0.03);
+  --border-input:   rgba(255, 255, 255, 0.10);
+  --border-focus:   #f59e0b;
 
-  /* Accent (brand green) */
-  --accent:       #4ade80;
-  --accent-hover: #5ee892;
-  --accent-muted: rgba(74, 222, 128, 0.08);
-  --accent-glow:  rgba(74, 222, 128, 0.3);
+  /* Accent — warm amber (not cold green) */
+  --accent:       #f59e0b;
+  --accent-hover: #fbbf24;
+  --accent-muted: rgba(245, 158, 11, 0.10);
+  --accent-glow:  rgba(245, 158, 11, 0.25);
+  --accent-text:  #fbbf24;
 
-  /* Semantic */
-  --semantic-red:          #f14c4c;
-  --semantic-orange:       #cca700;
-  --semantic-yellow:       #e2c08d;
-  --semantic-green:        #73c991;
-  --semantic-blue:         #569cd6;
+  /* Semantic — muted, not neon */
+  --semantic-red:          #ef4444;
+  --semantic-red-muted:    rgba(239, 68, 68, 0.12);
+  --semantic-orange:       #f59e0b;
+  --semantic-orange-muted: rgba(245, 158, 11, 0.12);
+  --semantic-yellow:       #eab308;
+  --semantic-green:        #22c55e;
+  --semantic-green-muted:  rgba(34, 197, 94, 0.12);
+  --semantic-blue:         #3b82f6;
+  --semantic-blue-muted:   rgba(59, 130, 246, 0.12);
   --semantic-purple:       #a78bfa;
-  --semantic-purple-light: #c084fc;
-  --semantic-gray:         #555555;
+  --semantic-purple-muted: rgba(167, 139, 250, 0.12);
+  --semantic-gray:         #57534e;
 
-  /* Status dots */
-  --status-active:    #b0b0b0;
-  --status-idle:      #555555;
-  --status-attention: #f14c4c;
+  /* Status */
+  --status-active:    #a8a29e;
+  --status-idle:      #57534e;
+  --status-attention: #ef4444;
 
   /* UI Controls */
-  --btn-bg:          #cccccc;
-  --btn-text:        #1e1e1e;
-  --btn-hover:       #aaaaaa;
-  --scrollbar-thumb: #333333;
-  --scrollbar-hover: #555555;
-  --backdrop:        rgba(0, 0, 0, 0.55);
+  --btn-bg:          #f59e0b;
+  --btn-text:        #1a1917;
+  --btn-hover:       #fbbf24;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.08);
+  --scrollbar-hover: rgba(255, 255, 255, 0.14);
+  --backdrop:        rgba(0, 0, 0, 0.6);
 
   /* Typography */
-  --font-ui:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-ui:   'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
 
-  /* Transitions */
-  --transition-fast:   100ms ease;
-  --transition-normal: 150ms ease;
-  --transition-smooth: 200ms ease;
+  /* Transitions — slightly slower for warmth */
+  --transition-fast:   120ms ease;
+  --transition-normal: 180ms ease;
+  --transition-smooth: 280ms cubic-bezier(0.4, 0, 0.2, 1);
 
-  /* Shadows */
-  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-panel:    0 8px 24px rgba(0, 0, 0, 0.3);
-  --shadow-modal:    0 20px 60px rgba(0, 0, 0, 0.5);
+  /* Shadows — warm-tinted, layered depth */
+  --shadow-sm:       0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-card:     0 1px 3px rgba(0, 0, 0, 0.15), 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-dropdown: 0 4px 16px rgba(0, 0, 0, 0.25), 0 1px 4px rgba(0, 0, 0, 0.15);
+  --shadow-panel:    0 8px 30px rgba(0, 0, 0, 0.25), 0 2px 8px rgba(0, 0, 0, 0.15);
+  --shadow-modal:    0 24px 80px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.2);
+
+  /* Radii — generous, Arc-like */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
 }
 
 /* ─── Reset & Base ────────────────────────────────────── */
@@ -80,8 +93,8 @@ body {
   font-family: var(--font-ui);
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.5;
-  letter-spacing: -0.01em;
+  line-height: 1.55;
+  letter-spacing: -0.011em;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -92,7 +105,7 @@ body {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
 }
 
 input:focus-visible,
@@ -135,7 +148,6 @@ button:focus-visible {
   background: var(--scrollbar-hover);
 }
 
-/* Firefox */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
@@ -154,6 +166,16 @@ button:focus-visible {
 }
 
 @keyframes toast-in {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
