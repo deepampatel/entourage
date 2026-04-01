@@ -1,8 +1,8 @@
 /**
- * Runs page — list, create, and manage run orchestration.
+ * Runs page — Vercel-style cards with live status.
  *
- * Shows run cards with status, cost/budget bar, and task progress.
- * Supports approve/reject for plans and pause/resume for execution.
+ * Each run is a self-contained card showing everything:
+ * tasks, status, diff summary, and actions. No expanding needed.
  */
 
 import { useMemo, useState } from "react";
@@ -10,258 +10,116 @@ import {
   useApprovePlan,
   useChangeRunStatus,
   useCreateRun,
-  useGenerateContracts,
   useMergeRun,
   useRepos,
-  useRunContracts,
   useRunDiff,
   useRuns,
   useRunTasks,
   useRejectPlan,
-  useSandboxRuns,
   useStartRun,
-  useTriggerSandboxRun,
 } from "../hooks/useApi";
 import { useTeamSocket } from "../hooks/useTeamSocket";
 import { useToast } from "../components/Toast";
-import {
-  RUN_STATUS_LABELS,
-  type Run,
-  type RunStatus,
-  type RunTask,
-  type SandboxRun,
-} from "../api/types";
+import type { Run, RunStatus, RunTask } from "../api/types";
+import { RUN_STATUS_LABELS } from "../api/types";
 
-const STATUS_TOOLTIPS: Record<string, string> = {
-  draft: "Not started yet",
-  planning: "AI is breaking your intent into tasks...",
-  contracting: "Generating interface contracts between tasks...",
-  awaiting_plan_approval: "Review and approve the plan before execution",
-  executing: "Agents are working on tasks",
-  reviewing: "Code review in progress",
-  merging: "Merging code changes",
-  done: "Run complete",
-  paused: "Run is paused",
-  failed: "One or more tasks failed",
-  cancelled: "Run was cancelled",
+// ─── Status colors ───────────────────────────────────
+
+const STATUS_DOT: Record<string, string> = {
+  draft: "var(--text-faint)",
+  planning: "var(--semantic-blue)",
+  awaiting_plan_approval: "var(--semantic-orange)",
+  executing: "var(--semantic-blue)",
+  reviewing: "var(--semantic-purple)",
+  merging: "var(--semantic-blue)",
+  done: "var(--semantic-green)",
+  paused: "var(--semantic-orange)",
+  failed: "var(--semantic-red)",
+  cancelled: "var(--text-faint)",
 };
 
-const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
-  "": "Full flexibility",
-  feature: "Add new functionality",
-  bugfix: "Fix a specific issue",
-  refactor: "Improve existing code",
-  migration: "Upgrade dependencies or infra",
-};
+const FILTERS: { value: string; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "executing", label: "Running" },
+  { value: "reviewing", label: "Review" },
+  { value: "awaiting_plan_approval", label: "Needs Approval" },
+  { value: "done", label: "Done" },
+  { value: "failed", label: "Failed" },
+];
 
 interface RunsProps {
   teamId: string;
 }
 
-const STATUS_FILTERS: (RunStatus | "all")[] = [
-  "all",
-  "executing",
-  "reviewing",
-  "awaiting_plan_approval",
-  "done",
-  "failed",
-];
+// ─── Task Pill ───────────────────────────────────────
 
-function CostBar({ actual, limit }: { actual: number; limit: number }) {
-  const pct = limit > 0 ? Math.min((actual / limit) * 100, 100) : 0;
-  const color = pct >= 100 ? "var(--semantic-red)" : pct >= 80 ? "var(--semantic-orange)" : "var(--semantic-green)";
-  return (
-    <div className="cost-bar">
-      <div className="cost-bar-fill" style={{ width: `${pct}%`, backgroundColor: color }} />
-      <span className="cost-bar-label">
-        ${actual.toFixed(2)} / ${limit.toFixed(2)}
-      </span>
-    </div>
-  );
-}
-
-function TaskProgress({ tasks }: { tasks: RunTask[] }) {
-  if (!tasks.length) return null;
-  const done = tasks.filter((t) => t.status === "done").length;
-  const failed = tasks.filter((t) => t.status === "failed").length;
-  const inProgress = tasks.filter((t) => t.status === "in_progress").length;
-  const isParallel = inProgress > 1;
-  return (
-    <div className="task-progress">
-      <span className="task-progress-text">
-        {done}/{tasks.length} tasks done
-        {inProgress > 0 && (
-          <>
-            {", "}
-            <span className={`running-indicator${isParallel ? " parallel" : ""}`}>
-              {inProgress} {isParallel ? "running in parallel" : "running"}
-              {isParallel && " ⚡"}
-            </span>
-          </>
-        )}
-        {failed > 0 && `, ${failed} failed`}
-      </span>
-      <div className="task-progress-bar">
-        <div
-          className="task-progress-fill done"
-          style={{ width: `${(done / tasks.length) * 100}%` }}
-        />
-        <div
-          className="task-progress-fill running"
-          style={{ width: `${(inProgress / tasks.length) * 100}%` }}
-        />
-        <div
-          className="task-progress-fill failed"
-          style={{ width: `${(failed / tasks.length) * 100}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
-function SandboxPill({ runs }: { runs: SandboxRun[] | undefined }) {
-  if (!runs || runs.length === 0) return <span className="sandbox-pill none">sandbox</span>;
-  const latest = runs[0];
-  if (latest.exit_code === null) return <span className="sandbox-pill running">running</span>;
-  return latest.passed ? (
-    <span className="sandbox-pill passed">passed</span>
-  ) : (
-    <span className="sandbox-pill failed">failed</span>
-  );
-}
-
-function TaskSandboxDetail({
-  runId,
-  task,
-  teamId,
-}: {
-  runId: string;
-  task: RunTask;
-  teamId: string;
-}) {
-  const [showOutput, setShowOutput] = useState(false);
-  const { data: runs } = useSandboxRuns(runId, task.id);
-  const triggerRun = useTriggerSandboxRun(teamId);
-
-  const latest = runs?.[0];
-
-  return (
-    <div className="sandbox-detail" onClick={(e) => e.stopPropagation()}>
-      <div className="sandbox-detail-header">
-        <SandboxPill runs={runs} />
-        {latest && latest.exit_code !== null && (
-          <button
-            className="sandbox-output-toggle"
-            onClick={() => setShowOutput(!showOutput)}
-          >
-            {showOutput ? "Hide Output" : "Show Output"}
-          </button>
-        )}
-        <button
-          className="run-btn sandbox-trigger-btn"
-          onClick={() =>
-            triggerRun.mutate({
-              runId,
-              taskId: task.id,
-              testCmd: "pytest tests/",
-            })
-          }
-          disabled={triggerRun.isPending}
-        >
-          {triggerRun.isPending ? "Running..." : "Run Tests"}
-        </button>
-      </div>
-      {showOutput && latest && (
-        <div className="sandbox-output">
-          {latest.stdout && (
-            <div className="sandbox-output-section">
-              <h5>stdout</h5>
-              <pre>{latest.stdout}</pre>
-            </div>
-          )}
-          {latest.stderr && (
-            <div className="sandbox-output-section">
-              <h5>stderr</h5>
-              <pre>{latest.stderr}</pre>
-            </div>
-          )}
-          <div className="sandbox-output-meta">
-            exit={latest.exit_code} | {latest.duration_seconds.toFixed(1)}s | {latest.image}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Diff Reviewer (GitHub-style, per-file) ──────────
-
-interface FileDiff {
-  path: string;
-  status: string;
-  additions: number;
-  deletions: number;
-  hunks: string[];
-}
-
-function parseDiffByFile(rawDiff: string): FileDiff[] {
-  const files: FileDiff[] = [];
-  const fileSections = rawDiff.split(/^diff --git /m).filter(Boolean);
-
-  for (const section of fileSections) {
-    const lines = section.split("\n");
-    // Extract file path from "a/path b/path"
-    const headerMatch = lines[0]?.match(/a\/(.+?) b\/(.+)/);
-    const path = headerMatch ? headerMatch[2] : "unknown";
-
-    // Find status
-    let status = "M";
-    if (lines.some((l) => l.startsWith("new file"))) status = "A";
-    if (lines.some((l) => l.startsWith("deleted file"))) status = "D";
-    if (lines.some((l) => l.startsWith("rename"))) status = "R";
-
-    // Count additions/deletions
-    let additions = 0;
-    let deletions = 0;
-    const contentLines: string[] = [];
-    let inContent = false;
-
-    for (const line of lines) {
-      if (line.startsWith("@@")) inContent = true;
-      if (inContent) {
-        contentLines.push(line);
-        if (line.startsWith("+") && !line.startsWith("+++")) additions++;
-        if (line.startsWith("-") && !line.startsWith("---")) deletions++;
-      }
-    }
-
-    files.push({
-      path,
-      status,
-      additions,
-      deletions,
-      hunks: [contentLines.join("\n")],
-    });
-  }
-  return files;
-}
-
-function DiffReviewer({
-  diffData,
-}: {
-  diffData: {
-    diff: string;
-    files: { path: string; status: string; additions: number; deletions: number }[];
-    branch: string;
-    base: string;
+function TaskPill({ task }: { task: RunTask }) {
+  const colors: Record<string, string> = {
+    todo: "var(--text-faint)",
+    in_progress: "var(--semantic-blue)",
+    done: "var(--semantic-green)",
+    failed: "var(--semantic-red)",
   };
-}) {
+  const bg: Record<string, string> = {
+    todo: "var(--bg-active)",
+    in_progress: "var(--semantic-blue-muted)",
+    done: "var(--semantic-green-muted)",
+    failed: "var(--semantic-red-muted)",
+  };
+
+  return (
+    <div
+      className="task-pill"
+      style={{
+        background: bg[task.status] || "var(--bg-active)",
+        color: colors[task.status] || "var(--text-muted)",
+      }}
+      title={`${task.title} — ${task.status}`}
+    >
+      {task.status === "done" && "✓"}
+      {task.status === "failed" && "✕"}
+      {task.status === "in_progress" && (
+        <span className="task-pill-spinner" />
+      )}
+      <span className="task-pill-label">{task.title.slice(0, 25)}</span>
+    </div>
+  );
+}
+
+// ─── Diff Summary (inline on card) ───────────────────
+
+function DiffSummary({ runId }: { runId: string }) {
+  const { data: diffData } = useRunDiff(runId);
+
+  if (!diffData || !diffData.files.length) return null;
+
+  const totalAdd = diffData.files.reduce((s, f) => s + f.additions, 0);
+  const totalDel = diffData.files.reduce((s, f) => s + f.deletions, 0);
+
+  return (
+    <div className="run-diff-summary">
+      <span className="diff-summary-count">
+        {diffData.files.length} file{diffData.files.length !== 1 ? "s" : ""}
+      </span>
+      <span className="diff-summary-add">+{totalAdd}</span>
+      <span className="diff-summary-del">-{totalDel}</span>
+      <span className="diff-summary-files">
+        {diffData.files.slice(0, 3).map((f) => f.path.split("/").pop()).join(", ")}
+        {diffData.files.length > 3 && ` +${diffData.files.length - 3} more`}
+      </span>
+    </div>
+  );
+}
+
+// ─── Diff Viewer (expandable per-file) ───────────────
+
+function DiffViewer({ runId }: { runId: string }) {
+  const { data: diffData } = useRunDiff(runId);
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
-  const fileDiffs = useMemo(
-    () => (diffData.diff ? parseDiffByFile(diffData.diff) : []),
-    [diffData.diff]
-  );
+  if (!diffData?.diff) return null;
+
+  const fileSections = diffData.diff.split(/^diff --git /m).filter(Boolean);
 
   const toggleFile = (path: string) => {
     const next = new Set(expandedFiles);
@@ -270,468 +128,246 @@ function DiffReviewer({
     setExpandedFiles(next);
   };
 
-  const expandAll = () =>
-    setExpandedFiles(new Set(fileDiffs.map((f) => f.path)));
-  const collapseAll = () => setExpandedFiles(new Set());
-
-  const totalAdd = diffData.files.reduce((s, f) => s + f.additions, 0);
-  const totalDel = diffData.files.reduce((s, f) => s + f.deletions, 0);
-
-  if (!diffData.diff && diffData.files.length === 0) {
-    return (
-      <div className="diff-reviewer" onClick={(e) => e.stopPropagation()}>
-        <p className="run-diff-empty">No changes on feature branch yet.</p>
-      </div>
-    );
-  }
-
   return (
-    <div className="diff-reviewer" onClick={(e) => e.stopPropagation()}>
-      {/* Header */}
-      <div className="diff-reviewer-header">
-        <div className="diff-reviewer-title">
-          <span className="diff-reviewer-branch">{diffData.branch}</span>
-          <span className="diff-reviewer-arrow">→</span>
-          <span className="diff-reviewer-branch">{diffData.base}</span>
-        </div>
-        <div className="diff-reviewer-summary">
-          <span>{diffData.files.length} files</span>
-          <span className="diff-stat-add">+{totalAdd}</span>
-          <span className="diff-stat-del">-{totalDel}</span>
-          <button className="diff-btn" onClick={expandAll}>Expand all</button>
-          <button className="diff-btn" onClick={collapseAll}>Collapse all</button>
-        </div>
-      </div>
+    <div className="diff-reviewer">
+      {fileSections.map((section, i) => {
+        const lines = section.split("\n");
+        const headerMatch = lines[0]?.match(/a\/(.+?) b\/(.+)/);
+        const path = headerMatch ? headerMatch[2] : `file-${i}`;
+        const isNew = lines.some((l) => l.startsWith("new file"));
+        const isExpanded = expandedFiles.has(path);
 
-      {/* File list with inline diffs */}
-      <div className="diff-file-sections">
-        {fileDiffs.map((file) => {
-          const isExpanded = expandedFiles.has(file.path);
-          const statusLabel =
-            file.status === "A" ? "Added" :
-            file.status === "D" ? "Deleted" :
-            file.status === "R" ? "Renamed" : "Modified";
+        const contentLines = lines.filter(
+          (l) => l.startsWith("+") || l.startsWith("-") || l.startsWith("@@") || l.startsWith(" ")
+        );
 
-          return (
-            <div key={file.path} className="diff-file-section">
-              <div
-                className={`diff-file-header ${isExpanded ? "expanded" : ""}`}
-                onClick={() => toggleFile(file.path)}
-              >
-                <span className="diff-file-chevron">{isExpanded ? "▾" : "▸"}</span>
-                <span className={`diff-file-badge diff-file-badge-${file.status}`}>
-                  {statusLabel}
-                </span>
-                <span className="diff-file-name">
-                  {file.path.split("/").slice(0, -1).join("/") + "/"}
-                  <strong>{file.path.split("/").pop()}</strong>
-                </span>
-                <span className="diff-file-counts">
-                  <span className="diff-stat-add">+{file.additions}</span>
-                  <span className="diff-stat-del">-{file.deletions}</span>
-                </span>
-              </div>
-
-              {isExpanded && (
-                <div className="diff-file-content">
-                  {file.hunks.map((hunk, hi) => (
-                    <pre key={hi} className="diff-hunk-block">
-                      {hunk.split("\n").map((line, li) => {
-                        let cls = "diff-code-line";
-                        if (line.startsWith("+") && !line.startsWith("+++"))
-                          cls += " diff-add";
-                        else if (line.startsWith("-") && !line.startsWith("---"))
-                          cls += " diff-del";
-                        else if (line.startsWith("@@"))
-                          cls += " diff-hunk-header";
-                        return (
-                          <div key={li} className={cls}>
-                            <span className="diff-line-prefix">
-                              {line.startsWith("+") && !line.startsWith("+++")
-                                ? "+"
-                                : line.startsWith("-") && !line.startsWith("---")
-                                ? "-"
-                                : " "}
-                            </span>
-                            <span className="diff-line-content">
-                              {line.startsWith("+") || line.startsWith("-")
-                                ? line.slice(1)
-                                : line}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </pre>
-                  ))}
-                </div>
-              )}
+        return (
+          <div key={path} className="diff-file-section">
+            <div
+              className={`diff-file-header ${isExpanded ? "expanded" : ""}`}
+              onClick={() => toggleFile(path)}
+            >
+              <span className="diff-file-chevron">{isExpanded ? "▾" : "▸"}</span>
+              <span className={`diff-file-badge diff-file-badge-${isNew ? "A" : "M"}`}>
+                {isNew ? "New" : "Mod"}
+              </span>
+              <span className="diff-file-name">
+                {path.split("/").slice(0, -1).join("/") + "/"}
+                <strong>{path.split("/").pop()}</strong>
+              </span>
             </div>
-          );
-        })}
-      </div>
+            {isExpanded && (
+              <pre className="diff-hunk-block">
+                {contentLines.map((line, li) => {
+                  let cls = "diff-code-line";
+                  if (line.startsWith("+") && !line.startsWith("+++")) cls += " diff-add";
+                  else if (line.startsWith("-") && !line.startsWith("---")) cls += " diff-del";
+                  else if (line.startsWith("@@")) cls += " diff-hunk-header";
+                  return (
+                    <div key={li} className={cls}>
+                      <span className="diff-line-prefix">
+                        {line.startsWith("+") && !line.startsWith("+++") ? "+" :
+                         line.startsWith("-") && !line.startsWith("---") ? "-" : " "}
+                      </span>
+                      <span className="diff-line-content">
+                        {line.startsWith("+") || line.startsWith("-") ? line.slice(1) : line}
+                      </span>
+                    </div>
+                  );
+                })}
+              </pre>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// ─── useMemo import needed ───────────────────────────
+// ─── Run Card ────────────────────────────────────────
 
-function RunCard({
-  run,
-  teamId,
-}: {
-  run: Run;
-  teamId: string;
-}) {
-  const shouldAutoExpand = run.status === "awaiting_plan_approval" || run.status === "failed";
-  const [expanded, setExpanded] = useState(shouldAutoExpand);
-  const [expandedTaskSandbox, setExpandedTaskSandbox] = useState<number | null>(null);
-  const [expandedTaskOutput, setExpandedTaskOutput] = useState<number | null>(null);
-  const { data: tasks } = useRunTasks(expanded ? run.id : undefined);
-  const { data: contracts } = useRunContracts(expanded ? run.id : undefined);
+function RunCard({ run, teamId }: { run: Run; teamId: string }) {
+  const { data: tasks } = useRunTasks(run.id);
   const approvePlan = useApprovePlan(teamId);
   const rejectPlan = useRejectPlan(teamId);
   const startRun = useStartRun(teamId);
-  const generateContracts = useGenerateContracts(teamId);
   const changeStatus = useChangeRunStatus(teamId);
   const mergeRun = useMergeRun(teamId);
-  const showDiff = expanded && run.status === "reviewing" && run.repository_id;
-  const { data: diffData } = useRunDiff(showDiff ? run.id : undefined);
-  const [showDiffViewer, setShowDiffViewer] = useState(false);
   const { showToast } = useToast();
+  const [showDiff, setShowDiff] = useState(false);
 
   const status = run.status as RunStatus;
-  const statusLabel = RUN_STATUS_LABELS[status] || status;
+  const dotColor = STATUS_DOT[status] || "var(--text-faint)";
+  const label = RUN_STATUS_LABELS[status] || status;
+
+  const doneTasks = tasks?.filter((t) => t.status === "done").length ?? 0;
+  const totalTasks = tasks?.length ?? 0;
+  const totalDuration = tasks?.reduce((s, t) => s + (t.result?.duration_seconds ?? 0), 0) ?? 0;
+
+  const isActive = ["planning", "executing"].includes(status);
+  const needsAction = ["draft", "awaiting_plan_approval", "reviewing"].includes(status);
 
   return (
-    <div className="run-card" onClick={() => setExpanded(!expanded)}>
-      <div className="run-card-header">
-        <div className="run-card-title">
-          <h3>{run.title}</h3>
-          <span
-            className={`run-status-badge ${status}`}
-            title={STATUS_TOOLTIPS[status] || ""}
-          >
-            {statusLabel}
-          </span>
+    <div className={`run-card-v2 ${isActive ? "active" : ""} ${needsAction ? "needs-action" : ""}`}>
+      {/* Header row */}
+      <div className="run-card-top">
+        <div className="run-card-title-row">
+          <h3 className="run-card-title">{run.title}</h3>
+          <div className="run-card-status" style={{ color: dotColor }}>
+            <span
+              className={`status-dot ${isActive ? "pulsing" : ""}`}
+              style={{ background: dotColor }}
+            />
+            {label}
+          </div>
         </div>
-        <p className="run-intent">{run.intent}</p>
-        {run.pr_url && (
-          <a
-            href={run.pr_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="run-pr-link"
-            onClick={(e) => e.stopPropagation()}
-          >
-            View Pull Request →
-          </a>
+        {run.branch_name && (
+          <span className="run-card-branch">{run.branch_name}</span>
         )}
       </div>
 
-      <div className="run-card-meta">
-        <CostBar actual={run.actual_cost_usd} limit={run.budget_limit_usd} />
-        {tasks && <TaskProgress tasks={tasks} />}
-      </div>
+      {/* Task pills */}
+      {tasks && tasks.length > 0 && (
+        <div className="run-card-tasks">
+          <div className="task-pills">
+            {tasks.map((t) => (
+              <TaskPill key={t.id} task={t} />
+            ))}
+          </div>
+          <span className="run-card-task-meta">
+            {doneTasks}/{totalTasks} tasks
+            {totalDuration > 0 && ` · ${Math.round(totalDuration)}s`}
+            {run.actual_cost_usd > 0 && ` · $${run.actual_cost_usd.toFixed(2)}`}
+          </span>
+        </div>
+      )}
 
-      {/* Action buttons */}
-      <div className="run-actions" onClick={(e) => e.stopPropagation()}>
+      {/* Diff summary (only when reviewing and has repo) */}
+      {status === "reviewing" && run.repository_id && (
+        <DiffSummary runId={run.id} />
+      )}
+
+      {/* Actions — always visible, contextual */}
+      <div className="run-card-actions">
         {status === "draft" && (
           <button
-            className="run-btn run-btn-primary"
+            className="run-action-btn primary"
             onClick={() => startRun.mutate(run.id)}
             disabled={startRun.isPending}
           >
             Start Planning
           </button>
         )}
+
         {status === "awaiting_plan_approval" && (
           <>
             <button
-              className="run-btn run-btn-success"
+              className="run-action-btn primary"
               onClick={() => approvePlan.mutate(run.id, {
-                onSuccess: () => showToast("Plan approved! Execution starting...", "success"),
+                onSuccess: () => showToast("Approved — agents are working", "success"),
               })}
               disabled={approvePlan.isPending}
             >
-              Approve Plan
+              Approve & Execute
             </button>
             <button
-              className="run-btn run-btn-danger"
-              onClick={() =>
-                rejectPlan.mutate({ runId: run.id })
-              }
-              disabled={rejectPlan.isPending}
+              className="run-action-btn ghost"
+              onClick={() => rejectPlan.mutate({ runId: run.id })}
             >
               Reject
             </button>
           </>
         )}
+
         {status === "reviewing" && (
           <>
+            {run.repository_id && (
+              <button
+                className="run-action-btn ghost"
+                onClick={() => setShowDiff(!showDiff)}
+              >
+                {showDiff ? "Hide Diff" : "Review Diff"}
+              </button>
+            )}
             {run.repository_id ? (
               <>
                 <button
-                  className="run-btn run-btn-primary"
-                  onClick={() => setShowDiffViewer(!showDiffViewer)}
-                >
-                  {showDiffViewer ? "Hide Diff" : "Review Diff"}
-                </button>
-                <button
-                  className="run-btn run-btn-success"
+                  className="run-action-btn primary"
                   onClick={() => mergeRun.mutate(
-                    { runId: run.id, strategy: "merge" },
-                    { onSuccess: () => showToast("Merged to main!", "success") }
+                    { runId: run.id },
+                    { onSuccess: () => showToast("Merged to main", "success") }
                   )}
                   disabled={mergeRun.isPending}
                 >
-                  {mergeRun.isPending ? "Merging..." : "Approve & Merge"}
+                  Approve & Merge
                 </button>
                 <button
-                  className="run-btn"
+                  className="run-action-btn ghost"
                   onClick={() => mergeRun.mutate(
-                    { runId: run.id, strategy: "merge", create_pr: true },
-                    { onSuccess: () => showToast("PR created!", "success") }
+                    { runId: run.id, create_pr: true },
+                    { onSuccess: () => showToast("PR created", "success") }
                   )}
-                  disabled={mergeRun.isPending}
                 >
                   Create PR
                 </button>
               </>
             ) : (
               <button
-                className="run-btn run-btn-success"
+                className="run-action-btn primary"
                 onClick={() => changeStatus.mutate(
                   { runId: run.id, status: "done" },
-                  { onSuccess: () => showToast("Run marked as done!", "success") }
+                  { onSuccess: () => showToast("Done", "success") }
                 )}
-                disabled={changeStatus.isPending}
               >
                 Mark Done
               </button>
             )}
-            <button
-              className="run-btn"
-              onClick={() => changeStatus.mutate(
-                { runId: run.id, status: "executing" },
-                { onSuccess: () => showToast("Re-executing...", "success") }
-              )}
-              disabled={changeStatus.isPending}
-            >
-              Re-run
-            </button>
           </>
         )}
+
         {status === "failed" && (
           <button
-            className="run-btn"
+            className="run-action-btn ghost"
             onClick={() => changeStatus.mutate(
               { runId: run.id, status: "draft" },
-              { onSuccess: () => showToast("Run reset to draft", "success") }
             )}
-            disabled={changeStatus.isPending}
           >
             Retry
           </button>
         )}
-        {(status === "executing" || status === "reviewing" || status === "failed") && (
+
+        {["executing", "reviewing", "failed"].includes(status) && (
           <button
-            className="run-btn run-btn-danger"
+            className="run-action-btn danger"
             onClick={() => changeStatus.mutate(
               { runId: run.id, status: "cancelled" },
-              { onSuccess: () => showToast("Run cancelled", "success") }
             )}
-            disabled={changeStatus.isPending}
           >
             Cancel
           </button>
         )}
       </div>
 
-      {/* Diff viewer for reviewing runs */}
-      {showDiffViewer && diffData && (
-        <DiffReviewer diffData={diffData} />
-      )}
-
-      {/* Expanded: show task graph + contracts */}
-      {expanded && tasks && (
-        <div className="run-tasks-list">
-          {(() => {
-            const runningTasks = tasks.filter((t) => t.status === "in_progress");
-            const isParallel = runningTasks.length > 1;
-            return (
-              <h4>
-                Task Graph ({tasks.length} tasks)
-                {isParallel && (
-                  <span className="parallel-badge">
-                    ⚡ {runningTasks.length} parallel
-                  </span>
-                )}
-              </h4>
-            );
-          })()}
-          {tasks.map((task, i) => {
-            const isRunning = task.status === "in_progress";
-            const runningTasks = tasks.filter((t) => t.status === "in_progress");
-            const isParallel = isRunning && runningTasks.length > 1;
-            const sandboxOpen = expandedTaskSandbox === task.id;
-            return (
-              <div key={task.id} className="run-task-wrapper">
-                <div
-                  className={`run-task-row${isParallel ? " parallel-running" : ""}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpandedTaskSandbox(sandboxOpen ? null : task.id);
-                  }}
-                >
-                  <span className="run-task-idx">{i}</span>
-                  <span
-                    className="run-task-complexity"
-                    data-complexity={task.complexity}
-                  >
-                    {task.complexity}
-                  </span>
-                  <span className="run-task-title">{task.title}</span>
-                  {isRunning && task.agent_id && (
-                    <span className="run-task-agent" title={task.agent_id}>
-                      {task.agent_id.slice(0, 8)}
-                    </span>
-                  )}
-                  <span className={`run-task-status run-task-status-${task.status}`}>
-                    {task.status}
-                    {isParallel && " ⚡"}
-                  </span>
-                  {task.retry_count > 0 && (
-                    <span className="run-task-retry" title={`Retried ${task.retry_count} time(s)`}>
-                      {task.retry_count}
-                    </span>
-                  )}
-                  {task.dependencies.length > 0 && (
-                    <span className="run-task-deps">
-                      deps: [{task.dependencies.join(", ")}]
-                    </span>
-                  )}
-                </div>
-                {/* Task description + error details */}
-                {(task.description || task.error) && (
-                  <div className="run-task-details">
-                    {task.description && (
-                      <p className="run-task-description">{task.description}</p>
-                    )}
-                    {task.error && (
-                      <div className="run-task-error">
-                        <span className="run-task-error-label">Error:</span> {task.error}
-                      </div>
-                    )}
-                  </div>
-                )}
-                {/* Agent output viewer */}
-                {task.result && (
-                  <div className="agent-output-section" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      className="sandbox-output-toggle"
-                      onClick={() =>
-                        setExpandedTaskOutput(
-                          expandedTaskOutput === task.id ? null : task.id
-                        )
-                      }
-                    >
-                      {expandedTaskOutput === task.id ? "Hide Output" : "View Output"}
-                    </button>
-                    {expandedTaskOutput === task.id && (
-                      <div className="agent-output">
-                        {task.result.stdout && (
-                          <div className="sandbox-output-section">
-                            <h5>stdout</h5>
-                            <pre>{task.result.stdout}</pre>
-                          </div>
-                        )}
-                        {task.result.stderr && (
-                          <div className="sandbox-output-section">
-                            <h5>stderr</h5>
-                            <pre>{task.result.stderr}</pre>
-                          </div>
-                        )}
-                        <div className="sandbox-output-meta">
-                          exit={task.result.exit_code ?? "?"} |{" "}
-                          {task.result.duration_seconds
-                            ? `${task.result.duration_seconds.toFixed(1)}s`
-                            : "?"}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {sandboxOpen && (
-                  <TaskSandboxDetail
-                    runId={run.id}
-                    task={task}
-                    teamId={teamId}
-                  />
-                )}
-              </div>
-            );
-          })}
-
-          {/* Contracts section */}
-          {contracts && contracts.length > 0 && (
-            <div className="run-contracts">
-              <h4>Contracts ({contracts.length})</h4>
-              {contracts.map((c) => (
-                <div key={c.id} className="run-contract-row">
-                  <span
-                    className="contract-type-badge"
-                    data-type={c.contract_type}
-                  >
-                    {c.contract_type}
-                  </span>
-                  <span className="contract-name">{c.name}</span>
-                  <span
-                    className="contract-lock-status"
-                    style={{ color: c.locked ? "var(--semantic-green)" : "var(--semantic-orange)" }}
-                  >
-                    {c.locked ? "locked" : "pending"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Generate contracts button for eligible runs */}
-          {status === "awaiting_plan_approval" &&
-            (!contracts || contracts.length === 0) &&
-            tasks.length >= 2 && (
-              <div
-                className="run-actions"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <button
-                  className="run-btn run-btn-secondary"
-                  onClick={() => generateContracts.mutate(run.id)}
-                  disabled={generateContracts.isPending}
-                >
-                  Generate Contracts
-                </button>
-              </div>
-            )}
-        </div>
+      {/* Diff viewer (expanded) */}
+      {showDiff && status === "reviewing" && run.repository_id && (
+        <DiffViewer runId={run.id} />
       )}
     </div>
   );
 }
 
-// ─── Create Run Form ──────────────────────────────
+// ─── Create Run (inline command bar) ─────────────────
 
-function CreateRunForm({
+function CreateBar({
   teamId,
-  onClose,
+  onCreated,
 }: {
   teamId: string;
-  onClose: () => void;
+  onCreated: () => void;
 }) {
-  const [title, setTitle] = useState("");
   const [intent, setIntent] = useState("");
+  const [expanded, setExpanded] = useState(false);
   const [budget, setBudget] = useState(10);
-  const [template, setTemplate] = useState("");
   const [repositoryId, setRepositoryId] = useState("");
   const createRun = useCreateRun(teamId);
   const { data: repos } = useRepos(teamId);
@@ -739,222 +375,142 @@ function CreateRunForm({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!intent.trim()) return;
+
     createRun.mutate(
       {
-        title,
-        intent,
+        title: intent.trim().slice(0, 200),
+        intent: intent.trim(),
         budget_limit_usd: budget,
-        ...(template ? { template } : {}),
         ...(repositoryId ? { repository_id: repositoryId } : {}),
       },
       {
         onSuccess: () => {
-          showToast("Run created! Planning will start shortly.", "success");
-          onClose();
+          setIntent("");
+          setExpanded(false);
+          showToast("Run created — planning will start", "success");
+          onCreated();
         },
       }
     );
   };
 
   return (
-    <form className="create-run-form" onSubmit={handleSubmit}>
-      <h3>New Run</h3>
-      <p className="form-help">
-        A run takes your description and turns it into working code.
-      </p>
-      <div className="template-picker">
-        {["", "feature", "bugfix", "refactor", "migration"].map((t) => (
-          <button
-            key={t}
-            type="button"
-            className={`filter-tab${template === t ? " active" : ""}`}
-            onClick={() => setTemplate(t)}
-            title={TEMPLATE_DESCRIPTIONS[t]}
-          >
-            {t || "Custom"}
-          </button>
-        ))}
+    <form className="create-bar" onSubmit={handleSubmit}>
+      <div className="create-bar-main">
+        <input
+          type="text"
+          className="create-bar-input"
+          placeholder="What do you want built?"
+          value={intent}
+          onChange={(e) => setIntent(e.target.value)}
+          onFocus={() => setExpanded(true)}
+        />
+        <button
+          type="submit"
+          className="create-bar-submit"
+          disabled={createRun.isPending || !intent.trim()}
+        >
+          {createRun.isPending ? "Creating..." : "Create Run"}
+        </button>
       </div>
-      <p className="form-help" style={{ marginTop: "-0.25rem" }}>
-        {TEMPLATE_DESCRIPTIONS[template]}
-      </p>
-      <input
-        type="text"
-        placeholder="Title (e.g. Add OAuth2 login)"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        required
-      />
-      <textarea
-        placeholder={"Describe what you want built in detail. The AI planner will decompose this into tasks.\n\nExample: Add user authentication with JWT tokens. Create login/register endpoints, password hashing with bcrypt, and protect all API routes with auth middleware."}
-        value={intent}
-        onChange={(e) => setIntent(e.target.value)}
-        rows={5}
-        required
-      />
-      <div>
-        <label>
-          Budget limit (USD):
-          <input
-            type="number"
-            min={0.01}
-            max={1000}
-            step={0.01}
-            value={budget}
-            onChange={(e) => setBudget(Number(e.target.value))}
-          />
-        </label>
-        <p className="form-help">
-          Max spend on AI API calls. $5-10 for small tasks, $20-50 for features.
-        </p>
-      </div>
-      {repos && repos.length > 0 && (
-        <div>
+      {expanded && intent.trim() && (
+        <div className="create-bar-options">
           <label>
-            Repository:
-            <select
-              value={repositoryId}
-              onChange={(e) => setRepositoryId(e.target.value)}
-              className="create-run-select"
-            >
-              <option value="">All repositories</option>
-              {repos.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name} ({r.local_path})
-                </option>
-              ))}
-            </select>
+            Budget: ${budget}
+            <input
+              type="range"
+              min={1}
+              max={50}
+              value={budget}
+              onChange={(e) => setBudget(Number(e.target.value))}
+              className="create-bar-slider"
+            />
           </label>
-          <p className="form-help">
-            Target a specific repo, or leave blank for multi-repo runs.
-          </p>
+          {repos && repos.length > 0 && (
+            <label>
+              Repo:
+              <select
+                value={repositoryId}
+                onChange={(e) => setRepositoryId(e.target.value)}
+                className="create-bar-select"
+              >
+                <option value="">Auto-detect</option>
+                {repos.map((r) => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
       )}
-      <div className="form-actions">
-        <button type="submit" className="run-btn run-btn-primary" disabled={createRun.isPending}>
-          Create
-        </button>
-        <button type="button" className="run-btn" onClick={onClose}>
-          Cancel
-        </button>
-      </div>
     </form>
   );
 }
 
-// ─── Main Page ─────────────────────────────────────────
+// ─── Main Page ───────────────────────────────────────
 
 export function Runs({ teamId }: RunsProps) {
   useTeamSocket(teamId);
 
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [showCreate, setShowCreate] = useState(false);
+  const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
 
   const { data: runs, isLoading } = useRuns(
     teamId,
-    statusFilter === "all" ? undefined : statusFilter
+    filter === "all" ? undefined : filter
   );
 
-  if (isLoading) return <div className="loading">Loading runs...</div>;
+  const filtered = useMemo(() => {
+    if (!runs) return [];
+    if (!search) return runs;
+    const q = search.toLowerCase();
+    return runs.filter((r) => r.title.toLowerCase().includes(q));
+  }, [runs, search]);
+
+  if (isLoading) return <div className="loading">Loading...</div>;
 
   return (
-    <div className="runs-page">
-      <div className="runs-header">
-        <h1>Runs</h1>
-        <button
-          className="run-btn run-btn-primary"
-          onClick={() => setShowCreate(true)}
-        >
-          + New Run
-        </button>
-      </div>
+    <div className="runs-page-v2">
+      {/* Command bar */}
+      <CreateBar teamId={teamId} onCreated={() => {}} />
 
-      {showCreate && (
-        <CreateRunForm
-          teamId={teamId}
-          onClose={() => setShowCreate(false)}
-        />
-      )}
-
-      {/* Filter bar */}
-      <div className="filter-bar">
+      {/* Filters */}
+      <div className="runs-toolbar">
+        <div className="runs-filters">
+          {FILTERS.map((f) => (
+            <button
+              key={f.value}
+              className={`runs-filter ${filter === f.value ? "active" : ""}`}
+              onClick={() => setFilter(f.value)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
         <input
           type="text"
-          placeholder="Search runs..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="search-input"
+          className="runs-search"
+          placeholder="Search..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
         />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="status-filter-dropdown"
-        >
-          <option value="all">All Statuses</option>
-          <option value="executing">Executing</option>
-          <option value="reviewing">Reviewing</option>
-          <option value="done">Done</option>
-          <option value="failed">Failed</option>
-        </select>
-      </div>
-
-      {/* Status filters */}
-      <div className="run-filters">
-        {STATUS_FILTERS.map((s) => (
-          <button
-            key={s}
-            className={`filter-tab ${statusFilter === s ? "active" : ""}`}
-            onClick={() => setStatusFilter(s)}
-          >
-            {s === "all"
-              ? "All"
-              : RUN_STATUS_LABELS[s as RunStatus] || s}
-          </button>
-        ))}
       </div>
 
       {/* Run list */}
-      <div className="run-list">
-        {(() => {
-          const filtered = runs?.filter((r) => {
-            if (searchTerm && !r.title.toLowerCase().includes(searchTerm.toLowerCase())) {
-              return false;
-            }
-            return true;
-          });
-
-          if (!filtered?.length) {
-            return (
-              <div className="empty-state">
-                {runs?.length ? (
-                  <>
-                    <p className="empty-state-title">No matching runs</p>
-                    <p className="empty-state-desc">Try adjusting your search or filter.</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="empty-state-title">No runs yet</p>
-                    <p className="empty-state-desc">
-                      A run takes your description and turns it into working code.
-                      Agents plan the work, write code, run tests, and open a PR.
-                    </p>
-                    <button
-                      className="run-btn run-btn-primary empty-state-cta"
-                      onClick={() => setShowCreate(true)}
-                    >
-                      + Create Your First Run
-                    </button>
-                  </>
-                )}
-              </div>
-            );
-          }
-
-          return filtered.map((r) => (
-            <RunCard key={r.id} run={r} teamId={teamId} />
-          ));
-        })()}
+      <div className="runs-list-v2">
+        {filtered.length === 0 ? (
+          <div className="runs-empty">
+            <p>{runs?.length ? "No matching runs." : "No runs yet."}</p>
+            {!runs?.length && (
+              <p className="runs-empty-hint">
+                Type what you want built above. Agents will plan, code, test, and open a PR.
+              </p>
+            )}
+          </div>
+        ) : (
+          filtered.map((r) => <RunCard key={r.id} run={r} teamId={teamId} />)
+        )}
       </div>
     </div>
   );
