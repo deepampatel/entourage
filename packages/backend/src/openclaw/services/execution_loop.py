@@ -90,6 +90,7 @@ class ExecutionLoop:
 
         # Track running tasks: run_task_id → asyncio.Task
         running: dict[int, asyncio.Task] = {}
+        feature_branch_created = False
 
         try:
             while True:
@@ -98,6 +99,28 @@ class ExecutionLoop:
                     run = await db.get(Run, run_id)
                     if not run:
                         raise ValueError(f"Run {run_id} not found")
+
+                    # One-time: create the feature branch for this run
+                    if not feature_branch_created and run.repository_id and run.branch_name:
+                        try:
+                            repo = await db.get(Repository, run.repository_id)
+                            if repo:
+                                git_svc = GitService(db)
+                                await git_svc.create_branch(
+                                    run.branch_name,
+                                    repo.default_branch,
+                                    run.repository_id,
+                                )
+                                logger.info(
+                                    "Created feature branch '%s' for run %s",
+                                    run.branch_name, run_id,
+                                )
+                        except Exception:
+                            logger.warning(
+                                "Failed to create feature branch for run %s",
+                                run_id, exc_info=True,
+                            )
+                        feature_branch_created = True
 
                     # Check if run is still in executing state
                     if run.status != "executing":
@@ -288,17 +311,20 @@ class ExecutionLoop:
                         task.started_at = datetime.now(timezone.utc)
 
                         # Create git worktree for isolated file access
+                        # Uses RunTask.branch_name, branching from Run.branch_name
                         wt_path = None
-                        if repo_id:
+                        if repo_id and task.branch_name and run.branch_name:
                             try:
                                 git_svc = GitService(db)
-                                wt_info = await git_svc.create_worktree(
-                                    task.id, repo_id
+                                wt_info = await git_svc.create_run_worktree(
+                                    run_task_id=task.id,
+                                    repo_id=repo_id,
+                                    base_branch=run.branch_name,
                                 )
                                 wt_path = wt_info.path
                                 logger.info(
-                                    "Created worktree for task %d at %s",
-                                    task.id, wt_path,
+                                    "Created worktree for task %d at %s (branch: %s)",
+                                    task.id, wt_path, task.branch_name,
                                 )
                             except Exception:
                                 logger.warning(
@@ -773,6 +799,48 @@ class ExecutionLoop:
             pass
         logger.info("Cleaned up %d tmux sessions", len(tasks) + 1)
 
+    async def _create_merge_resolution_task(
+        self,
+        db,
+        run_id: uuid.UUID,
+        run: Run,
+        failed_task: RunTask,
+        conflict_details: str,
+    ) -> None:
+        """Create a RunTask to resolve a merge conflict.
+
+        The resolution agent gets full context from both sides
+        and resolves the conflict.
+        """
+        resolution_task = RunTask(
+            run_id=run_id,
+            title=f"Resolve merge conflict: {failed_task.title}",
+            description=(
+                f"The branch '{failed_task.branch_name}' has merge conflicts "
+                f"when merging into '{run.branch_name}'.\n\n"
+                f"Original task: {failed_task.title}\n"
+                f"Description: {failed_task.description}\n\n"
+                f"Conflict details:\n{conflict_details}\n\n"
+                f"Steps:\n"
+                f"1. Checkout the feature branch: git checkout {run.branch_name}\n"
+                f"2. Merge the task branch: git merge {failed_task.branch_name}\n"
+                f"3. Resolve all conflicts in the affected files\n"
+                f"4. Stage and commit the resolution\n"
+            ),
+            complexity="M",
+            assigned_role="engineer",
+            status="todo",
+            dependencies=[],
+            branch_name=run.branch_name,  # Work directly on feature branch
+        )
+        db.add(resolution_task)
+        await db.commit()
+
+        logger.info(
+            "Created merge resolution task %d for run %s (conflict in %s)",
+            resolution_task.id, run_id, failed_task.branch_name,
+        )
+
     # ─── Task lifecycle helpers ────────────────────────────────────
 
     async def _record_task_started(
@@ -864,6 +932,48 @@ class ExecutionLoop:
                     logger.info(
                         "Run task %d completed successfully", task_id
                     )
+
+                    # Auto-merge task branch into feature branch
+                    run = await db.get(Run, run_id)
+                    if (run and run.repository_id and run.branch_name
+                            and ptask.branch_name):
+                        try:
+                            git_svc = GitService(db)
+                            merge_result = await git_svc.merge_branch(
+                                source_branch=ptask.branch_name,
+                                target_branch=run.branch_name,
+                                repo_id=run.repository_id,
+                            )
+                            if merge_result.ok:
+                                logger.info(
+                                    "Merged task %d branch %s into %s",
+                                    task_id, ptask.branch_name, run.branch_name,
+                                )
+                            else:
+                                # Conflict — create merge resolution task
+                                logger.warning(
+                                    "Merge conflict for task %d: %s",
+                                    task_id, merge_result.stderr,
+                                )
+                                await self._create_merge_resolution_task(
+                                    db, run_id, run, ptask,
+                                    merge_result.stderr or merge_result.stdout,
+                                )
+                        except Exception:
+                            logger.warning(
+                                "Auto-merge failed for task %d",
+                                task_id, exc_info=True,
+                            )
+
+                    # Clean up worktree
+                    if (run and run.repository_id and ptask.branch_name):
+                        try:
+                            git_svc = GitService(db)
+                            await git_svc.remove_run_worktree(
+                                ptask.branch_name, run.repository_id,
+                            )
+                        except Exception:
+                            pass
             elif ptask.retry_count < settings.max_task_retries:
                 # Retry: reset to todo with incremented retry count
                 ptask.retry_count += 1

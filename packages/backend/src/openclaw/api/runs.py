@@ -9,9 +9,11 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from openclaw.db.engine import get_db
+from openclaw.db.models import Repository, Run
 from openclaw.schemas.run import (
     BudgetEntryRead,
     BudgetLedgerRead,
@@ -324,6 +326,115 @@ async def set_task_graph(
         return run
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ─── Diff & Merge ─────────────────────────────────────────
+
+
+class RunMergeRequest(BaseModel):
+    strategy: str = "merge"
+    create_pr: bool = False
+
+
+@router.get("/runs/{run_id}/diff")
+async def get_run_diff(
+    run_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get combined diff: feature branch vs main."""
+    from openclaw.services.git_service import GitService
+
+    run = await db.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if not run.repository_id or not run.branch_name:
+        raise HTTPException(
+            status_code=400,
+            detail="Run has no repository or branch. Register a repo first.",
+        )
+
+    repo = await db.get(Repository, run.repository_id)
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    git_svc = GitService(db)
+    diff = await git_svc.get_branch_diff(
+        run.branch_name, repo.default_branch, run.repository_id,
+    )
+    changed_files = await git_svc.get_branch_changed_files(
+        run.branch_name, repo.default_branch, run.repository_id,
+    )
+    return {
+        "diff": diff,
+        "files": [
+            {"path": f.path, "status": f.status,
+             "additions": f.additions, "deletions": f.deletions}
+            for f in changed_files
+        ],
+        "branch": run.branch_name,
+        "base": repo.default_branch,
+    }
+
+
+@router.post("/runs/{run_id}/merge")
+async def merge_run(
+    run_id: uuid.UUID,
+    body: RunMergeRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Merge feature branch into main (or create PR)."""
+    from openclaw.services.git_service import GitService
+
+    svc = RunService(db)
+    run = await db.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status != "reviewing":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run must be in 'reviewing' status, got '{run.status}'",
+        )
+    if not run.repository_id or not run.branch_name:
+        raise HTTPException(
+            status_code=400, detail="Run has no repository or branch",
+        )
+
+    repo = await db.get(Repository, run.repository_id)
+    if not repo:
+        raise HTTPException(status_code=404, detail="Repository not found")
+
+    git_svc = GitService(db)
+
+    if body.create_pr:
+        # Push and create PR
+        push_result = await git_svc.push_branch_by_name(
+            run.branch_name, run.repository_id,
+        )
+        if not push_result.ok:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Push failed: {push_result.stderr}",
+            )
+        # TODO: call PRService to create PR via gh CLI
+        await svc.change_status(run_id, "merging")
+        return {"status": "pr_creating", "branch": run.branch_name}
+    else:
+        # Direct merge to main
+        merge_result = await git_svc.merge_branch(
+            source_branch=run.branch_name,
+            target_branch=repo.default_branch,
+            repo_id=run.repository_id,
+            strategy=body.strategy,
+        )
+        if merge_result.ok:
+            await svc.change_status(run_id, "done")
+            return {"status": "merged", "branch": run.branch_name}
+        else:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Merge failed: {merge_result.stderr}",
+            )
 
 
 # ─── Contracts ────────────────────────────────────────────

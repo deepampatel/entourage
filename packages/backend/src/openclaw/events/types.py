@@ -130,3 +130,9 @@ RECOVERY_AGENT_RESET = "recovery.agent_reset"
 RECOVERY_TASK_RESET = "recovery.task_reset"
 RECOVERY_SESSION_CLOSED = "recovery.session_closed"
 RECOVERY_RUN_FAILED = "recovery.run_failed"
+
+# ── Branch-per-run (Phase 3) ─────────────────────────────
+RUN_BRANCH_CREATED = "run.branch_created"
+RUN_TASK_MERGED = "run.task_merged"
+RUN_TASK_MERGE_CONFLICT = "run.task_merge_conflict"
+RUN_MERGED_TO_MAIN = "run.merged_to_main"

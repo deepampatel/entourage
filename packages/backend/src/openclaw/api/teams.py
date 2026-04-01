@@ -125,6 +125,23 @@ async def update_agent(
 
 # ─── Repositories ───────────────────────────────────────
 
+
+@router.post("/repos/validate")
+async def validate_repo_path(
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+):
+    """Validate a path is a git repo and return health info."""
+    from openclaw.services.git_service import GitService
+
+    local_path = body.get("local_path", "")
+    if not local_path:
+        raise HTTPException(status_code=400, detail="local_path required")
+
+    git_svc = GitService(db)
+    return await git_svc.validate_repo(local_path)
+
+
 @router.post("/teams/{team_id}/repos", response_model=RepoRead, status_code=201)
 async def register_repo(
     team_id: uuid.UUID,
