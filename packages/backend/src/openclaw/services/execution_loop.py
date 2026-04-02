@@ -174,6 +174,20 @@ class ExecutionLoop:
                         )
                         del running[tid]
 
+                # ── Detect stuck tasks (running > 30 min) ─────────────
+                now = datetime.now(timezone.utc)
+                for tid in list(running.keys()):
+                    if not running[tid].done():
+                        # Check if task has been running too long
+                        async with self._session_factory() as db_check:
+                            stuck_task = await db_check.get(RunTask, tid)
+                            if (stuck_task and stuck_task.started_at and
+                                    (now - stuck_task.started_at).total_seconds() > 1800):
+                                logger.warning(
+                                    "Task %d stuck for >30min, cancelling", tid,
+                                )
+                                running[tid].cancel()
+
                 # ── Re-read task state after completions ───────────────
                 async with self._session_factory() as db:
                     result = await db.execute(
