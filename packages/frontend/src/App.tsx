@@ -66,6 +66,13 @@ function AuthenticatedApp() {
   const { data: teams } = useTeams(orgId || undefined);
   const [teamId, setTeamId] = useState<string>("");
 
+  // Request browser notification permission
+  useState(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  });
+
   // Auto-select first org, last team (most recently created = most active)
   if (orgs?.length && !orgId) {
     setOrgId(orgs[0].id);

@@ -704,42 +704,73 @@ class ExecutionLoop:
             f"{sibling_section}"
         )
 
-        try:
-            result = await runner.run_agent(
-                agent_id=agent_id,
-                team_id=team_id,
-                prompt_override=prompt,
-                working_directory=worktree_path,
-                run_task_id=run_task_id,
-            )
+        # Retry with exponential backoff (like Claude Code: 3 retries, 500ms base)
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                result = await runner.run_agent(
+                    agent_id=agent_id,
+                    team_id=team_id,
+                    prompt_override=prompt,
+                    working_directory=worktree_path,
+                    run_task_id=run_task_id,
+                )
 
-            # Always store agent output in RunTask.result
-            async with self._session_factory() as db:
-                ptask = await db.get(RunTask, run_task_id)
-                if ptask:
-                    ptask.result = {
-                        "stdout": result.get("stdout", ""),
-                        "stderr": result.get("stderr", ""),
-                        "exit_code": result.get("exit_code"),
-                        "duration_seconds": result.get("duration_seconds"),
-                        "worktree": worktree_path,
-                    }
-                    if result.get("error"):
-                        ptask.error = result["error"]
-                    await db.commit()
+                # Check for rate limit errors — retry instead of failing
+                error_str = (result.get("error") or "") + (result.get("stderr") or "")
+                if any(phrase in error_str.lower() for phrase in
+                       ("rate limit", "429", "too many requests", "overloaded", "529")):
+                    if attempt < max_retries:
+                        delay = min(0.5 * (2 ** attempt), 30)
+                        logger.warning(
+                            "Rate limit on task %d, retrying in %.0fs (attempt %d/%d)",
+                            run_task_id, delay, attempt + 1, max_retries,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
 
-            success = not result.get("error") and result.get("exit_code", 1) == 0
+                # Always store agent output in RunTask.result
+                async with self._session_factory() as db:
+                    ptask = await db.get(RunTask, run_task_id)
+                    if ptask:
+                        ptask.result = {
+                            "stdout": result.get("stdout", ""),
+                            "stderr": result.get("stderr", ""),
+                            "exit_code": result.get("exit_code"),
+                            "duration_seconds": result.get("duration_seconds"),
+                            "worktree": worktree_path,
+                        }
+                        if result.get("error"):
+                            ptask.error = result["error"]
+                        await db.commit()
 
-            # Release agent back to idle
-            await self._release_agent(agent_id)
+                success = not result.get("error") and result.get("exit_code", 1) == 0
 
-            # Signal wakeup so loop re-dispatches immediately
-            self._wakeup.set()
+                # Auto-commit fallback: if agent didn't commit, do it for them
+                if success and worktree_path:
+                    await self._auto_commit_if_needed(
+                        worktree_path, run_task_id, task_title,
+                    )
 
-            return success
+                # Release agent back to idle
+                await self._release_agent(agent_id)
 
-        except Exception as e:
-            logger.exception(
+                # Signal wakeup so loop re-dispatches immediately
+                self._wakeup.set()
+
+                return success
+
+            except Exception as e:
+                if attempt < max_retries:
+                    delay = min(0.5 * (2 ** attempt), 30)
+                    logger.warning(
+                        "Task %d attempt %d failed (%s), retrying in %.0fs",
+                        run_task_id, attempt + 1, e, delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
+                logger.exception(
                 "Agent run failed for run task %d", run_task_id
             )
             async with self._session_factory() as db:
@@ -771,6 +802,48 @@ class ExecutionLoop:
                 "Failed to release agent %s back to idle",
                 agent_id,
                 exc_info=True,
+            )
+
+    async def _auto_commit_if_needed(
+        self, worktree_path: str, task_id: int, task_title: str,
+    ) -> None:
+        """Auto-commit if agent left uncommitted changes in the worktree."""
+        try:
+            # Check for uncommitted changes
+            proc = await asyncio.create_subprocess_exec(
+                "git", "status", "--porcelain",
+                cwd=worktree_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            changes = stdout.decode().strip()
+
+            if not changes:
+                return  # Nothing to commit
+
+            # Stage all + commit
+            await asyncio.create_subprocess_exec(
+                "git", "add", "-A",
+                cwd=worktree_path,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            proc = await asyncio.create_subprocess_exec(
+                "git", "commit", "-m",
+                f"auto-commit: task {task_id} — {task_title}",
+                cwd=worktree_path,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+            if proc.returncode == 0:
+                logger.info(
+                    "Auto-committed uncommitted changes for task %d", task_id,
+                )
+        except Exception:
+            logger.debug(
+                "Auto-commit check failed for task %d", task_id, exc_info=True,
             )
 
     async def _cleanup_tmux_sessions(self, tasks: list) -> None:
