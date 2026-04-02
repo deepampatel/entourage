@@ -57,34 +57,36 @@ You should. Entourage doesn't replace your coding agent — it gives it an engin
 
 ## Screenshots
 
+Entourage ships with a Notion-inspired light/dark theme. All pages respect the system preference or user toggle.
+
 <table>
 <tr>
 <td width="50%">
-<strong>Dashboard</strong> — Active tasks, agent status, cost tracking
+<strong>Dashboard</strong> — Stats overview (active tasks, working agents, costs), agent grid with run buttons, pending human requests
 <br /><br />
 <img src="docs/assets/screenshot-dashboard.png" alt="Dashboard" width="100%" />
 </td>
 <td width="50%">
-<strong>Runs</strong> — Create, plan, approve, and monitor execution
+<strong>Runs</strong> — Create from intent, status filters, expandable cards with task graph, diff viewer, approve/merge/cancel actions
 <br /><br />
 <img src="docs/assets/screenshot-pipelines.png" alt="Runs" width="100%" />
 </td>
 </tr>
 <tr>
 <td width="50%">
-<strong>Task Graph</strong> — Dependency DAG with complexity ratings and live status
+<strong>Kanban Board</strong> — All tasks across runs in 4 columns (Todo, In Progress, Done, Failed). Click any card for full details in sidebar panel.
 <br /><br />
-<img src="docs/assets/screenshot-pipeline-detail.png" alt="Run Detail" width="100%" />
+<img src="docs/assets/screenshot-pipeline-detail.png" alt="Kanban" width="100%" />
 </td>
 <td width="50%">
-<strong>Analytics</strong> — Run health, cost trends, agent efficiency
+<strong>Analytics</strong> — Run health donut, cost trends (30d chart), success rate, per-agent efficiency table
 <br /><br />
 <img src="docs/assets/screenshot-analytics.png" alt="Analytics" width="100%" />
 </td>
 </tr>
 <tr>
 <td colspan="2">
-<strong>Teams & Agents</strong> — Multi-team management with role badges, model selection, and live status
+<strong>Manage</strong> — Teams side by side, editable agent cards (click to change name/model/role), repo registration with git validation, create agent inline
 <br /><br />
 <img src="docs/assets/screenshot-manage.png" alt="Teams & Agents" width="100%" />
 </td>
