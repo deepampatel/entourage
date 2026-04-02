@@ -66,6 +66,16 @@ function AuthenticatedApp() {
   const { data: teams } = useTeams(orgId || undefined);
   const [teamId, setTeamId] = useState<string>("");
 
+  // Initialize theme from localStorage or system preference
+  useState(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) {
+      document.documentElement.setAttribute("data-theme", saved);
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  });
+
   // Auto-select first org, last team (most recently created = most active)
   if (orgs?.length && !orgId) {
     setOrgId(orgs[0].id);
@@ -126,6 +136,22 @@ function AuthenticatedApp() {
         </div>
 
         <div className="sidebar-footer">
+          <button
+            className="theme-toggle"
+            onClick={() => {
+              const html = document.documentElement;
+              const current = html.getAttribute("data-theme") || "light";
+              const next = current === "dark" ? "light" : "dark";
+              html.setAttribute("data-theme", next);
+              localStorage.setItem("theme", next);
+            }}
+            title="Toggle theme"
+          >
+            {typeof window !== "undefined" &&
+             document.documentElement.getAttribute("data-theme") === "dark"
+              ? "☀ Light"
+              : "☾ Dark"}
+          </button>
           <button className="logout-btn" onClick={handleLogout}>
             Logout
           </button>
