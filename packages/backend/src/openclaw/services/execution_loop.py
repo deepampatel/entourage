@@ -90,6 +90,7 @@ class ExecutionLoop:
 
         # Track running tasks: run_task_id → asyncio.Task
         running: dict[int, asyncio.Task] = {}
+        feature_branch_created = False
 
         try:
             while True:
@@ -98,6 +99,28 @@ class ExecutionLoop:
                     run = await db.get(Run, run_id)
                     if not run:
                         raise ValueError(f"Run {run_id} not found")
+
+                    # One-time: create the feature branch for this run
+                    if not feature_branch_created and run.repository_id and run.branch_name:
+                        try:
+                            repo = await db.get(Repository, run.repository_id)
+                            if repo:
+                                git_svc = GitService(db)
+                                await git_svc.create_branch(
+                                    run.branch_name,
+                                    repo.default_branch,
+                                    run.repository_id,
+                                )
+                                logger.info(
+                                    "Created feature branch '%s' for run %s",
+                                    run.branch_name, run_id,
+                                )
+                        except Exception:
+                            logger.warning(
+                                "Failed to create feature branch for run %s",
+                                run_id, exc_info=True,
+                            )
+                        feature_branch_created = True
 
                     # Check if run is still in executing state
                     if run.status != "executing":
@@ -150,6 +173,20 @@ class ExecutionLoop:
                             run_id, tid, success, team_id
                         )
                         del running[tid]
+
+                # ── Detect stuck tasks (running > 30 min) ─────────────
+                now = datetime.now(timezone.utc)
+                for tid in list(running.keys()):
+                    if not running[tid].done():
+                        # Check if task has been running too long
+                        async with self._session_factory() as db_check:
+                            stuck_task = await db_check.get(RunTask, tid)
+                            if (stuck_task and stuck_task.started_at and
+                                    (now - stuck_task.started_at).total_seconds() > 1800):
+                                logger.warning(
+                                    "Task %d stuck for >30min, cancelling", tid,
+                                )
+                                running[tid].cancel()
 
                 # ── Re-read task state after completions ───────────────
                 async with self._session_factory() as db:
@@ -288,17 +325,20 @@ class ExecutionLoop:
                         task.started_at = datetime.now(timezone.utc)
 
                         # Create git worktree for isolated file access
+                        # Uses RunTask.branch_name, branching from Run.branch_name
                         wt_path = None
-                        if repo_id:
+                        if repo_id and task.branch_name and run.branch_name:
                             try:
                                 git_svc = GitService(db)
-                                wt_info = await git_svc.create_worktree(
-                                    task.id, repo_id
+                                wt_info = await git_svc.create_run_worktree(
+                                    run_task_id=task.id,
+                                    repo_id=repo_id,
+                                    base_branch=run.branch_name,
                                 )
                                 wt_path = wt_info.path
                                 logger.info(
-                                    "Created worktree for task %d at %s",
-                                    task.id, wt_path,
+                                    "Created worktree for task %d at %s (branch: %s)",
+                                    task.id, wt_path, task.branch_name,
                                 )
                             except Exception:
                                 logger.warning(
@@ -678,42 +718,73 @@ class ExecutionLoop:
             f"{sibling_section}"
         )
 
-        try:
-            result = await runner.run_agent(
-                agent_id=agent_id,
-                team_id=team_id,
-                prompt_override=prompt,
-                working_directory=worktree_path,
-                run_task_id=run_task_id,
-            )
+        # Retry with exponential backoff (like Claude Code: 3 retries, 500ms base)
+        max_retries = 3
+        for attempt in range(max_retries + 1):
+            try:
+                result = await runner.run_agent(
+                    agent_id=agent_id,
+                    team_id=team_id,
+                    prompt_override=prompt,
+                    working_directory=worktree_path,
+                    run_task_id=run_task_id,
+                )
 
-            # Always store agent output in RunTask.result
-            async with self._session_factory() as db:
-                ptask = await db.get(RunTask, run_task_id)
-                if ptask:
-                    ptask.result = {
-                        "stdout": result.get("stdout", ""),
-                        "stderr": result.get("stderr", ""),
-                        "exit_code": result.get("exit_code"),
-                        "duration_seconds": result.get("duration_seconds"),
-                        "worktree": worktree_path,
-                    }
-                    if result.get("error"):
-                        ptask.error = result["error"]
-                    await db.commit()
+                # Check for rate limit errors — retry instead of failing
+                error_str = (result.get("error") or "") + (result.get("stderr") or "")
+                if any(phrase in error_str.lower() for phrase in
+                       ("rate limit", "429", "too many requests", "overloaded", "529")):
+                    if attempt < max_retries:
+                        delay = min(0.5 * (2 ** attempt), 30)
+                        logger.warning(
+                            "Rate limit on task %d, retrying in %.0fs (attempt %d/%d)",
+                            run_task_id, delay, attempt + 1, max_retries,
+                        )
+                        await asyncio.sleep(delay)
+                        continue
 
-            success = not result.get("error") and result.get("exit_code", 1) == 0
+                # Always store agent output in RunTask.result
+                async with self._session_factory() as db:
+                    ptask = await db.get(RunTask, run_task_id)
+                    if ptask:
+                        ptask.result = {
+                            "stdout": result.get("stdout", ""),
+                            "stderr": result.get("stderr", ""),
+                            "exit_code": result.get("exit_code"),
+                            "duration_seconds": result.get("duration_seconds"),
+                            "worktree": worktree_path,
+                        }
+                        if result.get("error"):
+                            ptask.error = result["error"]
+                        await db.commit()
 
-            # Release agent back to idle
-            await self._release_agent(agent_id)
+                success = not result.get("error") and result.get("exit_code", 1) == 0
 
-            # Signal wakeup so loop re-dispatches immediately
-            self._wakeup.set()
+                # Auto-commit fallback: if agent didn't commit, do it for them
+                if success and worktree_path:
+                    await self._auto_commit_if_needed(
+                        worktree_path, run_task_id, task_title,
+                    )
 
-            return success
+                # Release agent back to idle
+                await self._release_agent(agent_id)
 
-        except Exception as e:
-            logger.exception(
+                # Signal wakeup so loop re-dispatches immediately
+                self._wakeup.set()
+
+                return success
+
+            except Exception as e:
+                if attempt < max_retries:
+                    delay = min(0.5 * (2 ** attempt), 30)
+                    logger.warning(
+                        "Task %d attempt %d failed (%s), retrying in %.0fs",
+                        run_task_id, attempt + 1, e, delay,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+
+                logger.exception(
                 "Agent run failed for run task %d", run_task_id
             )
             async with self._session_factory() as db:
@@ -747,6 +818,48 @@ class ExecutionLoop:
                 exc_info=True,
             )
 
+    async def _auto_commit_if_needed(
+        self, worktree_path: str, task_id: int, task_title: str,
+    ) -> None:
+        """Auto-commit if agent left uncommitted changes in the worktree."""
+        try:
+            # Check for uncommitted changes
+            proc = await asyncio.create_subprocess_exec(
+                "git", "status", "--porcelain",
+                cwd=worktree_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            changes = stdout.decode().strip()
+
+            if not changes:
+                return  # Nothing to commit
+
+            # Stage all + commit
+            await asyncio.create_subprocess_exec(
+                "git", "add", "-A",
+                cwd=worktree_path,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            proc = await asyncio.create_subprocess_exec(
+                "git", "commit", "-m",
+                f"auto-commit: task {task_id} — {task_title}",
+                cwd=worktree_path,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await proc.wait()
+            if proc.returncode == 0:
+                logger.info(
+                    "Auto-committed uncommitted changes for task %d", task_id,
+                )
+        except Exception:
+            logger.debug(
+                "Auto-commit check failed for task %d", task_id, exc_info=True,
+            )
+
     async def _cleanup_tmux_sessions(self, tasks: list) -> None:
         """Kill tmux sessions left by completed tasks."""
         import asyncio
@@ -772,6 +885,48 @@ class ExecutionLoop:
         except Exception:
             pass
         logger.info("Cleaned up %d tmux sessions", len(tasks) + 1)
+
+    async def _create_merge_resolution_task(
+        self,
+        db,
+        run_id: uuid.UUID,
+        run: Run,
+        failed_task: RunTask,
+        conflict_details: str,
+    ) -> None:
+        """Create a RunTask to resolve a merge conflict.
+
+        The resolution agent gets full context from both sides
+        and resolves the conflict.
+        """
+        resolution_task = RunTask(
+            run_id=run_id,
+            title=f"Resolve merge conflict: {failed_task.title}",
+            description=(
+                f"The branch '{failed_task.branch_name}' has merge conflicts "
+                f"when merging into '{run.branch_name}'.\n\n"
+                f"Original task: {failed_task.title}\n"
+                f"Description: {failed_task.description}\n\n"
+                f"Conflict details:\n{conflict_details}\n\n"
+                f"Steps:\n"
+                f"1. Checkout the feature branch: git checkout {run.branch_name}\n"
+                f"2. Merge the task branch: git merge {failed_task.branch_name}\n"
+                f"3. Resolve all conflicts in the affected files\n"
+                f"4. Stage and commit the resolution\n"
+            ),
+            complexity="M",
+            assigned_role="engineer",
+            status="todo",
+            dependencies=[],
+            branch_name=run.branch_name,  # Work directly on feature branch
+        )
+        db.add(resolution_task)
+        await db.commit()
+
+        logger.info(
+            "Created merge resolution task %d for run %s (conflict in %s)",
+            resolution_task.id, run_id, failed_task.branch_name,
+        )
 
     # ─── Task lifecycle helpers ────────────────────────────────────
 
@@ -864,6 +1019,48 @@ class ExecutionLoop:
                     logger.info(
                         "Run task %d completed successfully", task_id
                     )
+
+                    # Auto-merge task branch into feature branch
+                    run = await db.get(Run, run_id)
+                    if (run and run.repository_id and run.branch_name
+                            and ptask.branch_name):
+                        try:
+                            git_svc = GitService(db)
+                            merge_result = await git_svc.merge_branch(
+                                source_branch=ptask.branch_name,
+                                target_branch=run.branch_name,
+                                repo_id=run.repository_id,
+                            )
+                            if merge_result.ok:
+                                logger.info(
+                                    "Merged task %d branch %s into %s",
+                                    task_id, ptask.branch_name, run.branch_name,
+                                )
+                            else:
+                                # Conflict — create merge resolution task
+                                logger.warning(
+                                    "Merge conflict for task %d: %s",
+                                    task_id, merge_result.stderr,
+                                )
+                                await self._create_merge_resolution_task(
+                                    db, run_id, run, ptask,
+                                    merge_result.stderr or merge_result.stdout,
+                                )
+                        except Exception:
+                            logger.warning(
+                                "Auto-merge failed for task %d",
+                                task_id, exc_info=True,
+                            )
+
+                    # Clean up worktree
+                    if (run and run.repository_id and ptask.branch_name):
+                        try:
+                            git_svc = GitService(db)
+                            await git_svc.remove_run_worktree(
+                                ptask.branch_name, run.repository_id,
+                            )
+                        except Exception:
+                            pass
             elif ptask.retry_count < settings.max_task_retries:
                 # Retry: reset to todo with incremented retry count
                 ptask.retry_count += 1

@@ -146,7 +146,7 @@ export function useRegisterRepo(teamId: string) {
 
 export function useTasks(
   teamId: string | undefined,
-  filters?: { status?: string; assignee_id?: string }
+  filters?: { status?: string; assignee_id?: string; include_archived?: boolean }
 ) {
   return useQuery({
     queryKey: ["tasks", teamId, filters],
@@ -154,6 +154,7 @@ export function useTasks(
       const params: Record<string, string> = {};
       if (filters?.status) params.status = filters.status;
       if (filters?.assignee_id) params.assignee_id = filters.assignee_id;
+      if (filters?.include_archived) params.include_archived = "true";
       return apiClient.get<Task[]>(`/api/v1/teams/${teamId}/tasks`, params);
     },
     enabled: !!teamId,
@@ -258,6 +259,19 @@ export function useRejectTask(teamId: string) {
     onSuccess: (_, taskId) => {
       queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
       queryClient.invalidateQueries({ queryKey: ["reviews", taskId] });
+    },
+  });
+}
+
+export function useArchiveTask(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: number) =>
+      apiClient.post<Task>(`/api/v1/tasks/${taskId}/archive`, {}),
+    onSuccess: (_, taskId) => {
+      queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });
+      queryClient.invalidateQueries({ queryKey: ["task", taskId] });
+      queryClient.invalidateQueries({ queryKey: ["task-events", taskId] });
     },
   });
 }
@@ -458,6 +472,56 @@ export function useChangeRunStatus(teamId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
     },
+  });
+}
+
+// ─── Diff & Merge hooks ─────────────────────────────────
+
+export function useRunDiff(runId: string | undefined) {
+  return useQuery({
+    queryKey: ["runDiff", runId],
+    queryFn: () =>
+      apiClient.get<{
+        diff: string;
+        files: { path: string; status: string; additions: number; deletions: number }[];
+        branch: string;
+        base: string;
+      }>(`/api/v1/runs/${runId}/diff`),
+    enabled: !!runId,
+    refetchInterval: false,
+  });
+}
+
+export function useMergeRun(teamId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      runId,
+      strategy = "merge",
+      create_pr = false,
+    }: {
+      runId: string;
+      strategy?: string;
+      create_pr?: boolean;
+    }) =>
+      apiClient.post(`/api/v1/runs/${runId}/merge`, { strategy, create_pr }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
+    },
+  });
+}
+
+export function useValidateRepo() {
+  return useMutation({
+    mutationFn: (body: { local_path: string }) =>
+      apiClient.post<{
+        valid: boolean;
+        default_branch: string | null;
+        current_branch: string | null;
+        is_dirty: boolean;
+        remote_url: string | null;
+        error: string | null;
+      }>("/api/v1/repos/validate", body),
   });
 }
 

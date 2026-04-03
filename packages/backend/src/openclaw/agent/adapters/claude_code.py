@@ -464,14 +464,18 @@ Begin by checking your inbox for the review request.
         # Output file — captures stdout alongside tmux pane display
         output_path = os.path.join(config_dir, "output.txt")
 
+        # Check if MCP server exists (only include --mcp-config if it does)
+        mcp_flag = ""
+        if os.path.exists(config.mcp_server_command[-1] if config.mcp_server_command else ""):
+            mcp_flag = f'  --mcp-config "{config_path}" \\\n'
+
         launcher_path = os.path.join(config_dir, "run-agent.sh")
         with open(launcher_path, "w") as lf:
             lf.write("#!/bin/bash\n")
-            # Use tee to capture stdout to file AND display in tmux
-            # --dangerously-skip-permissions lets agents write files without asking
             lf.write(f'"{claude_bin}" --print \\\n')
             lf.write(f'  --dangerously-skip-permissions \\\n')
-            lf.write(f'  --mcp-config "{config_path}" \\\n')
+            if mcp_flag:
+                lf.write(mcp_flag)
             lf.write(f'  --max-turns 100 \\\n')
             lf.write(f'  "$(cat \'{prompt_path}\')" 2>&1 | tee "{output_path}"\n')
         os.chmod(launcher_path, 0o755)

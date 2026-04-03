@@ -48,11 +48,21 @@ export interface Task {
   dri_id: string | null;
   assignee_id: string | null;
   depends_on: number[];
+  dependent_tasks?: DependentTaskInfo[];
   repo_ids: string[];
   tags: string[];
   branch: string;
   created_at: string;
   updated_at: string;
+  completed_at: string | null;
+}
+
+export interface DependentTaskInfo {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  priority: Priority;
+  assignee_id: string | null;
   completed_at: string | null;
 }
 
@@ -107,7 +117,8 @@ export type TaskStatus =
   | "in_approval"
   | "merging"
   | "done"
-  | "cancelled";
+  | "cancelled"
+  | "archived";
 
 export type Priority = "low" | "medium" | "high" | "critical";
 
@@ -119,6 +130,7 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
   merging: "Merging",
   done: "Done",
   cancelled: "Cancelled",
+  archived: "Archived",
 };
 
 export const PRIORITY_COLORS: Record<Priority, string> = {
@@ -235,6 +247,9 @@ export interface RunTask {
     stderr?: string;
     exit_code?: number;
     duration_seconds?: number;
+    diff?: string;
+    worktree?: string;
+    changed_files?: { file: string; status: string; additions: number; deletions: number }[];
   } | null;
   created_at: string;
   updated_at: string;

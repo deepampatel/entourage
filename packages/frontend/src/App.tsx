@@ -74,6 +74,10 @@ function AuthenticatedApp() {
     } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
       document.documentElement.setAttribute("data-theme", "dark");
     }
+    // Request browser notification permission
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
   });
 
   // Auto-select first org, last team (most recently created = most active)

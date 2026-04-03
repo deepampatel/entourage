@@ -200,7 +200,14 @@ class RunService:
         run_id: uuid.UUID,
         actor_id: Optional[uuid.UUID] = None,
     ) -> Run:
-        """Approve the plan — transitions from awaiting_plan_approval to executing."""
+        """Approve the plan — transitions to executing and assigns branch names.
+
+        Branch naming:
+        - Run: feature/run-{short_id}
+        - Each RunTask: task/{id}-{slug}
+        """
+        import re
+
         run = await self.db.get(Run, run_id)
         if not run:
             raise ValueError(f"Run {run_id} not found")
@@ -210,6 +217,18 @@ class RunService:
                 f"expected 'awaiting_plan_approval'"
             )
 
+        # Assign feature branch name for the run
+        short_id = str(run_id)[:8]
+        run.branch_name = f"feature/run-{short_id}"
+
+        # Assign branch names to all RunTasks
+        result = await self.db.execute(
+            select(RunTask).where(RunTask.run_id == run_id).order_by(RunTask.id)
+        )
+        for rt in result.scalars().all():
+            slug = re.sub(r"[^a-z0-9]+", "-", rt.title.lower())[:40].strip("-")
+            rt.branch_name = f"task/{rt.id}-{slug}"
+
         run.status = "executing"
         await self.events.append(
             stream_id=f"run:{run_id}",
@@ -217,6 +236,7 @@ class RunService:
             data={
                 "run_id": str(run_id),
                 "actor_id": str(actor_id) if actor_id else None,
+                "branch": run.branch_name,
             },
         )
         await self.db.commit()

@@ -22,11 +22,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm.attributes import flag_modified
 
 from openclaw.schemas.task import (
+    DependentTaskInfo,
     MessageCreate,
     MessageRead,
     StatusChange,
     TaskAssign,
     TaskCreate,
+    TaskDetail,
+    TaskListItem,
     TaskRead,
     TaskUpdate,
 )
@@ -74,35 +77,90 @@ async def create_task(
     return task
 
 
-@router.get("/teams/{team_id}/tasks", response_model=list[TaskRead])
+@router.get("/teams/{team_id}/tasks", response_model=list[TaskListItem])
 async def list_tasks(
     team_id: uuid.UUID,
     status: Optional[str] = Query(None, description="Filter by status"),
     assignee_id: Optional[uuid.UUID] = Query(None, description="Filter by assignee"),
+    include_archived: bool = Query(
+        False,
+        description="Include archived tasks in results when no status filter is set",
+    ),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     svc: TaskService = Depends(_task_svc),
 ):
-    """List tasks for a team with optional filters."""
-    return await svc.list_tasks(
+    """List tasks for a team with optional filters and dependent task information."""
+    tasks = await svc.list_tasks(
         team_id=team_id,
         status=status,
         assignee_id=assignee_id,
+        include_archived=include_archived,
         limit=limit,
         offset=offset,
     )
 
+    # Enrich each task with dependent task information
+    result = []
+    for task in tasks:
+        dependent_tasks_data = await svc.get_dependent_tasks(task.id)
+        task_dict = {
+            "id": task.id,
+            "team_id": task.team_id,
+            "title": task.title,
+            "description": task.description,
+            "status": task.status,
+            "priority": task.priority,
+            "dri_id": task.dri_id,
+            "assignee_id": task.assignee_id,
+            "depends_on": task.depends_on,
+            "dependent_tasks": dependent_tasks_data,
+            "repo_ids": task.repo_ids,
+            "tags": task.tags,
+            "branch": task.branch,
+            "created_at": task.created_at,
+            "updated_at": task.updated_at,
+            "completed_at": task.completed_at,
+        }
+        result.append(TaskListItem(**task_dict))
 
-@router.get("/tasks/{task_id}", response_model=TaskRead)
+    return result
+
+
+@router.get("/tasks/{task_id}", response_model=TaskDetail)
 async def get_task(
     task_id: int,
     svc: TaskService = Depends(_task_svc),
 ):
-    """Get a single task by ID."""
+    """Get a single task by ID with dependent task information."""
     task = await svc.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    return task
+
+    # Fetch dependent task information
+    dependent_tasks_data = await svc.get_dependent_tasks(task_id)
+
+    # Convert to TaskDetail schema
+    task_dict = {
+        "id": task.id,
+        "team_id": task.team_id,
+        "title": task.title,
+        "description": task.description,
+        "status": task.status,
+        "priority": task.priority,
+        "dri_id": task.dri_id,
+        "assignee_id": task.assignee_id,
+        "depends_on": task.depends_on,
+        "dependent_tasks": dependent_tasks_data,
+        "repo_ids": task.repo_ids,
+        "tags": task.tags,
+        "branch": task.branch,
+        "created_at": task.created_at,
+        "updated_at": task.updated_at,
+        "completed_at": task.completed_at,
+    }
+
+    return TaskDetail(**task_dict)
 
 
 @router.patch("/tasks/{task_id}", response_model=TaskRead)
@@ -149,6 +207,30 @@ async def change_task_status(
     except InvalidTransitionError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except DependencyBlockedError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+class ArchiveTaskRequest(BaseModel):
+    """Optional actor metadata for archive action."""
+    actor_id: Optional[uuid.UUID] = None
+
+
+@router.post("/tasks/{task_id}/archive", response_model=TaskRead)
+async def archive_task(
+    task_id: int,
+    body: Optional[ArchiveTaskRequest] = None,
+    svc: TaskService = Depends(_task_svc),
+):
+    """Archive a task that is already done or cancelled."""
+    try:
+        task = await svc.archive_task(
+            task_id=task_id,
+            actor_id=body.actor_id if body else None,
+        )
+        return task
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except InvalidTransitionError as e:
         raise HTTPException(status_code=409, detail=str(e))
 
 

@@ -86,6 +86,38 @@ export function useTeamSocket(teamId: string | undefined) {
             queryClient.invalidateQueries({ queryKey: ["costs", teamId] });
             break;
 
+          // Run lifecycle events
+          case "run.completed":
+            queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
+            queryClient.invalidateQueries({ queryKey: ["run-tasks"] });
+            // Browser notification
+            if (Notification.permission === "granted") {
+              new Notification("Run completed", {
+                body: `${(msg.title as string) || "A run"} finished successfully`,
+                icon: "/favicon.ico",
+              });
+            }
+            break;
+
+          case "run.failed":
+            queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
+            queryClient.invalidateQueries({ queryKey: ["run-tasks"] });
+            if (Notification.permission === "granted") {
+              new Notification("Run failed", {
+                body: `${(msg.title as string) || "A run"} has failed tasks`,
+                icon: "/favicon.ico",
+              });
+            }
+            break;
+
+          case "run.task_completed":
+          case "run.task_failed":
+          case "run.task_started":
+          case "run.task_retried":
+            queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
+            queryClient.invalidateQueries({ queryKey: ["run-tasks"] });
+            break;
+
           default:
             // Unknown event type — invalidate everything for safety
             queryClient.invalidateQueries({ queryKey: ["tasks", teamId] });

@@ -49,8 +49,13 @@ def _find_mcp_server_path() -> str:
 
     # Navigate from backend/src/openclaw/agent/ to project root
     here = Path(__file__).resolve().parent
+    # here = .../packages/backend/src/openclaw/agent/
+    # project root = 5 levels up
+    project_root = (here / ".." / ".." / ".." / ".." / "..").resolve()
+
     candidates = [
-        here / ".." / ".." / ".." / ".." / ".." / "mcp-server" / "dist" / "index.js",
+        project_root / "mcp-server" / "dist" / "index.js",
+        project_root / "packages" / "mcp-server" / "dist" / "index.js",
         Path.cwd() / "packages" / "mcp-server" / "dist" / "index.js",
     ]
 
@@ -60,7 +65,7 @@ def _find_mcp_server_path() -> str:
             return str(resolved)
 
     # Fallback — let the adapter fail with a clear error
-    return "packages/mcp-server/dist/index.js"
+    return str(project_root / "packages" / "mcp-server" / "dist" / "index.js")
 
 
 class AgentRunner:

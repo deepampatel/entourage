@@ -7,7 +7,7 @@ Learn: This is the CORE of the platform. Every task transition is:
 4. Applied to the task projection (the tasks table)
 
 The state machine enforces the workflow:
-  todo → in_progress → in_review → in_approval → merging → done
+  todo → in_progress → in_review → in_approval → merging → done → archived
 
 Dependencies are enforced via depends_on (PostgreSQL INTEGER[]):
   Task B depends_on [Task A] → B can't move to in_progress until A is done.
@@ -41,8 +41,9 @@ VALID_TRANSITIONS: dict[str, set[str]] = {
     "in_review": {"in_approval", "in_progress", "cancelled"},
     "in_approval": {"merging", "in_progress", "cancelled"},
     "merging": {"done", "in_progress"},  # merge_failed → back to in_progress
-    "done": set(),       # terminal state
-    "cancelled": set(),  # terminal state
+    "done": {"archived"},
+    "cancelled": {"archived"},
+    "archived": set(),  # terminal state
 }
 
 
@@ -134,6 +135,7 @@ class TaskService:
         team_id: uuid.UUID,
         status: Optional[str] = None,
         assignee_id: Optional[uuid.UUID] = None,
+        include_archived: bool = False,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Task]:
@@ -151,6 +153,9 @@ class TaskService:
         )
         if status:
             query = query.where(Task.status == status)
+        elif not include_archived:
+            # Archived tasks are hidden by default in the main list view.
+            query = query.where(Task.status != "archived")
         if assignee_id:
             query = query.where(Task.assignee_id == assignee_id)
 
@@ -254,6 +259,25 @@ class TaskService:
         await self.db.commit()
         return task
 
+    async def archive_task(
+        self,
+        task_id: int,
+        actor_id: Optional[uuid.UUID] = None,
+    ) -> Task:
+        """Archive a completed/cancelled task."""
+        task = await self.get_task(task_id)
+        if not task:
+            raise ValueError(f"Task {task_id} not found")
+        if task.status not in {"done", "cancelled"}:
+            raise InvalidTransitionError(
+                "Only tasks in 'done' or 'cancelled' status can be archived"
+            )
+        return await self.change_status(
+            task_id=task_id,
+            new_status="archived",
+            actor_id=actor_id,
+        )
+
     async def _check_dependencies(self, dep_ids: list[int]) -> None:
         """Verify all dependency tasks are 'done'.
 
@@ -308,6 +332,29 @@ class TaskService:
 
         await self.db.commit()
         return task
+
+    # ─── Dependent Tasks ─────────────────────────────────
+
+    async def get_dependent_tasks(self, task_id: int) -> list[dict]:
+        """Get information about tasks that this task depends on.
+
+        Returns a list of dicts with id, title, and status for each dependent task.
+        """
+        task = await self.get_task(task_id)
+        if not task or not task.depends_on:
+            return []
+
+        result = await self.db.execute(
+            select(Task.id, Task.title, Task.status)
+            .where(Task.id.in_(task.depends_on))
+        )
+
+        dependent_tasks = [
+            {"id": row.id, "title": row.title, "status": row.status}
+            for row in result
+        ]
+
+        return dependent_tasks
 
 
 class MessageService:
