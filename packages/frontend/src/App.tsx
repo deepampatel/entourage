@@ -118,28 +118,16 @@ function AuthenticatedApp() {
           )}
         </div>
 
-        {/* Navigation */}
+        {/* Navigation — 3 pages only */}
         <div className="sidebar-nav">
-          <NavLink to="/dashboard" className="nav-link">
-            Dashboard
-          </NavLink>
           <NavLink to="/runs" className="nav-link">
             Runs
-          </NavLink>
-          <NavLink to="/tasks" className="nav-link">
-            Tasks
-          </NavLink>
-          <NavLink to="/requests" className="nav-link">
-            Requests
-          </NavLink>
-          <NavLink to="/analytics" className="nav-link">
-            Analytics
           </NavLink>
           <NavLink to="/settings" className="nav-link">
             Settings
           </NavLink>
-          <NavLink to="/manage" className="nav-link">
-            Manage
+          <NavLink to="/analytics" className="nav-link">
+            Analytics
           </NavLink>
         </div>
 
@@ -200,7 +188,7 @@ function AuthenticatedApp() {
                 path="/settings"
                 element={<Settings teamId={teamId} />}
               />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              <Route path="*" element={<Navigate to="/runs" replace />} />
             </>
           ) : (
             <Route

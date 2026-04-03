@@ -517,14 +517,291 @@ function CreateBar({
   );
 }
 
+// ─── Board View (runs in status columns) ─────────────
+
+const BOARD_COLUMNS = [
+  { status: "executing", label: "Executing", color: "var(--semantic-blue)" },
+  { status: "reviewing", label: "Reviewing", color: "var(--semantic-purple)" },
+  { status: "done", label: "Done", color: "var(--semantic-green)" },
+  { status: "failed", label: "Failed", color: "var(--semantic-red)" },
+];
+
+function BoardCard({
+  run,
+  onClick,
+}: {
+  run: Run;
+  onClick: () => void;
+}) {
+  const { data: tasks } = useRunTasks(run.id);
+  const done = tasks?.filter((t) => t.status === "done").length ?? 0;
+  const total = tasks?.length ?? 0;
+  const duration = tasks?.reduce((s, t) => s + (t.result?.duration_seconds ?? 0), 0) ?? 0;
+  const isActive = run.status === "executing";
+
+  return (
+    <div className="board-card" onClick={onClick}>
+      <div className="board-card-title">{run.title}</div>
+      {total > 0 && (
+        <div className="board-card-progress">
+          <div className="board-card-bar">
+            <div
+              className="board-card-bar-fill"
+              style={{ width: `${total ? (done / total) * 100 : 0}%` }}
+            />
+          </div>
+          <span className="board-card-meta">
+            {done}/{total}
+            {duration > 0 && ` · ${Math.round(duration)}s`}
+          </span>
+        </div>
+      )}
+      {run.branch_name && (
+        <div className="board-card-branch">{run.branch_name}</div>
+      )}
+      {isActive && <div className="board-card-pulse" />}
+    </div>
+  );
+}
+
+function RunBoard({
+  runs,
+  onSelectRun,
+}: {
+  runs: Run[];
+  onSelectRun: (run: Run) => void;
+}) {
+  // Also include awaiting_plan_approval and planning in a "Pending" column
+  const pendingRuns = runs.filter((r) =>
+    ["draft", "planning", "awaiting_plan_approval", "contracting"].includes(r.status)
+  );
+
+  return (
+    <div className="runs-board">
+      {/* Pending column (if any) */}
+      {pendingRuns.length > 0 && (
+        <div className="board-column">
+          <div className="board-column-header">
+            <span className="board-column-title" style={{ color: "var(--semantic-orange)" }}>
+              Pending
+            </span>
+            <span className="board-column-count">{pendingRuns.length}</span>
+          </div>
+          <div className="board-column-cards">
+            {pendingRuns.map((r) => (
+              <BoardCard key={r.id} run={r} onClick={() => onSelectRun(r)} />
+            ))}
+          </div>
+        </div>
+      )}
+      {BOARD_COLUMNS.map((col) => {
+        const colRuns = runs.filter((r) => r.status === col.status);
+        return (
+          <div key={col.status} className="board-column">
+            <div className="board-column-header">
+              <span className="board-column-title" style={{ color: col.color }}>
+                {col.label}
+              </span>
+              <span className="board-column-count">{colRuns.length}</span>
+            </div>
+            <div className="board-column-cards">
+              {colRuns.map((r) => (
+                <BoardCard key={r.id} run={r} onClick={() => onSelectRun(r)} />
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Run Detail Modal ────────────────────────────────
+
+function RunModal({
+  run,
+  teamId,
+  onClose,
+}: {
+  run: Run;
+  teamId: string;
+  onClose: () => void;
+}) {
+  const [tab, setTab] = useState<"tasks" | "diff">("tasks");
+  const { data: tasks } = useRunTasks(run.id);
+  const { data: diffData } = useRunDiff(
+    run.status === "reviewing" && run.repository_id ? run.id : undefined
+  );
+  const approvePlan = useApprovePlan(teamId);
+  const rejectPlan = useRejectPlan(teamId);
+  const startRun = useStartRun(teamId);
+  const changeStatus = useChangeRunStatus(teamId);
+  const mergeRun = useMergeRun(teamId);
+  const { showToast } = useToast();
+  const [expandedTask, setExpandedTask] = useState<number | null>(null);
+
+  const status = run.status as RunStatus;
+  const dotColor = STATUS_DOT[status] || "var(--text-faint)";
+  const label = RUN_STATUS_LABELS[status] || status;
+  const done = tasks?.filter((t) => t.status === "done").length ?? 0;
+  const total = tasks?.length ?? 0;
+  const duration = tasks?.reduce((s, t) => s + (t.result?.duration_seconds ?? 0), 0) ?? 0;
+
+  return (
+    <>
+      <div className="run-modal-backdrop" onClick={onClose} />
+      <div className="run-modal">
+        <button className="run-modal-close" onClick={onClose}>✕</button>
+
+        {/* Header */}
+        <h2 className="run-modal-title">{run.title}</h2>
+        <div className="run-modal-meta">
+          <span className="run-modal-status" style={{ color: dotColor }}>
+            <span className="status-dot" style={{ background: dotColor }} />
+            {label}
+          </span>
+          {run.branch_name && (
+            <code className="run-modal-branch">{run.branch_name}</code>
+          )}
+          {total > 0 && (
+            <span className="run-modal-stats">
+              {done}/{total} tasks · {Math.round(duration)}s
+            </span>
+          )}
+        </div>
+
+        {/* Actions */}
+        <div className="run-modal-actions">
+          {status === "draft" && (
+            <button className="run-action-btn primary" onClick={() => { startRun.mutate(run.id); showToast("Planning started", "success"); }}>
+              Start Planning
+            </button>
+          )}
+          {status === "awaiting_plan_approval" && (
+            <>
+              <button className="run-action-btn primary" onClick={() => { approvePlan.mutate(run.id); showToast("Approved", "success"); }}>
+                Approve & Execute
+              </button>
+              <button className="run-action-btn ghost" onClick={() => rejectPlan.mutate({ runId: run.id })}>
+                Reject
+              </button>
+            </>
+          )}
+          {status === "reviewing" && (
+            <>
+              {run.repository_id ? (
+                <>
+                  <button className="run-action-btn primary" onClick={() => { mergeRun.mutate({ runId: run.id }); showToast("Merged", "success"); }}>
+                    Approve & Merge
+                  </button>
+                  <button className="run-action-btn ghost" onClick={() => { mergeRun.mutate({ runId: run.id, create_pr: true }); showToast("PR creating", "success"); }}>
+                    Create PR
+                  </button>
+                </>
+              ) : (
+                <button className="run-action-btn primary" onClick={() => { changeStatus.mutate({ runId: run.id, status: "done" }); showToast("Done", "success"); }}>
+                  Mark Done
+                </button>
+              )}
+            </>
+          )}
+          {status === "failed" && (
+            <button className="run-action-btn ghost" onClick={() => changeStatus.mutate({ runId: run.id, status: "draft" })}>
+              Retry
+            </button>
+          )}
+          {["executing", "reviewing", "failed"].includes(status) && (
+            <button className="run-action-btn danger" onClick={() => { changeStatus.mutate({ runId: run.id, status: "cancelled" }); onClose(); }}>
+              Cancel
+            </button>
+          )}
+        </div>
+
+        {/* Tabs */}
+        <div className="run-modal-tabs">
+          <button className={`run-modal-tab ${tab === "tasks" ? "active" : ""}`} onClick={() => setTab("tasks")}>
+            Tasks {total > 0 && `(${total})`}
+          </button>
+          <button
+            className={`run-modal-tab ${tab === "diff" ? "active" : ""}`}
+            onClick={() => setTab("diff")}
+            disabled={!diffData?.diff}
+          >
+            Diff {diffData?.files?.length ? `(${diffData.files.length})` : ""}
+          </button>
+        </div>
+
+        {/* Tasks tab */}
+        {tab === "tasks" && (
+          <div className="run-modal-content">
+            {run.intent && (
+              <p className="run-modal-intent">{run.intent}</p>
+            )}
+            {tasks && tasks.length > 0 ? (
+              <div className="run-task-list">
+                {tasks.map((task, i) => (
+                  <div
+                    key={task.id}
+                    className={`run-task-row ${task.status === "failed" ? "failed" : ""} ${expandedTask === task.id ? "selected" : ""}`}
+                    onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                  >
+                    <div className="run-task-summary">
+                      <span className="run-task-index">{i}</span>
+                      <span className={`run-task-complexity complexity-${task.complexity}`}>{task.complexity}</span>
+                      <span className="run-task-title">{task.title}</span>
+                      <span className={`run-task-status status-${task.status}`}>{task.status.replace("_", " ")}</span>
+                      {task.result?.duration_seconds && (
+                        <span className="run-task-duration">{Math.round(task.result.duration_seconds)}s</span>
+                      )}
+                      {task.dependencies.length > 0 && (
+                        <span className="run-task-deps">→ [{task.dependencies.join(", ")}]</span>
+                      )}
+                    </div>
+                    {expandedTask === task.id && (
+                      <div className="run-task-detail">
+                        {task.description && <div className="run-task-description">{task.description}</div>}
+                        {task.error && <div className="run-task-error">{task.error}</div>}
+                        {task.agent_id && (
+                          <div className="run-task-meta-line">Agent: <code>{task.agent_id.slice(0, 12)}</code></div>
+                        )}
+                        {task.result?.stdout && (
+                          <details className="run-task-output">
+                            <summary>Output ({task.result.stdout.length} chars)</summary>
+                            <pre>{task.result.stdout}</pre>
+                          </details>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="run-modal-empty">No tasks yet. Start planning to generate the task graph.</p>
+            )}
+          </div>
+        )}
+
+        {/* Diff tab */}
+        {tab === "diff" && diffData && (
+          <div className="run-modal-content">
+            <DiffViewer runId={run.id} />
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────
 
 export function Runs({ teamId }: RunsProps) {
   useTeamSocket(teamId);
 
+  const [view, setView] = useState<"list" | "board">("board");
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [modalRun, setModalRun] = useState<Run | null>(null);
   const changeStatus = useChangeRunStatus(teamId);
   const { showToast } = useToast();
 
@@ -547,8 +824,26 @@ export function Runs({ teamId }: RunsProps) {
       {/* Command bar */}
       <CreateBar teamId={teamId} onCreated={() => {}} />
 
-      {/* Filters */}
+      {/* Toolbar */}
       <div className="runs-toolbar">
+        {/* View toggle */}
+        <div className="runs-view-toggle">
+          <button
+            className={`view-toggle-btn ${view === "list" ? "active" : ""}`}
+            onClick={() => setView("list")}
+            title="List view"
+          >
+            ☰
+          </button>
+          <button
+            className={`view-toggle-btn ${view === "board" ? "active" : ""}`}
+            onClick={() => setView("board")}
+            title="Board view"
+          >
+            ▦
+          </button>
+        </div>
+
         <div className="runs-filters">
           {FILTERS.map((f) => (
             <button
@@ -569,74 +864,63 @@ export function Runs({ teamId }: RunsProps) {
         />
       </div>
 
-      {/* Bulk actions */}
-      {selected.size > 0 && (
+      {/* Bulk actions (list view only) */}
+      {view === "list" && selected.size > 0 && (
         <div className="runs-bulk-bar">
           <span className="runs-bulk-count">{selected.size} selected</span>
-          <button
-            className="run-action-btn ghost"
-            onClick={() => {
-              selected.forEach((id) =>
-                changeStatus.mutate({ runId: id, status: "done" })
-              );
-              setSelected(new Set());
-              showToast(`${selected.size} runs marked done`, "success");
-            }}
-          >
+          <button className="run-action-btn ghost" onClick={() => { selected.forEach((id) => changeStatus.mutate({ runId: id, status: "done" })); setSelected(new Set()); showToast(`${selected.size} runs done`, "success"); }}>
             Mark Done
           </button>
-          <button
-            className="run-action-btn danger"
-            onClick={() => {
-              selected.forEach((id) =>
-                changeStatus.mutate({ runId: id, status: "cancelled" })
-              );
-              setSelected(new Set());
-              showToast(`${selected.size} runs cancelled`, "success");
-            }}
-          >
+          <button className="run-action-btn danger" onClick={() => { selected.forEach((id) => changeStatus.mutate({ runId: id, status: "cancelled" })); setSelected(new Set()); showToast(`${selected.size} cancelled`, "success"); }}>
             Cancel All
           </button>
-          <button
-            className="run-action-btn ghost"
-            onClick={() => setSelected(new Set())}
-          >
-            Clear
-          </button>
+          <button className="run-action-btn ghost" onClick={() => setSelected(new Set())}>Clear</button>
         </div>
       )}
 
-      {/* Run list */}
-      <div className="runs-list-v2">
-        {filtered.length === 0 ? (
-          <div className="runs-empty">
-            <p>{runs?.length ? "No matching runs." : "No runs yet."}</p>
-            {!runs?.length && (
-              <p className="runs-empty-hint">
-                Type what you want built above. Agents will plan, code, test, and open a PR.
-              </p>
-            )}
-          </div>
-        ) : (
-          filtered.map((r) => (
-            <div key={r.id} className="run-card-wrapper">
-              <input
-                type="checkbox"
-                className="run-select-checkbox"
-                checked={selected.has(r.id)}
-                onChange={(e) => {
-                  const next = new Set(selected);
-                  if (e.target.checked) next.add(r.id);
-                  else next.delete(r.id);
-                  setSelected(next);
-                }}
-                onClick={(e) => e.stopPropagation()}
-              />
-              <RunCard run={r} teamId={teamId} />
+      {/* Board view */}
+      {view === "board" && (
+        <RunBoard runs={filtered} onSelectRun={setModalRun} />
+      )}
+
+      {/* List view */}
+      {view === "list" && (
+        <div className="runs-list-v2">
+          {filtered.length === 0 ? (
+            <div className="runs-empty">
+              <p>{runs?.length ? "No matching runs." : "No runs yet."}</p>
+              {!runs?.length && (
+                <p className="runs-empty-hint">
+                  Type what you want built above. Agents will plan, code, test, and open a PR.
+                </p>
+              )}
             </div>
-          ))
-        )}
-      </div>
+          ) : (
+            filtered.map((r) => (
+              <div key={r.id} className="run-card-wrapper" onClick={() => setModalRun(r)}>
+                <input
+                  type="checkbox"
+                  className="run-select-checkbox"
+                  checked={selected.has(r.id)}
+                  onChange={(e) => {
+                    const next = new Set(selected);
+                    if (e.target.checked) next.add(r.id);
+                    else next.delete(r.id);
+                    setSelected(next);
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <RunCard run={r} teamId={teamId} />
+              </div>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Run detail modal */}
+      {modalRun && (
+        <RunModal run={modalRun} teamId={teamId} onClose={() => setModalRun(null)} />
+      )}
     </div>
   );
 }
