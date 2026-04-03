@@ -43,3 +43,28 @@ async def get_db() -> AsyncSession:
             yield session
         finally:
             await session.close()
+
+
+# ─── Redis singleton ─────────────────────────────────────
+
+_redis_client = None
+
+
+async def get_redis():
+    """Get or create a shared Redis client. Reuses connection across calls."""
+    global _redis_client
+    if _redis_client is None:
+        import redis.asyncio as aioredis
+        _redis_client = aioredis.from_url(
+            settings.redis_url,
+            decode_responses=False,
+        )
+    return _redis_client
+
+
+async def close_redis():
+    """Close the shared Redis client (call on app shutdown)."""
+    global _redis_client
+    if _redis_client:
+        await _redis_client.close()
+        _redis_client = None

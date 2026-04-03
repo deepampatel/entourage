@@ -1222,11 +1222,11 @@ class ExecutionLoop:
     ) -> None:
         """Publish event to Redis for real-time UI updates."""
         try:
-            redis = aioredis.from_url(settings.redis_url)
+            from openclaw.db.engine import get_redis
+            redis = await get_redis()
             await redis.publish(
                 f"openclaw:events:{team_id}",
                 json.dumps({"type": event_type, **data}),
             )
-            await redis.close()
         except Exception:
             logger.debug("Failed to publish to Redis", exc_info=True)
