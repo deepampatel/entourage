@@ -52,17 +52,21 @@
 
 /* ─── Kanban Board ────────────────────────────────────── */
 
+/* ─── Kanban Board — 4 columns, each independently scrollable ── */
+
 .kanban-board {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-  min-height: 400px;
-  align-items: start;
+  gap: 12px;
+  /* Fill remaining viewport height so columns can scroll */
+  height: calc(100vh - 100px);
+  align-items: stretch;
 }
 
 @media (max-width: 900px) {
   .kanban-board {
     grid-template-columns: repeat(2, 1fr);
+    height: auto;
   }
 }
 
@@ -74,59 +78,65 @@
 
 .kanban-column {
   min-width: 0;
-  background: var(--bg-inset, rgba(0,0,0,0.15));
-  border-radius: 8px;
-  padding: 0.5rem;
+  background: var(--bg-inset, rgba(0,0,0,0.08));
+  border-radius: var(--radius-md, 8px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Clip children to rounded corners */
 }
 
 .kanban-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.5rem 0.25rem;
-  margin-bottom: 0.5rem;
+  padding: 10px 12px 8px;
+  flex-shrink: 0;
 }
 
 .kanban-title {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
 }
 
 .kanban-count {
   font-size: 11px;
   color: var(--text-muted);
-  background: rgba(255,255,255,0.06);
-  padding: 2px 8px;
+  background: var(--bg-active, rgba(255,255,255,0.06));
+  padding: 1px 7px;
   border-radius: 10px;
   font-family: var(--font-mono);
 }
 
+/* Cards container — THIS is what scrolls per column */
 .kanban-cards {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 6px;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0; /* Needed for flex child to scroll */
 }
 
 /* ─── Kanban Card ─────────────────────────────────────── */
 
 .kanban-card {
   background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  padding: 0.75rem;
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px 12px;
   cursor: pointer;
-  transition: all var(--transition-fast, 150ms);
+  transition: all var(--transition-fast, 80ms);
+  box-shadow: var(--ring, 0 0 0 1px rgba(255,255,255,0.055));
+  flex-shrink: 0; /* Cards don't compress */
 }
 
 .kanban-card:hover {
-  border-color: var(--accent);
-  background: var(--bg-hover, rgba(255,255,255,0.03));
+  box-shadow: var(--ring-hover, 0 0 0 1px rgba(255,255,255,0.1));
 }
 
 .kanban-card.selected {
-  border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
 }
 
@@ -138,15 +148,18 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin-bottom: 4px;
+  line-height: 1.35;
+  /* Allow 2 lines before truncating */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .kanban-card-meta {
   display: flex;
-  gap: 0.4rem;
+  gap: 6px;
   align-items: center;
   flex-wrap: wrap;
   font-size: 11px;
@@ -155,6 +168,15 @@
 .kanban-card-role {
   font-size: 10px;
   color: var(--text-muted);
+}
+
+.kanban-card-run {
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .kanban-card-retry {
@@ -183,24 +205,25 @@
 .task-sidepanel-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--backdrop, rgba(0, 0, 0, 0.5));
   z-index: 100;
+  animation: fade-in 120ms ease;
 }
 
 .task-sidepanel {
   position: fixed;
   top: 0;
   right: 0;
-  width: 420px;
+  width: 440px;
   max-width: 90vw;
   height: 100vh;
   background: var(--bg-surface);
   border-left: 1px solid var(--border-default);
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-panel, -8px 0 32px rgba(0, 0, 0, 0.3));
   z-index: 101;
   overflow-y: auto;
-  padding: 1.5rem;
-  animation: sidepanel-in 200ms ease;
+  padding: 24px;
+  animation: sidepanel-in 200ms cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @keyframes sidepanel-in {

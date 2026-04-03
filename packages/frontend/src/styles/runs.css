@@ -165,28 +165,27 @@
 
 .run-card-v2 {
   background: var(--bg-surface);
-  border-radius: var(--radius-lg);
-  padding: 1.25rem 1.5rem;
-  box-shadow: var(--shadow-card);
+  border-radius: var(--radius-md, 8px);
+  padding: 16px 20px;
+  box-shadow: var(--ring, 0 0 0 1px rgba(255,255,255,0.055));
   transition: all var(--transition-normal);
-  border: 1px solid transparent;
 }
 
 .run-card-v2:hover {
-  box-shadow: var(--shadow-dropdown);
+  box-shadow: var(--ring-hover, 0 0 0 1px rgba(255,255,255,0.1));
 }
 
 .run-card-v2.active {
-  border-color: var(--semantic-blue-muted);
+  box-shadow: 0 0 0 1px var(--semantic-blue-muted);
 }
 
 .run-card-v2.needs-action {
-  border-color: var(--accent-muted);
+  box-shadow: 0 0 0 1px var(--accent-muted);
 }
 
 /* Card header */
 .run-card-top {
-  margin-bottom: 0.75rem;
+  margin-bottom: 10px;
 }
 
 .run-card-title-row {
@@ -197,7 +196,7 @@
 }
 
 .run-card-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-heading);
   line-height: 1.4;
@@ -235,7 +234,7 @@
 
 /* Task pills */
 .run-card-tasks {
-  margin-bottom: 0.75rem;
+  margin-bottom: 10px;
 }
 
 .task-pills {
