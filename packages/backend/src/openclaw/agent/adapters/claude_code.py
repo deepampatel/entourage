@@ -412,11 +412,23 @@ Begin by checking your inbox for the review request.
                 prompt, config, claude_bin, config_path, config_dir
             )
         except Exception as e:
+            import asyncio as _aio
             import logging
             logger = logging.getLogger("openclaw.agent.adapters.claude_code")
             logger.warning(
                 "Tmux runtime failed (%s), falling back to --print mode", e,
             )
+            # Kill orphaned tmux session from the failed interactive run
+            session_name = f"eo-task-{config.task_id}"
+            try:
+                proc = await _aio.create_subprocess_exec(
+                    "tmux", "kill-session", "-t", session_name,
+                    stdout=_aio.subprocess.DEVNULL,
+                    stderr=_aio.subprocess.DEVNULL,
+                )
+                await proc.wait()
+            except Exception:
+                pass
             # Fall back to --print subprocess
             try:
                 return await self._run_print_mode(
@@ -527,8 +539,8 @@ Begin by checking your inbox for the review request.
         except (FileNotFoundError, OSError):
             output = await runtime.read_output(rt_session, 500)
 
-        # Don't clean up MCP config yet — caller may need output_path
-        # self._cleanup_mcp_config(config_path, config_dir)
+        # Clean up temp files (output already read above)
+        self._cleanup_mcp_config(config_path, config_dir)
 
         return AdapterResult(
             exit_code=0,
