@@ -1,6 +1,7 @@
 /* ─── Runs Page v2 — Vercel-style cards ──────────────── */
 
 .runs-page-v2 {
+  width: 100%;
   max-width: 100%;
 }
 
@@ -160,7 +161,7 @@
 .runs-list-v2 {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .run-card-v2 {
@@ -696,6 +697,11 @@
   display: flex;
   gap: 8px;
   align-items: flex-start;
+}
+
+.run-card-wrapper .run-card-v2 {
+  flex: 1;
+  min-width: 0;
 }
 
 .run-select-checkbox {
