@@ -295,8 +295,11 @@ class RunService:
         run.task_graph = task_graph
         flag_modified(run, "task_graph")
 
-        # Create RunTask rows from the task_graph
+        # Validate task graph dependencies
         tasks_data = task_graph.get("tasks", [])
+        self._validate_dependencies(tasks_data)
+
+        # Create RunTask rows from the task_graph
         for i, t in enumerate(tasks_data):
             ptask = RunTask(
                 run_id=run_id,
@@ -312,6 +315,42 @@ class RunService:
 
         await self.db.commit()
         return run
+
+    @staticmethod
+    def _validate_dependencies(tasks: list[dict]) -> None:
+        """Validate task graph: no invalid indices, no cycles."""
+        n = len(tasks)
+
+        for i, t in enumerate(tasks):
+            for dep in t.get("dependencies", []):
+                if not isinstance(dep, int) or dep < 0 or dep >= n:
+                    raise ValueError(
+                        f"Task {i} ('{t.get('title', '')}') has invalid dependency "
+                        f"index {dep}. Must be 0-{n-1}."
+                    )
+                if dep == i:
+                    raise ValueError(
+                        f"Task {i} depends on itself."
+                    )
+
+        # Cycle detection via DFS
+        WHITE, GRAY, BLACK = 0, 1, 2
+        color = [WHITE] * n
+
+        def dfs(node: int) -> None:
+            color[node] = GRAY
+            for dep in tasks[node].get("dependencies", []):
+                if color[dep] == GRAY:
+                    raise ValueError(
+                        f"Circular dependency: task {node} → task {dep}"
+                    )
+                if color[dep] == WHITE:
+                    dfs(dep)
+            color[node] = BLACK
+
+        for i in range(n):
+            if color[i] == WHITE:
+                dfs(i)
 
     # ─── Cost tracking ───────────────────────────────────
 
