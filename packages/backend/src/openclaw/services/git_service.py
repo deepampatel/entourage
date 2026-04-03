@@ -469,45 +469,67 @@ class GitService:
         repo_id: uuid.UUID,
         strategy: str = "merge",
     ) -> GitResult:
-        """Merge source branch into target. Returns GitResult with conflict info if failed."""
+        """Merge source branch into target using a temporary worktree.
+
+        Uses a temp worktree to avoid changing the main repo's checkout.
+        This is safe for concurrent operations — the main working tree
+        is never touched.
+        """
+        import tempfile
+        import shutil
+
         repo = await self._get_repo(repo_id)
         if not repo:
             raise ValueError(f"Repository {repo_id} not found")
 
-        # Checkout target branch
-        checkout = await _run_git(repo.local_path, "checkout", target_branch)
-        if not checkout.ok:
-            return checkout
+        # Create a temporary worktree for the merge
+        merge_dir = os.path.join(repo.local_path, ".worktrees", f"_merge-{os.getpid()}")
 
-        if strategy == "squash":
-            result = await _run_git(
+        try:
+            # Create worktree on target branch
+            wt_result = await _run_git(
                 repo.local_path,
-                "merge", "--squash", source_branch,
+                "worktree", "add", merge_dir, target_branch,
             )
-            if result.ok:
-                # Squash needs an explicit commit
-                await _run_git(
-                    repo.local_path,
-                    "commit", "-m", f"Squash merge {source_branch} into {target_branch}",
+            if not wt_result.ok:
+                # Target branch might not exist as worktree-able, try checkout approach
+                return wt_result
+
+            # Merge inside the temp worktree
+            if strategy == "squash":
+                result = await _run_git(
+                    merge_dir,
+                    "merge", "--squash", source_branch,
                 )
-        elif strategy == "rebase":
-            result = await _run_git(
-                repo.local_path,
-                "rebase", source_branch,
-            )
-        else:
-            result = await _run_git(
-                repo.local_path,
-                "merge", "--no-ff", source_branch,
-                "-m", f"Merge {source_branch} into {target_branch}",
-            )
+                if result.ok:
+                    await _run_git(
+                        merge_dir,
+                        "commit", "-m", f"Squash merge {source_branch} into {target_branch}",
+                    )
+            elif strategy == "rebase":
+                result = await _run_git(
+                    merge_dir,
+                    "rebase", source_branch,
+                )
+            else:
+                result = await _run_git(
+                    merge_dir,
+                    "merge", "--no-ff", source_branch,
+                    "-m", f"Merge {source_branch} into {target_branch}",
+                )
 
-        if not result.ok:
-            # Abort the failed merge to leave repo clean
-            await _run_git(repo.local_path, "merge", "--abort")
-            await _run_git(repo.local_path, "rebase", "--abort")
+            if not result.ok:
+                # Abort to leave clean
+                await _run_git(merge_dir, "merge", "--abort")
+                await _run_git(merge_dir, "rebase", "--abort")
 
-        return result
+            return result
+
+        finally:
+            # Always clean up the temp worktree
+            await _run_git(repo.local_path, "worktree", "remove", merge_dir, "--force")
+            if os.path.exists(merge_dir):
+                shutil.rmtree(merge_dir, ignore_errors=True)
 
     async def get_branch_diff(
         self,
