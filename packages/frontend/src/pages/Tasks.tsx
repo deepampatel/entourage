@@ -5,9 +5,10 @@
  * Click a card → sidebar panel slides in with full details.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useRuns, useAllRunTasks } from "../hooks/useApi";
 import { useTeamSocket } from "../hooks/useTeamSocket";
+import { useEscapeKey } from "../hooks/useKeyboard";
 import type { Run, RunTask } from "../api/types";
 
 interface TasksProps {
@@ -304,6 +305,9 @@ export function Tasks({ teamId }: TasksProps) {
 
   const { data: runs, isLoading: runsLoading } = useRuns(teamId);
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
+
+  // Escape closes sidebar
+  useEscapeKey(useCallback(() => setSelectedTaskId(null), []));
 
   // Get all non-draft run IDs
   const activeRuns = useMemo(

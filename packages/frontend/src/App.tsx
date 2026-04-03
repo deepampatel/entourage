@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Routes, Route, NavLink, Navigate } from "react-router-dom";
 import { getToken, clearToken } from "./api/client";
 import { useOrgs, useTeams } from "./hooks/useApi";
+import { useGlobalKeyboard } from "./hooks/useKeyboard";
 import { Analytics } from "./pages/Analytics";
 import { Dashboard } from "./pages/Dashboard";
 import { HumanRequests } from "./pages/HumanRequests";
@@ -87,6 +88,9 @@ function AuthenticatedApp() {
   if (teams?.length && !teamId) {
     setTeamId(teams[teams.length - 1].id);
   }
+
+  // Keyboard shortcuts (g+d=Dashboard, g+r=Runs, /=search, Escape=close)
+  useGlobalKeyboard();
 
   const handleLogout = () => {
     clearToken();
