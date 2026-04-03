@@ -6,7 +6,7 @@
  * Team selection is managed via local state.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Routes, Route, NavLink, Navigate } from "react-router-dom";
 import { getToken, clearToken } from "./api/client";
 import { useOrgs, useTeams } from "./hooks/useApi";
@@ -81,13 +81,18 @@ function AuthenticatedApp() {
     }
   });
 
-  // Auto-select first org, last team (most recently created = most active)
-  if (orgs?.length && !orgId) {
-    setOrgId(orgs[0].id);
-  }
-  if (teams?.length && !teamId) {
-    setTeamId(teams[teams.length - 1].id);
-  }
+  // Auto-select first org, last team (in useEffect, not during render)
+  useEffect(() => {
+    if (orgs?.length && !orgId) {
+      setOrgId(orgs[0].id);
+    }
+  }, [orgs, orgId]);
+
+  useEffect(() => {
+    if (teams?.length && !teamId) {
+      setTeamId(teams[teams.length - 1].id);
+    }
+  }, [teams, teamId]);
 
   // Keyboard shortcuts (g+d=Dashboard, g+r=Runs, /=search, Escape=close)
   useGlobalKeyboard();
