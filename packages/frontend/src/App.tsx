@@ -191,7 +191,7 @@ function AuthenticatedApp() {
               />
               <Route
                 path="/settings"
-                element={<Settings teamId={teamId} />}
+                element={<Settings teamId={teamId} orgId={orgId} />}
               />
               <Route path="*" element={<Navigate to="/runs" replace />} />
             </>

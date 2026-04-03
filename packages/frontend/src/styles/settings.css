@@ -219,3 +219,32 @@
 .allowlist-add-btn:hover {
   background: var(--accent-hover);
 }
+
+/* ─── Unified Settings Tabs ───────────────────────────── */
+
+.settings-unified {
+  width: 100%;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-default);
+  margin-bottom: 24px;
+}
+
+.settings-tab {
+  padding: 8px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  font-family: var(--font-ui);
+  transition: all 80ms;
+}
+
+.settings-tab:hover { color: var(--text-primary); }
+.settings-tab.active { color: var(--accent); border-bottom-color: var(--accent); }

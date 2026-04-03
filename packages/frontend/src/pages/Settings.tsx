@@ -6,7 +6,7 @@
  * Phase 3D adds a Security section for network allowlist and security mode.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useTeamSettings, useUpdateTeamSettings } from "../hooks/useApi";
 import { useToast } from "../components/Toast";
 import "../styles/settings.css";
@@ -15,7 +15,7 @@ interface SettingsProps {
   teamId: string;
 }
 
-export function Settings({ teamId }: SettingsProps) {
+function TeamConfig({ teamId }: SettingsProps) {
   const { data: teamSettings, isLoading } = useTeamSettings(teamId);
   const updateMut = useUpdateTeamSettings(teamId);
   const { showToast } = useToast();
@@ -243,6 +243,49 @@ export function Settings({ teamId }: SettingsProps) {
           )}
         </div>
       </form>
+    </div>
+  );
+}
+
+// ─── Unified Settings Page (Config + Agents + Repos) ──
+
+// Lazy load Manage to avoid circular deps
+const ManageLazy = lazy(() =>
+  import("./Manage").then((m) => ({ default: m.Manage }))
+);
+
+interface UnifiedSettingsProps {
+  teamId: string;
+  orgId: string;
+}
+
+export function Settings({ teamId, orgId }: UnifiedSettingsProps) {
+  const [tab, setTab] = useState<"config" | "agents">("agents");
+
+  return (
+    <div className="settings-unified">
+      <div className="settings-tabs">
+        <button
+          className={`settings-tab ${tab === "agents" ? "active" : ""}`}
+          onClick={() => setTab("agents")}
+        >
+          Agents & Repos
+        </button>
+        <button
+          className={`settings-tab ${tab === "config" ? "active" : ""}`}
+          onClick={() => setTab("config")}
+        >
+          Configuration
+        </button>
+      </div>
+
+      {tab === "agents" && (
+        <Suspense fallback={<div className="loading">Loading...</div>}>
+          <ManageLazy orgId={orgId} />
+        </Suspense>
+      )}
+
+      {tab === "config" && <TeamConfig teamId={teamId} />}
     </div>
   );
 }
