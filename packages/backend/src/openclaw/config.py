@@ -57,9 +57,9 @@ class Settings(BaseSettings):
     agent_timeout_seconds: int = 1800  # 30 min default
 
     # Run execution
-    max_concurrent_run_tasks: int = 4
+    max_concurrent_run_tasks: int = 20  # Was 4 — bottleneck for parallel agents
     task_polling_interval_seconds: float = 10.0
-    max_task_retries: int = 2
+    max_task_retries: int = 3  # Was 2 — one more retry before failing
 
     # Agent memory + context
     context_rotation_threshold_tokens: int = 150_000
