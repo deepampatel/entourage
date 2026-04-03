@@ -14,6 +14,46 @@ interface WSEvent {
   [key: string]: unknown;
 }
 
+// ─── Grouped notifications (batch within 3s window) ──
+
+const pendingNotifications: { type: string; title: string }[] = [];
+let notifyTimer: number | undefined;
+
+function queueNotification(type: string, title: string) {
+  pendingNotifications.push({ type, title });
+
+  if (notifyTimer) clearTimeout(notifyTimer);
+  notifyTimer = window.setTimeout(() => {
+    if (Notification.permission !== "granted" || !pendingNotifications.length) {
+      pendingNotifications.length = 0;
+      return;
+    }
+
+    const completed = pendingNotifications.filter((n) => n.type === "completed");
+    const failed = pendingNotifications.filter((n) => n.type === "failed");
+
+    if (completed.length + failed.length === 1) {
+      // Single notification
+      const n = pendingNotifications[0];
+      new Notification(
+        n.type === "completed" ? "Run completed" : "Run failed",
+        { body: n.title, icon: "/favicon.ico" }
+      );
+    } else {
+      // Grouped notification
+      const parts: string[] = [];
+      if (completed.length) parts.push(`${completed.length} completed`);
+      if (failed.length) parts.push(`${failed.length} failed`);
+      new Notification(
+        `${pendingNotifications.length} runs finished`,
+        { body: parts.join(", "), icon: "/favicon.ico" }
+      );
+    }
+
+    pendingNotifications.length = 0;
+  }, 3000);
+}
+
 export function useTeamSocket(teamId: string | undefined) {
   const queryClient = useQueryClient();
   const wsRef = useRef<WebSocket | null>(null);
@@ -86,28 +126,15 @@ export function useTeamSocket(teamId: string | undefined) {
             queryClient.invalidateQueries({ queryKey: ["costs", teamId] });
             break;
 
-          // Run lifecycle events
+          // Run lifecycle events — group notifications
           case "run.completed":
-            queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
-            queryClient.invalidateQueries({ queryKey: ["run-tasks"] });
-            // Browser notification
-            if (Notification.permission === "granted") {
-              new Notification("Run completed", {
-                body: `${(msg.title as string) || "A run"} finished successfully`,
-                icon: "/favicon.ico",
-              });
-            }
-            break;
-
           case "run.failed":
             queryClient.invalidateQueries({ queryKey: ["runs", teamId] });
             queryClient.invalidateQueries({ queryKey: ["run-tasks"] });
-            if (Notification.permission === "granted") {
-              new Notification("Run failed", {
-                body: `${(msg.title as string) || "A run"} has failed tasks`,
-                icon: "/favicon.ico",
-              });
-            }
+            queueNotification(
+              msg.type === "run.completed" ? "completed" : "failed",
+              (msg.title as string) || "A run"
+            );
             break;
 
           case "run.task_completed":
