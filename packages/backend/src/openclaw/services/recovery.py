@@ -38,6 +38,8 @@ class RecoveryReport:
     tasks_reset: int = 0
     sessions_closed: int = 0
     runs_failed: int = 0
+    worktrees_cleaned: int = 0
+    tmux_sessions_cleaned: int = 0
     errors: list[str] = field(default_factory=list)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -93,6 +95,8 @@ class RecoveryManager:
             await self._recover_stuck_agents(report, dry_run)
             await self._recover_orphaned_tasks(report, dry_run)
             await self._recover_stuck_runs(report, dry_run)
+            await self._cleanup_orphaned_worktrees(report, dry_run)
+            await self._cleanup_orphaned_tmux(report, dry_run)
 
         except Exception as e:
             report.errors.append(str(e))
@@ -329,3 +333,84 @@ class RecoveryManager:
 
             if not dry_run:
                 await db.commit()
+
+    # ─── Orphaned worktrees ────────────────────────────────────
+
+    async def _cleanup_orphaned_worktrees(
+        self, report: RecoveryReport, dry_run: bool
+    ):
+        """Clean up worktrees from failed/cancelled tasks."""
+        from openclaw.db.models import Repository
+        from openclaw.services.git_service import GitService
+
+        async with self._session_factory() as db:
+            # Find tasks that are done/failed/cancelled with branch names
+            result = await db.execute(
+                select(RunTask).where(
+                    RunTask.status.in_(["failed", "cancelled"]),
+                    RunTask.branch_name != "",
+                    RunTask.branch_name.isnot(None),
+                )
+            )
+            dead_tasks = list(result.scalars().all())
+
+            git_svc = GitService(db)
+            for task in dead_tasks:
+                run = await db.get(Run, task.run_id)
+                if not run or not run.repository_id:
+                    continue
+
+                try:
+                    if dry_run:
+                        report.worktrees_cleaned += 1
+                    else:
+                        removed = await git_svc.remove_run_worktree(
+                            task.branch_name, run.repository_id,
+                        )
+                        if removed:
+                            report.worktrees_cleaned += 1
+                except Exception:
+                    pass  # Best effort
+
+        if report.worktrees_cleaned:
+            logger.info(
+                "Cleaned %d orphaned worktrees", report.worktrees_cleaned,
+            )
+
+    # ─── Orphaned tmux sessions ────────────────────────────────
+
+    async def _cleanup_orphaned_tmux(
+        self, report: RecoveryReport, dry_run: bool
+    ):
+        """Kill tmux sessions left by crashed agents."""
+        import asyncio
+
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "tmux", "list-sessions", "-F", "#{session_name}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            stdout, _ = await proc.communicate()
+            sessions = stdout.decode().strip().split("\n") if stdout else []
+
+            for name in sessions:
+                if name.startswith("eo-task-"):
+                    if dry_run:
+                        report.tmux_sessions_cleaned += 1
+                    else:
+                        kill = await asyncio.create_subprocess_exec(
+                            "tmux", "kill-session", "-t", name,
+                            stdout=asyncio.subprocess.DEVNULL,
+                            stderr=asyncio.subprocess.DEVNULL,
+                        )
+                        await kill.wait()
+                        report.tmux_sessions_cleaned += 1
+
+            if report.tmux_sessions_cleaned:
+                logger.info(
+                    "Cleaned %d orphaned tmux sessions",
+                    report.tmux_sessions_cleaned,
+                )
+        except Exception:
+            pass  # tmux might not be installed
