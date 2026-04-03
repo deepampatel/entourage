@@ -15,13 +15,17 @@ from sqlalchemy.ext.asyncio import (
 
 from openclaw.config import settings
 
-# Connection pool: min 5, max 20 connections.
-# echo=True in dev to see SQL queries.
+# Connection pool sized for concurrent agents.
+# pool_size = base connections kept open
+# max_overflow = extra connections under load (total = pool_size + max_overflow)
+# pool_pre_ping = verify connection is alive before checkout (prevents stale conn errors)
 engine = create_async_engine(
     settings.database_url,
     echo=settings.debug,
-    pool_size=5,
-    max_overflow=15,
+    pool_size=max(settings.max_concurrent_agents // 2, 10),  # 16 for 32 agents
+    max_overflow=max(settings.max_concurrent_agents, 20),    # 32 overflow
+    pool_pre_ping=True,
+    pool_recycle=1800,  # Recycle connections after 30 min (prevents DB timeout)
 )
 
 # Session factory — each request gets its own session.
