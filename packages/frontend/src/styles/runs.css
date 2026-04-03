@@ -690,3 +690,38 @@
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* ─── Batch Selection ─────────────────────────────────── */
+
+.run-card-wrapper {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.run-select-checkbox {
+  margin-top: 20px;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.runs-bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--accent-muted);
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: 12px;
+  animation: slide-up 120ms ease;
+}
+
+.runs-bulk-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent, #2383e2);
+  margin-right: 8px;
+}

@@ -524,6 +524,9 @@ export function Runs({ teamId }: RunsProps) {
 
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const changeStatus = useChangeRunStatus(teamId);
+  const { showToast } = useToast();
 
   const { data: runs, isLoading } = useRuns(
     teamId,
@@ -566,6 +569,43 @@ export function Runs({ teamId }: RunsProps) {
         />
       </div>
 
+      {/* Bulk actions */}
+      {selected.size > 0 && (
+        <div className="runs-bulk-bar">
+          <span className="runs-bulk-count">{selected.size} selected</span>
+          <button
+            className="run-action-btn ghost"
+            onClick={() => {
+              selected.forEach((id) =>
+                changeStatus.mutate({ runId: id, status: "done" })
+              );
+              setSelected(new Set());
+              showToast(`${selected.size} runs marked done`, "success");
+            }}
+          >
+            Mark Done
+          </button>
+          <button
+            className="run-action-btn danger"
+            onClick={() => {
+              selected.forEach((id) =>
+                changeStatus.mutate({ runId: id, status: "cancelled" })
+              );
+              setSelected(new Set());
+              showToast(`${selected.size} runs cancelled`, "success");
+            }}
+          >
+            Cancel All
+          </button>
+          <button
+            className="run-action-btn ghost"
+            onClick={() => setSelected(new Set())}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       {/* Run list */}
       <div className="runs-list-v2">
         {filtered.length === 0 ? (
@@ -578,7 +618,23 @@ export function Runs({ teamId }: RunsProps) {
             )}
           </div>
         ) : (
-          filtered.map((r) => <RunCard key={r.id} run={r} teamId={teamId} />)
+          filtered.map((r) => (
+            <div key={r.id} className="run-card-wrapper">
+              <input
+                type="checkbox"
+                className="run-select-checkbox"
+                checked={selected.has(r.id)}
+                onChange={(e) => {
+                  const next = new Set(selected);
+                  if (e.target.checked) next.add(r.id);
+                  else next.delete(r.id);
+                  setSelected(next);
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+              <RunCard run={r} teamId={teamId} />
+            </div>
+          ))
         )}
       </div>
     </div>
