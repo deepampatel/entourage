@@ -630,7 +630,7 @@ function RunModal({
   const [tab, setTab] = useState<"tasks" | "diff">("tasks");
   const { data: tasks } = useRunTasks(run.id);
   const { data: diffData } = useRunDiff(
-    run.status === "reviewing" && run.repository_id ? run.id : undefined
+    run.repository_id ? run.id : undefined
   );
   const approvePlan = useApprovePlan(teamId);
   const rejectPlan = useRejectPlan(teamId);
@@ -670,19 +670,25 @@ function RunModal({
           )}
         </div>
 
-        {/* Actions */}
+        {/* Actions — close modal after mutation so board refreshes */}
         <div className="run-modal-actions">
           {status === "draft" && (
-            <button className="run-action-btn primary" onClick={() => { startRun.mutate(run.id); showToast("Planning started", "success"); }}>
+            <button className="run-action-btn primary" onClick={() => {
+              startRun.mutate(run.id, { onSuccess: () => { showToast("Planning started", "success"); onClose(); } });
+            }}>
               Start Planning
             </button>
           )}
           {status === "awaiting_plan_approval" && (
             <>
-              <button className="run-action-btn primary" onClick={() => { approvePlan.mutate(run.id); showToast("Approved", "success"); }}>
+              <button className="run-action-btn primary" onClick={() => {
+                approvePlan.mutate(run.id, { onSuccess: () => { showToast("Approved — agents working", "success"); onClose(); } });
+              }}>
                 Approve & Execute
               </button>
-              <button className="run-action-btn ghost" onClick={() => rejectPlan.mutate({ runId: run.id })}>
+              <button className="run-action-btn ghost" onClick={() => {
+                rejectPlan.mutate({ runId: run.id }, { onSuccess: () => { showToast("Plan rejected", "success"); onClose(); } });
+              }}>
                 Reject
               </button>
             </>
@@ -691,27 +697,37 @@ function RunModal({
             <>
               {run.repository_id ? (
                 <>
-                  <button className="run-action-btn primary" onClick={() => { mergeRun.mutate({ runId: run.id }); showToast("Merged", "success"); }}>
+                  <button className="run-action-btn primary" onClick={() => {
+                    mergeRun.mutate({ runId: run.id }, { onSuccess: () => { showToast("Merged to main", "success"); onClose(); } });
+                  }}>
                     Approve & Merge
                   </button>
-                  <button className="run-action-btn ghost" onClick={() => { mergeRun.mutate({ runId: run.id, create_pr: true }); showToast("PR creating", "success"); }}>
+                  <button className="run-action-btn ghost" onClick={() => {
+                    mergeRun.mutate({ runId: run.id, create_pr: true }, { onSuccess: () => { showToast("PR created", "success"); onClose(); } });
+                  }}>
                     Create PR
                   </button>
                 </>
               ) : (
-                <button className="run-action-btn primary" onClick={() => { changeStatus.mutate({ runId: run.id, status: "done" }); showToast("Done", "success"); }}>
+                <button className="run-action-btn primary" onClick={() => {
+                  changeStatus.mutate({ runId: run.id, status: "done" }, { onSuccess: () => { showToast("Done", "success"); onClose(); } });
+                }}>
                   Mark Done
                 </button>
               )}
             </>
           )}
           {status === "failed" && (
-            <button className="run-action-btn ghost" onClick={() => changeStatus.mutate({ runId: run.id, status: "draft" })}>
+            <button className="run-action-btn ghost" onClick={() => {
+              changeStatus.mutate({ runId: run.id, status: "draft" }, { onSuccess: () => { showToast("Reset to draft", "success"); onClose(); } });
+            }}>
               Retry
             </button>
           )}
           {["executing", "reviewing", "failed"].includes(status) && (
-            <button className="run-action-btn danger" onClick={() => { changeStatus.mutate({ runId: run.id, status: "cancelled" }); onClose(); }}>
+            <button className="run-action-btn danger" onClick={() => {
+              changeStatus.mutate({ runId: run.id, status: "cancelled" }, { onSuccess: () => { showToast("Cancelled", "success"); onClose(); } });
+            }}>
               Cancel
             </button>
           )}
