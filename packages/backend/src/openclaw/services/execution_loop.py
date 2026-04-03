@@ -17,8 +17,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-import redis.asyncio as aioredis
-
 from sqlalchemy import select, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -410,14 +408,16 @@ class ExecutionLoop:
                         "reason": "Budget exceeded",
                     }
 
-                # Event-driven wait: sleep until wakeup signal OR timeout
+                # Adaptive polling: fast when tasks are running, slow when idle
+                has_running = len(running) > 0
+                poll_timeout = 1.0 if has_running else settings.task_polling_interval_seconds
+
                 self._wakeup.clear()
                 try:
                     await asyncio.wait_for(
                         self._wakeup.wait(),
-                        timeout=settings.task_polling_interval_seconds,
+                        timeout=poll_timeout,
                     )
-                    logger.debug("Run %s: woken by task completion event", run_id)
                 except asyncio.TimeoutError:
                     pass  # Normal polling fallback
 

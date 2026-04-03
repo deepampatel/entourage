@@ -407,7 +407,7 @@ async def merge_run(
     git_svc = GitService(db)
 
     if body.create_pr:
-        # Push and create PR
+        # Push feature branch
         push_result = await git_svc.push_branch_by_name(
             run.branch_name, run.repository_id,
         )
@@ -416,9 +416,45 @@ async def merge_run(
                 status_code=500,
                 detail=f"Push failed: {push_result.stderr}",
             )
-        # TODO: call PRService to create PR via gh CLI
-        await svc.change_status(run_id, "merging")
-        return {"status": "pr_creating", "branch": run.branch_name}
+
+        # Create PR via gh CLI
+        import shutil
+        if not shutil.which("gh"):
+            raise HTTPException(
+                status_code=500,
+                detail="gh CLI not installed — install from https://cli.github.com",
+            )
+
+        pr_proc = await asyncio.create_subprocess_exec(
+            "gh", "pr", "create",
+            "--title", run.title,
+            "--body", f"Created by Entourage run {str(run_id)[:8]}\n\n{run.intent or ''}",
+            "--base", repo.default_branch,
+            "--head", run.branch_name,
+            cwd=repo.local_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        pr_stdout, pr_stderr = await asyncio.wait_for(
+            pr_proc.communicate(), timeout=30.0,
+        )
+        pr_result_ok = pr_proc.returncode == 0
+        pr_result_stdout = pr_stdout.decode().strip() if pr_stdout else ""
+        pr_result_stderr = pr_stderr.decode().strip() if pr_stderr else ""
+
+        if pr_result_ok:
+            pr_url = pr_result_stdout
+            run.pr_url = pr_url
+            await db.commit()
+            await svc.change_status(run_id, "merging")
+            return {"status": "pr_created", "pr_url": pr_url, "branch": run.branch_name}
+        else:
+            await svc.change_status(run_id, "merging")
+            return {
+                "status": "pr_failed",
+                "error": pr_result_stderr,
+                "branch": run.branch_name,
+            }
     else:
         # Direct merge to main
         merge_result = await git_svc.merge_branch(

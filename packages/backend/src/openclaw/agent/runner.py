@@ -20,7 +20,7 @@ import uuid as _uuid
 from pathlib import Path
 from typing import Optional
 
-import redis.asyncio as aioredis
+
 
 from openclaw.agent.adapters import AdapterConfig, get_adapter
 from openclaw.config import settings
