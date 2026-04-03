@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import redis.asyncio as aioredis
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -366,7 +365,8 @@ class ReactionEngine:
 
         # Publish to Redis for real-time UI
         try:
-            redis = aioredis.from_url(settings.redis_url)
+            from openclaw.db.engine import get_redis
+            redis = await get_redis()
             await redis.publish(
                 f"openclaw:events:{team_id}",
                 json.dumps({
@@ -421,7 +421,8 @@ class ReactionEngine:
 
         # Publish notification
         try:
-            redis = aioredis.from_url(settings.redis_url)
+            from openclaw.db.engine import get_redis
+            redis = await get_redis()
             await redis.publish(
                 f"openclaw:events:{team_id}",
                 json.dumps({
