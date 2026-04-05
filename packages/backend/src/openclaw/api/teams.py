@@ -126,6 +126,51 @@ async def update_agent(
 # ─── Repositories ───────────────────────────────────────
 
 
+@router.get("/repos/scan")
+async def scan_for_repos(
+    db: AsyncSession = Depends(get_db),
+):
+    """Scan common directories for git repos. Returns list of discovered repos."""
+    import os
+    import asyncio
+
+    home = os.path.expanduser("~")
+    scan_dirs = [
+        os.path.join(home, "Documents", "GitHub"),
+        os.path.join(home, "projects"),
+        os.path.join(home, "code"),
+        os.path.join(home, "repos"),
+        os.path.join(home, "dev"),
+        os.path.join(home, "src"),
+        os.path.join(home, "workspace"),
+        os.path.join(home, "Desktop"),
+    ]
+
+    found = []
+    for scan_dir in scan_dirs:
+        if not os.path.isdir(scan_dir):
+            continue
+        try:
+            for entry in os.scandir(scan_dir):
+                if entry.is_dir() and os.path.isdir(os.path.join(entry.path, ".git")):
+                    # It's a git repo
+                    from openclaw.services.git_service import GitService
+                    git_svc = GitService(db)
+                    info = await git_svc.validate_repo(entry.path)
+                    if info["valid"]:
+                        found.append({
+                            "name": entry.name,
+                            "path": entry.path,
+                            "default_branch": info["default_branch"],
+                            "remote_url": info["remote_url"],
+                            "is_dirty": info["is_dirty"],
+                        })
+        except PermissionError:
+            continue
+
+    return found
+
+
 @router.post("/repos/validate")
 async def validate_repo_path(
     body: dict,

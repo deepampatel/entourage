@@ -13,7 +13,7 @@ import {
   useUpdateAgent,
   useRepos,
   useRegisterRepo,
-  useValidateRepo,
+  useScanRepos,
 } from "../hooks/useApi";
 import { useToast } from "../components/Toast";
 import type { Agent } from "../api/types";
@@ -198,95 +198,93 @@ function CreateAgentForm({ teamId }: { teamId: string }) {
 
 // ─── Register Repo Form ────────────────────────────────
 
-function RegisterRepoForm({ teamId }: { teamId: string }) {
-  const [name, setName] = useState("");
-  const [localPath, setLocalPath] = useState("");
-  const [validated, setValidated] = useState<{
-    valid: boolean;
-    default_branch: string | null;
-    is_dirty: boolean;
-    remote_url: string | null;
-    error: string | null;
-  } | null>(null);
-  const validateRepo = useValidateRepo();
-  const [branch, setBranch] = useState("main");
+function RegisterRepoForm({ teamId, existingRepoNames }: { teamId: string; existingRepoNames: string[] }) {
+  const { data: scannedRepos, isLoading: scanning } = useScanRepos();
   const registerRepo = useRegisterRepo(teamId);
   const { showToast } = useToast();
+  const [showManual, setShowManual] = useState(false);
+  const [manualPath, setManualPath] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !localPath.trim()) return;
+  const handleAdd = (repo: { name: string; path: string; default_branch: string | null }) => {
     registerRepo.mutate(
-      { name: name.trim(), local_path: localPath.trim(), default_branch: branch.trim() || "main" },
       {
-        onSuccess: () => {
-          setName("");
-          setLocalPath("");
-          setBranch("main");
-          showToast("Repository registered!", "success");
-        },
+        name: repo.name,
+        local_path: repo.path,
+        default_branch: repo.default_branch || "main",
+      },
+      {
+        onSuccess: () => showToast(`${repo.name} added!`, "success"),
       }
     );
   };
 
-  const handleValidate = () => {
-    if (!localPath.trim()) return;
-    validateRepo.mutate(
-      { local_path: localPath.trim() },
-      {
-        onSuccess: (data) => {
-          setValidated(data);
-          if (data.valid && data.default_branch) {
-            setBranch(data.default_branch);
-          }
-          if (data.valid && !name) {
-            // Auto-fill name from path
-            const parts = localPath.trim().split("/");
-            setName(parts[parts.length - 1] || "");
-          }
-        },
-      }
-    );
-  };
+  // Filter out repos already registered
+  const available = scannedRepos?.filter(
+    (r) => !existingRepoNames.includes(r.name)
+  );
 
   return (
     <div>
-      <form className="manage-form manage-repo-form" onSubmit={handleSubmit}>
-        <input type="text" placeholder="Local path (e.g. /home/user/project)" value={localPath}
-          onChange={(e) => { setLocalPath(e.target.value); setValidated(null); }}
-          className="manage-input" />
-        <button type="button" className="manage-btn manage-btn-secondary"
-          onClick={handleValidate} disabled={validateRepo.isPending || !localPath.trim()}>
-          {validateRepo.isPending ? "Checking..." : "Validate"}
-        </button>
-      </form>
+      {/* Auto-discovered repos */}
+      {scanning && <p className="form-help">Scanning for repos...</p>}
 
-      {validated && (
-        <div className={`repo-validation ${validated.valid ? "valid" : "invalid"}`}>
-          {validated.valid ? (
-            <>
-              <span className="repo-valid-badge">Valid git repo</span>
-              <span className="repo-validation-detail">
-                Branch: {validated.default_branch}
-                {validated.is_dirty && " (dirty)"}
-                {validated.remote_url && ` | ${validated.remote_url}`}
-              </span>
-            </>
-          ) : (
-            <span className="repo-invalid-msg">{validated.error}</span>
-          )}
+      {available && available.length > 0 && (
+        <div className="repo-scan-list">
+          {available.map((repo) => (
+            <div key={repo.path} className="repo-scan-item">
+              <div className="repo-scan-info">
+                <span className="repo-scan-name">{repo.name}</span>
+                <span className="repo-scan-detail">
+                  {repo.remote_url || repo.path}
+                  {repo.is_dirty && " · dirty"}
+                </span>
+              </div>
+              <button
+                className="manage-btn manage-btn-primary manage-btn-sm"
+                onClick={() => handleAdd(repo)}
+                disabled={registerRepo.isPending}
+              >
+                + Add
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
-      {validated?.valid && (
-        <form className="manage-form manage-repo-form" onSubmit={handleSubmit}>
-          <input type="text" placeholder="Repo name" value={name}
-            onChange={(e) => setName(e.target.value)} className="manage-input" />
-          <input type="text" placeholder="Default branch" value={branch}
-            onChange={(e) => setBranch(e.target.value)} className="manage-input manage-input-sm" />
-          <button type="submit" className="manage-btn manage-btn-primary"
-            disabled={registerRepo.isPending || !name.trim()}>
-            {registerRepo.isPending ? "Adding..." : "+ Register"}
+      {available && available.length === 0 && !scanning && (
+        <p className="form-help">No new repos found. All discovered repos are already registered.</p>
+      )}
+
+      {/* Manual path input (fallback) */}
+      <button
+        className="manage-btn manage-btn-secondary manage-btn-sm"
+        onClick={() => setShowManual(!showManual)}
+        style={{ marginTop: "0.5rem" }}
+      >
+        {showManual ? "Cancel" : "Add by path..."}
+      </button>
+
+      {showManual && (
+        <form
+          className="manage-form manage-repo-form"
+          style={{ marginTop: "0.5rem" }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!manualPath.trim()) return;
+            const name = manualPath.trim().split("/").pop() || "repo";
+            handleAdd({ name, path: manualPath.trim(), default_branch: "main" });
+            setManualPath("");
+          }}
+        >
+          <input
+            type="text"
+            placeholder="Paste path..."
+            value={manualPath}
+            onChange={(e) => setManualPath(e.target.value)}
+            className="manage-input"
+          />
+          <button type="submit" className="manage-btn manage-btn-primary" disabled={!manualPath.trim()}>
+            Add
           </button>
         </form>
       )}
@@ -346,7 +344,12 @@ function TeamPanel({ teamId, teamName }: { teamId: string; teamName: string }) {
       >
         {showRepoForm ? "Cancel" : "+ Add Repository"}
       </button>
-      {showRepoForm && <RegisterRepoForm teamId={teamId} />}
+      {showRepoForm && (
+        <RegisterRepoForm
+          teamId={teamId}
+          existingRepoNames={repos?.map((r) => r.name) ?? []}
+        />
+      )}
     </div>
   );
 }

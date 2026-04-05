@@ -525,6 +525,21 @@ export function useValidateRepo() {
   });
 }
 
+export function useScanRepos() {
+  return useQuery({
+    queryKey: ["scanned-repos"],
+    queryFn: () =>
+      apiClient.get<{
+        name: string;
+        path: string;
+        default_branch: string | null;
+        remote_url: string | null;
+        is_dirty: boolean;
+      }[]>("/api/v1/repos/scan"),
+    staleTime: 60_000, // Cache for 1 min
+  });
+}
+
 // ─── Contract hooks ──────────────────────────────────────
 
 export function useRunContracts(runId: string | undefined) {

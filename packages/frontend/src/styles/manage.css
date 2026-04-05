@@ -534,3 +534,48 @@
   color: var(--semantic-red);
 }
 
+
+/* ─── Repo Scan List ──────────────────────────────────── */
+
+.repo-scan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 0.75rem;
+}
+
+.repo-scan-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--bg-inset, rgba(0,0,0,0.08));
+  transition: background 80ms;
+}
+
+.repo-scan-item:hover {
+  background: var(--bg-hover);
+}
+
+.repo-scan-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.repo-scan-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.repo-scan-detail {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
