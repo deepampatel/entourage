@@ -110,6 +110,7 @@ class AgentRunner:
         adapter_override: Optional[str] = None,
         working_directory: Optional[str] = None,
         run_task_id: Optional[int] = None,
+        resume_session_id: Optional[str] = None,
     ) -> dict:
         """Execute a full agent run cycle.
 
@@ -215,6 +216,7 @@ class AgentRunner:
             timeout_seconds=agent.config.get(
                 "timeout_seconds", settings.agent_timeout_seconds
             ),
+            resume_session_id=resume_session_id,
         )
 
         # ── Run the adapter ───────────────────────────────────

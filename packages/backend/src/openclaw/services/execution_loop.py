@@ -736,6 +736,17 @@ class ExecutionLoop:
         base_delay = 0.5  # 500ms base
         max_delay = 60.0  # 1 min cap
 
+        # Load previous session ID for resume (Paperclip pattern)
+        resume_session_id = None
+        async with self._session_factory() as db_sess:
+            task_obj = await db_sess.get(RunTask, run_task_id)
+            if task_obj and task_obj.claude_session_id:
+                resume_session_id = task_obj.claude_session_id
+                logger.info(
+                    "Resuming session %s for task %d",
+                    resume_session_id, run_task_id,
+                )
+
         for attempt in range(max_retries + 1):
             try:
                 result = await runner.run_agent(
@@ -744,6 +755,7 @@ class ExecutionLoop:
                     prompt_override=prompt,
                     working_directory=worktree_path,
                     run_task_id=run_task_id,
+                    resume_session_id=resume_session_id,
                 )
 
                 error_str = (result.get("error") or "") + (result.get("stderr") or "")
@@ -793,6 +805,13 @@ class ExecutionLoop:
                         }
                         if result.get("error"):
                             ptask.error = result["error"]
+
+                        # Capture Claude Code session ID for resume on retry
+                        session_id = result.get("session_id")
+                        if session_id:
+                            ptask.claude_session_id = str(session_id)
+                            resume_session_id = str(session_id)  # Use on next retry
+
                         await db.commit()
 
                 success = not result.get("error") and result.get("exit_code", 1) == 0

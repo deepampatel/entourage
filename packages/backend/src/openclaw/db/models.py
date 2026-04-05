@@ -329,7 +329,7 @@ class Task(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, default="todo"
-    )  # todo, in_progress, in_review, in_approval, merging, done, cancelled
+    )  # todo, in_progress, in_review, in_approval, merging, done, cancelled, archived
     priority: Mapped[str] = mapped_column(
         String(10), nullable=False, default="medium"
     )  # low, medium, high, critical
@@ -888,6 +888,9 @@ class RunTask(Base):
         String(200), nullable=False, default=""
     )
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    claude_session_id: Mapped[Optional[str]] = mapped_column(
+        String(200), nullable=True
+    )  # Claude Code session UUID for --resume
     result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
