@@ -13,6 +13,7 @@ Key improvements over Phase 2:
 import asyncio
 import json
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -379,23 +380,34 @@ class ExecutionLoop:
                             )
                         )
 
-                # ── Check budget ────────────────────────────────────────
+                # ── Hard-stop budget enforcement ────────────────────────
+                # Paperclip pattern: auto-pause agents, cancel work, halt run
                 try:
                     async with self._session_factory() as db:
                         budget_svc = RunBudgetService(db)
                         budget = await budget_svc.check_budget(run_id)
                         if not budget.get("within_budget", True):
                             logger.warning(
-                                "Run %s exceeded budget, pausing",
+                                "Run %s HARD STOP — budget exceeded: $%.2f / $%.2f",
                                 run_id,
+                                budget.get("actual", 0),
+                                budget.get("limit", 0),
                             )
+                            # 1. Cancel all running tasks immediately
                             await self._cancel_running(running)
+                            # 2. Release all agents back to idle
+                            for tid in list(running.keys()):
+                                async with self._session_factory() as db2:
+                                    task = await db2.get(RunTask, tid)
+                                    if task and task.agent_id:
+                                        await self._release_agent(str(task.agent_id))
+                            # 3. Pause the run
                             svc = RunService(db)
                             await svc.change_status(run_id, "paused")
                             return {
                                 "run_id": str(run_id),
                                 "status": "paused",
-                                "reason": "Budget exceeded",
+                                "reason": f"Budget exceeded: ${budget.get('actual', 0):.2f} / ${budget.get('limit', 0):.2f}",
                             }
                 except RunBudgetExceededError:
                     await self._cancel_running(running)
@@ -405,7 +417,7 @@ class ExecutionLoop:
                     return {
                         "run_id": str(run_id),
                         "status": "paused",
-                        "reason": "Budget exceeded",
+                        "reason": "Budget exceeded (hard stop)",
                     }
 
                 # Adaptive polling: fast when tasks are running, slow when idle
@@ -718,8 +730,12 @@ class ExecutionLoop:
             f"{sibling_section}"
         )
 
-        # Retry with exponential backoff (like Claude Code: 3 retries, 500ms base)
-        max_retries = 3
+        # Retry with exponential backoff (Claude Code pattern: 10 retries, jitter)
+        import random
+        max_retries = settings.max_task_retries  # Default 3, configurable
+        base_delay = 0.5  # 500ms base
+        max_delay = 60.0  # 1 min cap
+
         for attempt in range(max_retries + 1):
             try:
                 result = await runner.run_agent(
@@ -730,12 +746,33 @@ class ExecutionLoop:
                     run_task_id=run_task_id,
                 )
 
-                # Check for rate limit errors — retry instead of failing
                 error_str = (result.get("error") or "") + (result.get("stderr") or "")
+
+                # Context overflow — truncate prompt and retry
+                if "context" in error_str.lower() and ("overflow" in error_str.lower() or "exceed" in error_str.lower()):
+                    if attempt < max_retries:
+                        # Truncate the description to 50% of original
+                        task_description = task_description[:len(task_description) // 2]
+                        prompt = (
+                            f"## Run Task: {task_title}\n\n"
+                            f"{task_description}\n\n"
+                            f"Complete this task. Commit when done."
+                            f"{worktree_section}"
+                        )
+                        logger.warning(
+                            "Context overflow on task %d, truncating prompt (attempt %d/%d)",
+                            run_task_id, attempt + 1, max_retries,
+                        )
+                        await asyncio.sleep(1)
+                        continue
+
+                # Rate limit — exponential backoff with jitter
                 if any(phrase in error_str.lower() for phrase in
                        ("rate limit", "429", "too many requests", "overloaded", "529")):
                     if attempt < max_retries:
-                        delay = min(0.5 * (2 ** attempt), 30)
+                        delay = min(base_delay * (2 ** attempt), max_delay)
+                        jitter = random.random() * 0.25 * delay  # 25% jitter
+                        delay += jitter
                         logger.warning(
                             "Rate limit on task %d, retrying in %.0fs (attempt %d/%d)",
                             run_task_id, delay, attempt + 1, max_retries,
@@ -1052,15 +1089,38 @@ class ExecutionLoop:
                                 task_id, exc_info=True,
                             )
 
-                    # Clean up worktree
+                    # Clean up worktree (with readiness check)
                     if (run and run.repository_id and ptask.branch_name):
                         try:
                             git_svc = GitService(db)
+                            repo = await db.get(Repository, run.repository_id)
+                            if repo:
+                                wt_dir = os.path.join(
+                                    repo.local_path, ".worktrees",
+                                    ptask.branch_name.replace("/", "-"),
+                                )
+                                if os.path.exists(wt_dir):
+                                    # Check for uncommitted changes first
+                                    from openclaw.services.git_service import _run_git
+                                    status = await _run_git(wt_dir, "status", "--porcelain")
+                                    if status.stdout.strip():
+                                        logger.warning(
+                                            "Worktree for task %d has %d uncommitted changes, auto-committing",
+                                            task_id, len(status.stdout.strip().split("\n")),
+                                        )
+                                        await _run_git(wt_dir, "add", "-A")
+                                        await _run_git(
+                                            wt_dir, "commit", "-m",
+                                            f"auto-commit: cleanup task {task_id}",
+                                        )
                             await git_svc.remove_run_worktree(
                                 ptask.branch_name, run.repository_id,
                             )
                         except Exception:
-                            pass
+                            logger.debug(
+                                "Worktree cleanup failed for task %d",
+                                task_id, exc_info=True,
+                            )
             elif ptask.retry_count < settings.max_task_retries:
                 # Retry: reset to todo with incremented retry count
                 ptask.retry_count += 1
