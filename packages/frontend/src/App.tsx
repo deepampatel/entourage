@@ -210,6 +210,26 @@ function AuthenticatedApp() {
 function App() {
   const [authed, setAuthed] = useState(!!getToken());
 
+  // Validate token on mount — if expired, clear and show login
+  useEffect(() => {
+    if (!authed) return;
+    const token = getToken();
+    if (!token) { setAuthed(false); return; }
+
+    // Quick validation: try to decode JWT expiry
+    try {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        clearToken();
+        setAuthed(false);
+      }
+    } catch {
+      // Invalid token format — clear it
+      clearToken();
+      setAuthed(false);
+    }
+  }, [authed]);
+
   if (!authed) {
     return <Login onLogin={() => setAuthed(true)} />;
   }

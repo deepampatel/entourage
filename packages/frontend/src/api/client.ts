@@ -84,6 +84,11 @@ class ApiClient {
   }
 
   private async parseError(resp: Response): Promise<Error> {
+    // Auto-logout on 401 — token is expired or invalid
+    if (resp.status === 401) {
+      clearToken();
+      window.location.reload();
+    }
     try {
       const data = await resp.json();
       return new Error(data.detail || resp.statusText);
